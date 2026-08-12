@@ -18,4 +18,13 @@ describe('supabase migrations', () => {
     expect(sql).toContain('references auth.users(id)');
     expect(sql).toContain('alter table public.profiles enable row level security');
   });
+
+  it('includes a diagnostics table migration with the expected enums and columns', () => {
+    const sql = readMigrationContaining('create_diagnostics');
+    expect(sql).toContain("create type public.diagnostic_platform as enum ('youtube', 'tiktok', 'instagram')");
+    expect(sql).toContain("create type public.diagnostic_status as enum ('pending', 'complete', 'failed')");
+    expect(sql).toContain('create table if not exists public.diagnostics');
+    expect(sql).toContain('report_json jsonb');
+    expect(sql).toContain('references public.profiles(id)');
+  });
 });
