@@ -58,4 +58,56 @@ describe('createClaudeReportClient', () => {
       })
     ).rejects.toThrow('Claude API request failed');
   });
+
+  it('strips markdown code fences before parsing the JSON response', async () => {
+    const fenced = '```json\n' + JSON.stringify({ headline: 'Fenced headline', explanation: 'Fenced explanation' }) + '\n```';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ content: [{ text: fenced }] }),
+      })
+    );
+
+    const client = createClaudeReportClient('test-api-key');
+    const report = await client.generateDiagnosticReport({
+      platform: 'youtube',
+      postSummary: 'x',
+      scores: {
+        hookStrength: { value: 1, label: 'weak' },
+        retentionRisk: { value: 1, label: 'weak' },
+        timing: { value: 1, label: 'weak' },
+        formatFit: { value: 1, label: 'weak' },
+      },
+    });
+
+    expect(report.headline).toBe('Fenced headline');
+    expect(report.explanation).toBe('Fenced explanation');
+  });
+
+  it('throws a descriptive error when the response is not valid JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ content: [{ text: 'Sorry, I cannot help with that right now.' }] }),
+      })
+    );
+
+    const client = createClaudeReportClient('test-api-key');
+    await expect(
+      client.generateDiagnosticReport({
+        platform: 'youtube',
+        postSummary: 'x',
+        scores: {
+          hookStrength: { value: 1, label: 'weak' },
+          retentionRisk: { value: 1, label: 'weak' },
+          timing: { value: 1, label: 'weak' },
+          formatFit: { value: 1, label: 'weak' },
+        },
+      })
+    ).rejects.toThrow('Claude API returned a response that could not be parsed as JSON.');
+  });
 });

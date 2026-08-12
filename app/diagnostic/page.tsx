@@ -26,6 +26,8 @@ export default function DiagnosticInputPage() {
         return;
       }
       router.push(`/diagnostic/${data.id}`);
+    } catch {
+      setError('Something went wrong. Please check your connection and try again.');
     } finally {
       setSubmitting(false);
     }

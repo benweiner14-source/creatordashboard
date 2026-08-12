@@ -45,4 +45,12 @@ describe('DiagnosticReportPage', () => {
     render(<DiagnosticReportPage />);
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Diagnostic not found.'));
   });
+
+  it('shows an error message when the network request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+    render(<DiagnosticReportPage />);
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong loading your report. Please try again.')
+    );
+  });
 });

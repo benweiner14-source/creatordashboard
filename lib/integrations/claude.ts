@@ -57,7 +57,13 @@ export function createClaudeReportClient(apiKey: string, model = 'claude-sonnet-
       }
       const data = await response.json();
       const text = data.content?.[0]?.text ?? '{}';
-      const parsed = JSON.parse(text);
+      let parsed: { headline?: string; explanation?: string };
+      try {
+        const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+        parsed = JSON.parse(cleaned);
+      } catch {
+        throw new Error('Claude API returned a response that could not be parsed as JSON.');
+      }
       return {
         headline: parsed.headline ?? 'Your diagnostic report',
         explanation: parsed.explanation ?? '',

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { handleDiagnosticRequest } from '@/lib/diagnostic/handler';
 import { createInMemoryRateLimitStore } from '../../../fakes/rate-limit-store.fake';
 import { createFakeYouTubeClient } from '../../../fakes/youtube.fake';
@@ -68,5 +68,46 @@ describe('handleDiagnosticRequest', () => {
       url: 'https://www.youtube.com/watch?v=abc123',
     });
     expect(second.status).toBe(429);
+  });
+
+  it('never calls the paid external clients once the request is rate-limited', async () => {
+    const fakeYouTubeClient = createFakeYouTubeClient();
+    const fakeScraperClient = createFakeScraperClient();
+    const fakeClaudeClient = createFakeClaudeReportClient();
+    const youtubeClient = {
+      ...fakeYouTubeClient,
+      getVideoMetadata: vi.fn(fakeYouTubeClient.getVideoMetadata),
+    };
+    const scraperClient = {
+      ...fakeScraperClient,
+      fetchPost: vi.fn(fakeScraperClient.fetchPost),
+    };
+    const claudeClient = {
+      ...fakeClaudeClient,
+      generateDiagnosticReport: vi.fn(fakeClaudeClient.generateDiagnosticReport),
+    };
+
+    const deps = makeDeps({ youtubeClient, scraperClient, claudeClient });
+
+    await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/watch?v=abc123',
+    });
+
+    youtubeClient.getVideoMetadata.mockClear();
+    scraperClient.fetchPost.mockClear();
+    claudeClient.generateDiagnosticReport.mockClear();
+
+    const second = await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/watch?v=abc123',
+    });
+
+    expect(second.status).toBe(429);
+    expect(youtubeClient.getVideoMetadata).not.toHaveBeenCalled();
+    expect(scraperClient.fetchPost).not.toHaveBeenCalled();
+    expect(claudeClient.generateDiagnosticReport).not.toHaveBeenCalled();
   });
 });

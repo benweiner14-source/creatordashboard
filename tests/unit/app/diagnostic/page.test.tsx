@@ -45,4 +45,17 @@ describe('DiagnosticInputPage', () => {
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('already used your free diagnostic'));
   });
+
+  it('shows an error message when the network request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+    render(<DiagnosticInputPage />);
+    fireEvent.change(screen.getByLabelText(/paste a youtube, tiktok, or instagram link/i), {
+      target: { value: 'https://www.tiktok.com/@user/video/123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /get my report/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong. Please check your connection and try again.')
+    );
+  });
 });

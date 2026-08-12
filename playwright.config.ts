@@ -1,4 +1,8 @@
+import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
+
+const SANDBOX_CHROMIUM_PATH = '/opt/pw-browsers/chromium';
+const executablePath = existsSync(SANDBOX_CHROMIUM_PATH) ? SANDBOX_CHROMIUM_PATH : undefined;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -8,9 +12,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
-    launchOptions: {
-      executablePath: '/opt/pw-browsers/chromium',
-    },
+    launchOptions: executablePath ? { executablePath } : {},
   },
   webServer: {
     command: 'npm run dev',

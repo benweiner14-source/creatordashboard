@@ -26,6 +26,9 @@ export default function DiagnosticReportPage() {
           return;
         }
         setReport(data.diagnostic.report_json);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Something went wrong loading your report. Please try again.');
       });
     return () => {
       cancelled = true;
