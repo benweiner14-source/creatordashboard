@@ -52,4 +52,11 @@ describe('supabase migrations', () => {
     expect(sql).toContain('week_start date not null');
     expect(sql).toContain('unique (profile_id, week_start)');
   });
+
+  it('includes a niche_community_sources table migration unique per niche/source', () => {
+    const sql = readMigrationContaining('create_niche_community_sources');
+    expect(sql).toContain('create table if not exists public.niche_community_sources');
+    expect(sql).toContain('source_type text not null');
+    expect(sql).toContain('unique (niche, source_type, source_identifier)');
+  });
 });
