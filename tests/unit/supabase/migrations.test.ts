@@ -45,4 +45,11 @@ describe('supabase migrations', () => {
     expect(insertMatches.length).toBe(6);
     expect(sql).toContain("'hook-rate'");
   });
+
+  it('includes a weekly_digests table migration unique per profile per week', () => {
+    const sql = readMigrationContaining('create_weekly_digests');
+    expect(sql).toContain('create table if not exists public.weekly_digests');
+    expect(sql).toContain('week_start date not null');
+    expect(sql).toContain('unique (profile_id, week_start)');
+  });
 });
