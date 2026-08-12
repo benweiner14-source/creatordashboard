@@ -27,4 +27,12 @@ describe('supabase migrations', () => {
     expect(sql).toContain('report_json jsonb');
     expect(sql).toContain('references public.profiles(id)');
   });
+
+  it('includes a rate_limit_events table migration indexed for lookups by profile and IP hash', () => {
+    const sql = readMigrationContaining('create_rate_limit_events');
+    expect(sql).toContain('create table if not exists public.rate_limit_events');
+    expect(sql).toContain('ip_hash text not null');
+    expect(sql).toContain('rate_limit_events_profile_id_created_at_idx');
+    expect(sql).toContain('rate_limit_events_ip_hash_created_at_idx');
+  });
 });
