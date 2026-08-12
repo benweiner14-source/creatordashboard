@@ -35,4 +35,14 @@ describe('supabase migrations', () => {
     expect(sql).toContain('rate_limit_events_profile_id_created_at_idx');
     expect(sql).toContain('rate_limit_events_ip_hash_created_at_idx');
   });
+
+  it('includes a glossary_terms table migration seeded with 6 terms, readable by everyone', () => {
+    const sql = readMigrationContaining('create_glossary_terms');
+    expect(sql).toContain('create table if not exists public.glossary_terms');
+    expect(sql).toContain('slug text not null unique');
+    expect(sql).toContain('"Glossary terms are viewable by everyone"');
+    const insertMatches = sql.match(/\('[a-z-]+', '(?:[^']|'')*', '(?:[^']|'')*', '(?:[^']|'')*'\)/g) ?? [];
+    expect(insertMatches.length).toBe(6);
+    expect(sql).toContain("'hook-rate'");
+  });
 });
