@@ -70,7 +70,8 @@ export interface Database {
     Functions: {
       check_and_record_rate_limit: {
         Args: {
-          p_profile_id: string;
+          p_profile_id: string | null;
+          p_identity_hash: string | null;
           p_ip_hash: string;
           p_event_type: string;
           p_profile_limit: number;

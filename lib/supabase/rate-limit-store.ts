@@ -35,9 +35,10 @@ export function createSupabaseRateLimitStore(supabase: SupabaseClient<Database>)
         throw new Error(`Failed to record rate limit event: ${error.message}`);
       }
     },
-    async checkAndRecordAtomically({ profileId, ipHash, eventType, profileLimit, ipLimit, windowStart, now }) {
+    async checkAndRecordAtomically({ profileId, identityHash, ipHash, eventType, profileLimit, ipLimit, windowStart, now }) {
       const { data, error } = await supabase.rpc('check_and_record_rate_limit', {
-        p_profile_id: profileId,
+        p_profile_id: profileId ?? null,
+        p_identity_hash: identityHash ?? null,
         p_ip_hash: ipHash,
         p_event_type: eventType,
         p_profile_limit: profileLimit,

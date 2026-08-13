@@ -73,6 +73,7 @@ describe('createSupabaseRateLimitStore', () => {
 
       expect(receivedParams).toEqual({
         p_profile_id: 'profile-1',
+        p_identity_hash: null,
         p_ip_hash: 'ip-hash-1',
         p_event_type: 'diagnostic_request',
         p_profile_limit: 1,
@@ -81,6 +82,40 @@ describe('createSupabaseRateLimitStore', () => {
         p_now: '2026-08-13T00:00:00.000Z',
       });
       expect(result).toEqual({ allowed: true, reason: undefined, eventId: 'event-1' });
+    });
+
+    it('sends p_profile_id as null and forwards identityHash when profileId is not provided', async () => {
+      let receivedParams: unknown;
+      const client = createFakeSupabaseClient(
+        {},
+        {
+          check_and_record_rate_limit: async (params) => {
+            receivedParams = params;
+            return { data: [{ allowed: true, reason: null, event_id: 'event-2' }], error: null };
+          },
+        }
+      );
+      const store = createSupabaseRateLimitStore(client as any);
+      await store.checkAndRecordAtomically({
+        identityHash: 'email-hash-1',
+        ipHash: 'ip-hash-1',
+        eventType: 'magic_link_request',
+        profileLimit: 3,
+        ipLimit: 10,
+        windowStart: new Date('2026-08-13T00:00:00Z'),
+        now: new Date('2026-08-13T00:10:00Z'),
+      });
+
+      expect(receivedParams).toEqual({
+        p_profile_id: null,
+        p_identity_hash: 'email-hash-1',
+        p_ip_hash: 'ip-hash-1',
+        p_event_type: 'magic_link_request',
+        p_profile_limit: 3,
+        p_ip_limit: 10,
+        p_window_start: '2026-08-13T00:00:00.000Z',
+        p_now: '2026-08-13T00:10:00.000Z',
+      });
     });
 
     it('maps a denied response with a reason', async () => {
