@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get('code');
   const next = requestUrl.searchParams.get('next') ?? '/diagnostic';
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const result = await handleAuthCallback(
     { exchangeCodeForSession: (c) => supabase.auth.exchangeCodeForSession(c) },
     { code, next, origin: requestUrl.origin }

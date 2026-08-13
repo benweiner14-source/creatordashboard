@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('next/headers', () => ({
-  cookies: () => ({
+  cookies: async () => ({
     get: (name: string) => (name === 'sb-test' ? { value: 'abc' } : undefined),
     set: vi.fn(),
   }),
@@ -22,7 +22,7 @@ describe('Supabase client helpers', () => {
 
   it('builds a server client without a live connection', async () => {
     const { createSupabaseServerClient } = await import('@/lib/supabase/server');
-    const client = createSupabaseServerClient();
+    const client = await createSupabaseServerClient();
     expect(typeof client.from).toBe('function');
   });
 

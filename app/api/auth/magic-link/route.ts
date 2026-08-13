@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const origin = new URL(request.url).origin;
 
     const result = await requestMagicLink(
