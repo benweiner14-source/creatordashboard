@@ -59,4 +59,13 @@ describe('supabase migrations', () => {
     expect(sql).toContain('source_type text not null');
     expect(sql).toContain('unique (niche, source_type, source_identifier)');
   });
+
+  it('includes an atomic check-and-record rate limit function using advisory locks', () => {
+    const sql = readMigrationContaining('add_atomic_rate_limit_function');
+    expect(sql).toContain('create or replace function public.check_and_record_rate_limit');
+    expect(sql).toContain('pg_advisory_xact_lock');
+    expect(sql).toContain('insert into public.rate_limit_events');
+    expect(sql).toContain('create or replace function public.release_rate_limit_event');
+    expect(sql).toContain('delete from public.rate_limit_events where id = p_event_id');
+  });
 });
