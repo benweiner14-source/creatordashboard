@@ -14,7 +14,9 @@ export interface RateLimitStore {
   countEventsSince(params: { profileId?: string; ipHash?: string; eventType: string; since: Date }): Promise<number>;
   recordEvent(params: { profileId: string | null; ipHash: string; eventType: string; createdAt?: Date }): Promise<void>;
   checkAndRecordAtomically(params: {
-    profileId: string;
+    /** Exactly one of profileId/identityHash is provided per call — see checkAndRecordRateLimit. */
+    profileId?: string;
+    identityHash?: string;
     ipHash: string;
     eventType: string;
     profileLimit: number;
@@ -77,7 +79,14 @@ export async function recordRateLimitEvent(params: {
 
 export interface AtomicRateLimitCheckParams {
   store: RateLimitStore;
-  profileId: string;
+  /**
+   * The primary identity to check/count against. Provide exactly one of
+   * profileId (authenticated flows, e.g. the diagnostic endpoint) or
+   * identityHash (pre-authentication flows with no profile yet, e.g. a
+   * salted hash of the email address for magic-link requests).
+   */
+  profileId?: string;
+  identityHash?: string;
   ipHash: string;
   eventType: string;
   now?: Date;
@@ -95,11 +104,18 @@ export interface AtomicRateLimitResult extends AtomicRateLimitCheckResult {
  * Atomically checks and records a rate-limit event in one round trip to the
  * store, closing the check-then-record race that calling checkRateLimit and
  * recordRateLimitEvent separately cannot guarantee. Callers should invoke
- * this before doing any expensive/paid work, and call releaseRateLimitEvent
- * if that work subsequently fails, so a server-side failure never consumes
- * the caller's rate-limit slot.
+ * this before doing any expensive/paid work, and call
+ * releaseRateLimitEventIfNeeded if that work subsequently fails, so a
+ * server-side failure never consumes the caller's rate-limit slot.
  */
 export async function checkAndRecordRateLimit(params: AtomicRateLimitCheckParams): Promise<AtomicRateLimitResult> {
+  if (!params.profileId && !params.identityHash) {
+    throw new Error('checkAndRecordRateLimit requires either profileId or identityHash');
+  }
+  if (params.profileId && params.identityHash) {
+    throw new Error('checkAndRecordRateLimit accepts only one of profileId or identityHash');
+  }
+
   const now = params.now ?? new Date();
   const windowDays = params.windowDays ?? FREE_DIAGNOSTIC_WINDOW_DAYS;
   const windowMs = windowDays * 24 * 60 * 60 * 1000;
@@ -109,6 +125,7 @@ export async function checkAndRecordRateLimit(params: AtomicRateLimitCheckParams
 
   const result = await params.store.checkAndRecordAtomically({
     profileId: params.profileId,
+    identityHash: params.identityHash,
     ipHash: params.ipHash,
     eventType: params.eventType,
     profileLimit,
@@ -127,6 +144,33 @@ export async function releaseRateLimitEvent(params: { store: RateLimitStore; eve
   await params.store.releaseEvent(params.eventId);
 }
 
+/**
+ * Releases a rate-limit event if one was recorded, swallowing (and logging)
+ * any failure so a compensating release can never mask the original error
+ * a caller is already handling. Shared by lib/diagnostic/handler.ts and
+ * lib/auth/magic-link.ts.
+ */
+export async function releaseRateLimitEventIfNeeded(params: {
+  store: RateLimitStore;
+  eventId: string | undefined;
+}): Promise<void> {
+  if (!params.eventId) return;
+  try {
+    await releaseRateLimitEvent({ store: params.store, eventId: params.eventId });
+  } catch (releaseErr) {
+    console.error('Failed to release rate limit event:', releaseErr);
+  }
+}
+
+/**
+ * Generic salted hash used to derive a rate-limit identity key from a raw
+ * value (an IP address, an email address, ...) without storing the raw
+ * value itself.
+ */
+export function hashIdentity(value: string, salt: string): string {
+  return createHash('sha256').update(`${salt}:${value}`).digest('hex');
+}
+
 export function hashIp(ip: string, salt: string): string {
-  return createHash('sha256').update(`${salt}:${ip}`).digest('hex');
+  return hashIdentity(ip, salt);
 }

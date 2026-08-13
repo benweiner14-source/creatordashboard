@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { checkRateLimit, recordRateLimitEvent, checkAndRecordRateLimit, releaseRateLimitEvent, hashIp } from '@/lib/rate-limit';
+import {
+  checkRateLimit,
+  recordRateLimitEvent,
+  checkAndRecordRateLimit,
+  releaseRateLimitEvent,
+  releaseRateLimitEventIfNeeded,
+  hashIp,
+  hashIdentity,
+} from '@/lib/rate-limit';
 import { createInMemoryRateLimitStore } from '../../fakes/rate-limit-store.fake';
 
 describe('checkRateLimit', () => {
@@ -175,6 +183,116 @@ describe('releaseRateLimitEvent', () => {
   });
 });
 
+describe('releaseRateLimitEventIfNeeded', () => {
+  it('releases the event when an eventId is provided', async () => {
+    const store = createInMemoryRateLimitStore();
+    const recorded = await checkAndRecordRateLimit({
+      store,
+      profileId: 'profile-1',
+      ipHash: 'ip-hash-1',
+      eventType: 'diagnostic_request',
+      now: new Date('2026-08-12T12:00:00Z'),
+    });
+    await releaseRateLimitEventIfNeeded({ store, eventId: recorded.eventId });
+    const second = await checkAndRecordRateLimit({
+      store,
+      profileId: 'profile-1',
+      ipHash: 'ip-hash-1',
+      eventType: 'diagnostic_request',
+      now: new Date('2026-08-12T12:05:00Z'),
+    });
+    expect(second.allowed).toBe(true);
+  });
+
+  it('is a no-op when eventId is undefined', async () => {
+    const store = createInMemoryRateLimitStore();
+    await expect(releaseRateLimitEventIfNeeded({ store, eventId: undefined })).resolves.toBeUndefined();
+  });
+
+  it('swallows a release failure instead of throwing, so it never masks the original error', async () => {
+    const store = createInMemoryRateLimitStore();
+    store.releaseEvent = async () => {
+      throw new Error('boom');
+    };
+    await expect(releaseRateLimitEventIfNeeded({ store, eventId: 'event-1' })).resolves.toBeUndefined();
+  });
+});
+
+describe('checkAndRecordRateLimit — identityHash (non-profile identity)', () => {
+  it('allows and atomically records the first request for a fresh identity', async () => {
+    const store = createInMemoryRateLimitStore();
+    const result = await checkAndRecordRateLimit({
+      store,
+      identityHash: 'email-hash-1',
+      ipHash: 'ip-hash-1',
+      eventType: 'magic_link_request',
+    });
+    expect(result.allowed).toBe(true);
+    expect(result.eventId).toBeDefined();
+  });
+
+  it('denies a second request from the same identity within the window', async () => {
+    const store = createInMemoryRateLimitStore();
+    await checkAndRecordRateLimit({
+      store,
+      identityHash: 'email-hash-1',
+      ipHash: 'ip-hash-1',
+      eventType: 'magic_link_request',
+      profileLimit: 1,
+      now: new Date('2026-08-12T12:00:00Z'),
+    });
+    const second = await checkAndRecordRateLimit({
+      store,
+      identityHash: 'email-hash-1',
+      ipHash: 'ip-hash-1',
+      eventType: 'magic_link_request',
+      profileLimit: 1,
+      now: new Date('2026-08-12T12:05:00Z'),
+    });
+    expect(second.allowed).toBe(false);
+    expect(second.reason).toBe('profile_limit');
+  });
+
+  it('keeps identityHash and profileId counts independent even with the same event type', async () => {
+    const store = createInMemoryRateLimitStore();
+    await checkAndRecordRateLimit({
+      store,
+      profileId: 'shared-value',
+      ipHash: 'ip-hash-1',
+      eventType: 'shared_event_type',
+      profileLimit: 1,
+    });
+    const result = await checkAndRecordRateLimit({
+      store,
+      identityHash: 'shared-value',
+      ipHash: 'ip-hash-2',
+      eventType: 'shared_event_type',
+      profileLimit: 1,
+    });
+    expect(result.allowed).toBe(true);
+  });
+
+  it('throws when neither profileId nor identityHash is provided', async () => {
+    const store = createInMemoryRateLimitStore();
+    await expect(
+      checkAndRecordRateLimit({ store, ipHash: 'ip-hash-1', eventType: 'magic_link_request' })
+    ).rejects.toThrow('checkAndRecordRateLimit requires either profileId or identityHash');
+  });
+
+  it('throws when both profileId and identityHash are provided', async () => {
+    const store = createInMemoryRateLimitStore();
+    await expect(
+      checkAndRecordRateLimit({
+        store,
+        profileId: 'profile-1',
+        identityHash: 'email-hash-1',
+        ipHash: 'ip-hash-1',
+        eventType: 'magic_link_request',
+      })
+    ).rejects.toThrow('checkAndRecordRateLimit accepts only one of profileId or identityHash');
+  });
+});
+
 describe('hashIp', () => {
   it('produces a deterministic hash for the same IP and salt', () => {
     expect(hashIp('203.0.113.7', 'test-salt')).toBe(hashIp('203.0.113.7', 'test-salt'));
@@ -182,5 +300,19 @@ describe('hashIp', () => {
 
   it('produces different hashes for different IPs', () => {
     expect(hashIp('203.0.113.7', 'test-salt')).not.toBe(hashIp('203.0.113.8', 'test-salt'));
+  });
+});
+
+describe('hashIdentity', () => {
+  it('produces a deterministic hash for the same value and salt', () => {
+    expect(hashIdentity('creator@example.com', 'test-salt')).toBe(hashIdentity('creator@example.com', 'test-salt'));
+  });
+
+  it('produces different hashes for different values', () => {
+    expect(hashIdentity('a@example.com', 'test-salt')).not.toBe(hashIdentity('b@example.com', 'test-salt'));
+  });
+
+  it('is what hashIp delegates to', () => {
+    expect(hashIp('203.0.113.7', 'test-salt')).toBe(hashIdentity('203.0.113.7', 'test-salt'));
   });
 });

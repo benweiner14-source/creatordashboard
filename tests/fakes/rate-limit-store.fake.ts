@@ -3,6 +3,7 @@ import type { RateLimitStore } from '@/lib/rate-limit';
 interface StoredEvent {
   id: string;
   profileId: string | null;
+  identityHash: string | null;
   ipHash: string;
   eventType: string;
   createdAt: Date;
@@ -23,7 +24,14 @@ export function createInMemoryRateLimitStore(): RateLimitStore {
       }).length;
     },
     async recordEvent({ profileId, ipHash, eventType, createdAt }) {
-      events.push({ id: `event-${nextId++}`, profileId, ipHash, eventType, createdAt: createdAt ?? new Date() });
+      events.push({
+        id: `event-${nextId++}`,
+        profileId,
+        identityHash: null,
+        ipHash,
+        eventType,
+        createdAt: createdAt ?? new Date(),
+      });
     },
     // Deliberately synchronous between the count and the push (no `await`
     // in between) so that concurrent calls against this fake behave the
@@ -31,11 +39,12 @@ export function createInMemoryRateLimitStore(): RateLimitStore {
     // does: one caller's check-then-insert can never interleave with
     // another's. This is what tests/unit/lib/rate-limit.test.ts's
     // concurrent-call test relies on to prove the composition is race-safe.
-    async checkAndRecordAtomically({ profileId, ipHash, eventType, profileLimit, ipLimit, windowStart, now }) {
-      const profileCount = events.filter(
-        (e) => e.eventType === eventType && e.createdAt >= windowStart && e.profileId === profileId
-      ).length;
-      if (profileCount >= profileLimit) {
+    async checkAndRecordAtomically({ profileId, identityHash, ipHash, eventType, profileLimit, ipLimit, windowStart, now }) {
+      const primaryCount = events.filter((e) => {
+        if (e.eventType !== eventType || e.createdAt < windowStart) return false;
+        return profileId !== undefined ? e.profileId === profileId : e.identityHash === identityHash;
+      }).length;
+      if (primaryCount >= profileLimit) {
         return { allowed: false, reason: 'profile_limit' };
       }
 
@@ -47,7 +56,14 @@ export function createInMemoryRateLimitStore(): RateLimitStore {
       }
 
       const id = `event-${nextId++}`;
-      events.push({ id, profileId, ipHash, eventType, createdAt: now });
+      events.push({
+        id,
+        profileId: profileId ?? null,
+        identityHash: identityHash ?? null,
+        ipHash,
+        eventType,
+        createdAt: now,
+      });
       return { allowed: true, eventId: id };
     },
     async releaseEvent(eventId) {
