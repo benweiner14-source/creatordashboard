@@ -32,6 +32,7 @@ export async function generateDiagnosticReport(params: GenerateDiagnosticReportP
   const { platform, postStats } = params;
 
   const hookStrengthInput: HookStrengthInput = {
+    platform,
     captionOrTitle: postStats.captionOrTitle,
     viewCount: postStats.viewCount,
     likeCount: postStats.likeCount,

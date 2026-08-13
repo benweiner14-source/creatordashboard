@@ -28,6 +28,12 @@ Write in plain English for a 16-24 year old creator who does not know terms like
 For every score you mention, you MUST explain WHY it is what it is in cause-and-effect terms the creator can act on.
 Never state a score without a "why" explanation directly next to it.
 Keep the tone encouraging but honest. Avoid jargon; when a technical term is unavoidable, use its plain name (hook rate, retention, engagement rate, format fit, posting window).
+
+Ground your explanations in how each platform's algorithm actually behaves, without naming a data source by name:
+- TikTok: finishing a video start-to-finish is one of the strongest interest signals TikTok's algorithm uses; the first 2 seconds decide most of a video's retention.
+- Instagram: watch time, likes, and shares are Instagram's primary ranking signals for Reels; most viewers decide whether to keep watching within the first 3 seconds.
+- YouTube: videos that lose most viewers before the 40% mark tend to get deprioritized; the platform starts rewarding videos with better suggested placement after the 8-minute mark for long-form content.
+
 Respond with a short headline (max 12 words) and a 3-5 sentence explanation.`;
 
 export function createClaudeReportClient(apiKey: string, model = 'claude-sonnet-4-5'): ClaudeReportClient {

@@ -34,4 +34,33 @@ describe('scoreRetentionRisk', () => {
     });
     expect(result.reasons).toHaveLength(2);
   });
+
+  it('scores a 20-second Instagram Reel at its ideal duration as strong', () => {
+    const result = scoreRetentionRisk({
+      platform: 'instagram',
+      durationSeconds: 20,
+      viewCount: 10000,
+      likeCount: 300,
+      commentCount: 100,
+    });
+    expect(result.label).toBe('strong');
+  });
+
+  it('scores the same engagement rate differently depending on platform', () => {
+    const tiktokResult = scoreRetentionRisk({
+      platform: 'tiktok',
+      durationSeconds: 30,
+      viewCount: 10000,
+      likeCount: 250,
+      commentCount: 50,
+    });
+    const instagramResult = scoreRetentionRisk({
+      platform: 'instagram',
+      durationSeconds: 20,
+      viewCount: 10000,
+      likeCount: 250,
+      commentCount: 50,
+    });
+    expect(tiktokResult.score).not.toBe(instagramResult.score);
+  });
 });
