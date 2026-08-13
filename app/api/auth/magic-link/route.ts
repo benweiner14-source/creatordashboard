@@ -13,7 +13,10 @@ export async function POST(request: Request) {
     const origin = new URL(request.url).origin;
 
     const result = await requestMagicLink(
-      { signInWithOtp: (params) => supabase.auth.signInWithOtp(params) },
+      {
+        signInWithOtp: (params) =>
+          supabase.auth.signInWithOtp({ email: params.email, options: { emailRedirectTo: params.emailRedirectTo } }),
+      },
       { email, redirectPath: redirectPath ?? '/diagnostic', origin }
     );
 
