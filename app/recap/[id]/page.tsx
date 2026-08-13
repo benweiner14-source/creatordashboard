@@ -1,12 +1,34 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 interface RecapCardData {
   month: string;
   totals: { views: number; likes: number; comments: number; postCount: number };
   topPost: { platform: string; captionOrTitle: string; viewCount: number; permalink: string };
+  warnings?: string[];
+}
+
+const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram' };
+
+/**
+ * Turns the stored `{platform}_scrape_failed` markers into something a
+ * creator can act on — otherwise a partially-scraped card silently
+ * under-reports and nobody ever finds out why.
+ */
+function describeWarnings(warnings: string[] | undefined): string | null {
+  const platforms = (warnings ?? [])
+    .map((warning) => warning.replace(/_scrape_failed$/, ''))
+    .map((platform) => PLATFORM_LABELS[platform] ?? platform)
+    .filter(Boolean);
+  if (platforms.length === 0) return null;
+  const list =
+    platforms.length === 1
+      ? platforms[0]
+      : `${platforms.slice(0, -1).join(', ')} and ${platforms[platforms.length - 1]}`;
+  return `Note: ${list} couldn't be reached when this card was generated, so those posts aren't counted here.`;
 }
 
 export default function RecapCardPage() {
@@ -47,6 +69,7 @@ export default function RecapCardPage() {
     year: 'numeric',
     timeZone: 'UTC',
   });
+  const warningNote = describeWarnings(card.warnings);
 
   return (
     <main className="mx-auto flex max-w-md flex-col items-center gap-6 px-6 py-16 text-center">
@@ -56,6 +79,11 @@ export default function RecapCardPage() {
         alt={`${monthLabel} recap card: ${card.totals.views} total views`}
         className="w-full rounded-lg shadow-lg"
       />
+      {warningNote && (
+        <p role="status" className="text-sm text-amber-700">
+          {warningNote}
+        </p>
+      )}
       <a
         href={`/recap/${params.id}/image`}
         download
@@ -63,6 +91,11 @@ export default function RecapCardPage() {
       >
         Download image
       </a>
+      {/* Without this, /recap redirects here for the rest of the month and a
+          creator has no way back to add a platform or fix a typo. */}
+      <Link href="/recap?edit=1" className="text-sm text-indigo-700 underline">
+        Manage platforms
+      </Link>
     </main>
   );
 }
