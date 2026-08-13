@@ -1,11 +1,17 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createInMemoryRateLimitStore } from '../../../../fakes/rate-limit-store.fake';
 
 const signInWithOtpMock = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: vi.fn(() => ({
     auth: { signInWithOtp: signInWithOtpMock },
   })),
+  createSupabaseServiceRoleClient: vi.fn(() => ({})),
+}));
+
+vi.mock('@/lib/supabase/rate-limit-store', () => ({
+  createSupabaseRateLimitStore: vi.fn(() => createInMemoryRateLimitStore()),
 }));
 
 import { POST } from '@/app/api/auth/magic-link/route';
