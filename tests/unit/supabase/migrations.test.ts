@@ -68,4 +68,15 @@ describe('supabase migrations', () => {
     expect(sql).toContain('create or replace function public.release_rate_limit_event');
     expect(sql).toContain('delete from public.rate_limit_events where id = p_event_id');
   });
+
+  it('includes a migration generalizing rate_limit_events to a non-profile identity_hash', () => {
+    const sql = readMigrationContaining('add_rate_limit_identity_hash');
+    expect(sql).toContain('add column if not exists identity_hash text');
+    expect(sql).toContain('create or replace function public.check_and_record_rate_limit');
+    expect(sql).toContain('p_identity_hash text');
+    expect(sql).toContain("raise exception 'check_and_record_rate_limit requires either p_profile_id or p_identity_hash'");
+    expect(sql).toContain("raise exception 'check_and_record_rate_limit accepts only one of p_profile_id or p_identity_hash'");
+    expect(sql).toContain('where identity_hash = p_identity_hash');
+    expect(sql).toContain('rate_limit_events_identity_hash_created_at_idx');
+  });
 });
