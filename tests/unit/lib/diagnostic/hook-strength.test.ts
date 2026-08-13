@@ -48,6 +48,45 @@ describe('scoreHookStrength', () => {
     expect(result.label).toBe('moderate');
   });
 
+  it('scores a comment-heavy tiktok post higher than a like-heavy one with identical total engagement', () => {
+    const commentHeavy = scoreHookStrength({
+      platform: 'tiktok',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 100,
+      commentCount: 200,
+    });
+    const likeHeavy = scoreHookStrength({
+      platform: 'tiktok',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 200,
+      commentCount: 100,
+    });
+    // Under the old unweighted (likes+comments)/views formula these are
+    // identical (both sum to 300/10000). TikTok now weights comments
+    // above likes, so the comment-heavy post should score higher.
+    expect(commentHeavy.score).toBeGreaterThan(likeHeavy.score);
+  });
+
+  it('does not weight comments over likes on instagram — same total engagement scores identically regardless of split', () => {
+    const commentHeavy = scoreHookStrength({
+      platform: 'instagram',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 100,
+      commentCount: 200,
+    });
+    const likeHeavy = scoreHookStrength({
+      platform: 'instagram',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 200,
+      commentCount: 100,
+    });
+    expect(commentHeavy.score).toBe(likeHeavy.score);
+  });
+
   it('scores the same 4% engagement rate differently depending on platform', () => {
     const tiktokResult = scoreHookStrength({
       platform: 'tiktok',

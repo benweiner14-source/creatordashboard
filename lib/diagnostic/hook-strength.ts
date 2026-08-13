@@ -1,4 +1,4 @@
-import { labelForScore, type ScoreResult } from './types';
+import { labelForScore, computeEngagementRate, type ScoreResult } from './types';
 
 export interface HookStrengthInput {
   platform: 'youtube' | 'tiktok' | 'instagram';
@@ -35,8 +35,7 @@ function engagementRateToScore(engagementRate: number, thresholds: { moderate: n
 }
 
 export function scoreHookStrength(input: HookStrengthInput): ScoreResult {
-  const views = Math.max(input.viewCount, 1);
-  const engagementRate = (input.likeCount + input.commentCount) / views;
+  const engagementRate = computeEngagementRate(input.platform, input.likeCount, input.commentCount, input.viewCount);
   const hasHookPattern = HOOK_PATTERN.test(input.captionOrTitle);
   const thresholds = ENGAGEMENT_THRESHOLDS[input.platform];
 

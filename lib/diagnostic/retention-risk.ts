@@ -1,4 +1,4 @@
-import { labelForScore, isLikelyYouTubeShort, type ScoreResult } from './types';
+import { labelForScore, isLikelyYouTubeShort, computeEngagementRate, type ScoreResult } from './types';
 
 export interface RetentionRiskInput {
   platform: 'youtube' | 'tiktok' | 'instagram';
@@ -46,8 +46,7 @@ export function scoreRetentionRisk(input: RetentionRiskInput): ScoreResult {
   const durationRatio = input.durationSeconds / ideal;
   const durationPenalty = Math.min(Math.abs(1 - durationRatio) * 40, 40);
 
-  const views = Math.max(input.viewCount, 1);
-  const engagementRate = (input.likeCount + input.commentCount) / views;
+  const engagementRate = computeEngagementRate(input.platform, input.likeCount, input.commentCount, input.viewCount);
   const saturation = ENGAGEMENT_SATURATION[input.platform];
   const engagementScore = Math.min((engagementRate / saturation) * 60, 60);
 

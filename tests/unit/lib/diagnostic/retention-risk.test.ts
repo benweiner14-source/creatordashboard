@@ -83,6 +83,44 @@ describe('scoreRetentionRisk', () => {
     expect(atBoundary.score).toBeLessThan(justOverBoundary.score);
   });
 
+  it('scores a comment-heavy tiktok post higher than a like-heavy one with identical total engagement, at the same (ideal) duration', () => {
+    const commentHeavy = scoreRetentionRisk({
+      platform: 'tiktok',
+      durationSeconds: 30,
+      viewCount: 10000,
+      likeCount: 100,
+      commentCount: 200,
+    });
+    const likeHeavy = scoreRetentionRisk({
+      platform: 'tiktok',
+      durationSeconds: 30,
+      viewCount: 10000,
+      likeCount: 200,
+      commentCount: 100,
+    });
+    // Under the old unweighted formula these are identical (both
+    // 300/10000). TikTok now weights comments above likes.
+    expect(commentHeavy.score).toBeGreaterThan(likeHeavy.score);
+  });
+
+  it('does not weight comments over likes on instagram — same total engagement scores identically regardless of split', () => {
+    const commentHeavy = scoreRetentionRisk({
+      platform: 'instagram',
+      durationSeconds: 20,
+      viewCount: 10000,
+      likeCount: 100,
+      commentCount: 200,
+    });
+    const likeHeavy = scoreRetentionRisk({
+      platform: 'instagram',
+      durationSeconds: 20,
+      viewCount: 10000,
+      likeCount: 200,
+      commentCount: 100,
+    });
+    expect(commentHeavy.score).toBe(likeHeavy.score);
+  });
+
   it('scores the same engagement rate differently depending on platform', () => {
     const tiktokResult = scoreRetentionRisk({
       platform: 'tiktok',
