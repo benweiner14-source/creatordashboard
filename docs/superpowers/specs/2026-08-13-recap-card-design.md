@@ -38,6 +38,26 @@ app fetches itself, not a report the creator uploads exports to build.
    handles → generate → view/download), not a separate settings page. There
    is no settings/account page in this app today; splitting connection into
    one wouldn't serve anything else yet.
+7. **Apify/handle-based sourcing (decision #2) is a deliberate bridge, not a
+   permanent architecture — confirmed 2026-08-13.** The Recap Card is a
+   "your own connected account" feature, which is exactly what OAuth is
+   built for (unlike the Diagnostic's paste-anyone's-link hook or a
+   someone-else's-channel feature, where OAuth is structurally impossible).
+   Official TikTok Content Posting/Display API and Instagram Graph API
+   access would be faster, more stable, and ToS-clean versus scraping — but
+   both gate real scopes behind an app-review process that can take weeks
+   and typically wants to see a working product first, a real
+   chicken-and-egg blocker pre-launch. Decision: ship on Apify/handles now;
+   treat OAuth for TikTok/Instagram as a fast-follow once the product has
+   enough traction to submit for platform review. The DI boundary in
+   `lib/recap/handler.ts` (spec §2) isolates this — swapping
+   `fetchProfilePosts`'s internals for an OAuth-backed call later is a
+   contained change to `lib/integrations/scraper.ts` and its wiring, not a
+   redesign of aggregation, rate-limiting, caching, or the card itself.
+   YouTube is unaffected either way: the public Data API this plan already
+   uses (decision #2) is sufficient for what the card needs; OAuth to the
+   YouTube Analytics API (retention curves, true watch-time) is a
+   Diagnostic-feature upgrade this card doesn't use, tracked separately.
 
 ## Non-goals
 
