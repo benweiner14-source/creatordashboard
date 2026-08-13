@@ -2,38 +2,60 @@
 
 import { useState } from 'react';
 import { Spinner } from './Spinner';
-import { isValidEmailFormat, type SignInFlowState } from '@/lib/auth/sign-in-flow-state';
+import { isValidEmailFormat } from '@/lib/auth/sign-in-flow-state';
 
-type SignInPromptState = Extract<
-  SignInFlowState,
-  { status: 'needsSignIn' | 'submittingMagicLink' | 'checkEmail' | 'magicLinkError' }
->;
+/**
+ * Structural shape this component needs, rather than an Extract of one
+ * flow's state, so any flow that mirrors the magic-link states can drive
+ * it. `url` is the subject line of the diagnostic flow ("Checking: …");
+ * flows without one (the recap page) simply omit it.
+ */
+export type SignInPromptState =
+  | { status: 'needsSignIn'; url?: string; email: string; notice: string | null }
+  | { status: 'submittingMagicLink'; url?: string; email: string }
+  | { status: 'checkEmail'; url?: string; email: string }
+  | { status: 'magicLinkError'; url?: string; email: string; error: string };
 
 export interface SignInPromptProps {
   state: SignInPromptState;
   onEmailChange: (email: string) => void;
   onSubmitEmail: () => void;
-  onEditUrl: () => void;
   onResend: () => void;
   onRetryEmail: () => void;
+  onEditUrl?: () => void;
+  /** Why the creator is being asked to sign in. */
+  introCopy?: string;
+  /** What happens after they click the emailed link. */
+  returnCopy?: string;
 }
 
-export function SignInPrompt({ state, onEmailChange, onSubmitEmail, onEditUrl, onResend, onRetryEmail }: SignInPromptProps) {
+export function SignInPrompt({
+  state,
+  onEmailChange,
+  onSubmitEmail,
+  onEditUrl,
+  onResend,
+  onRetryEmail,
+  introCopy = 'Sign in with a one-time email link to get your report.',
+  returnCopy = "Click it to continue, then we'll bring you back here with your diagnostic ready to go.",
+}: SignInPromptProps) {
   const [blurError, setBlurError] = useState<string | null>(null);
   const email = state.email;
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-gray-200 p-4">
-      <div className="flex items-center justify-between text-sm text-gray-600">
-        <span>
-          Checking: <span className="font-medium text-gray-900">{state.url}</span>
-        </span>
-        {state.status !== 'checkEmail' && state.status !== 'submittingMagicLink' && (
-          <button type="button" onClick={onEditUrl} className="text-indigo-700 underline">
-            Not this link? Edit
-          </button>
-        )}
-      </div>
+      {state.url && (
+        <div className="flex items-center justify-between text-sm text-gray-600">
+          <span>
+            Checking: <span className="font-medium text-gray-900">{state.url}</span>
+          </span>
+          {onEditUrl && state.status !== 'checkEmail' && state.status !== 'submittingMagicLink' && (
+            <button type="button" onClick={onEditUrl} className="text-indigo-700 underline">
+              Not this link? Edit
+            </button>
+          )}
+        </div>
+      )}
 
       {state.status === 'needsSignIn' && state.notice && (
         <p className="text-sm text-amber-700">{state.notice}</p>
@@ -42,8 +64,7 @@ export function SignInPrompt({ state, onEmailChange, onSubmitEmail, onEditUrl, o
       {state.status === 'checkEmail' ? (
         <div className="flex flex-col gap-2">
           <p>
-            Check your email — we sent a sign-in link to <strong>{email}</strong>. Click it to continue, then
-            we&apos;ll bring you back here with your diagnostic ready to go.
+            Check your email — we sent a sign-in link to <strong>{email}</strong>. {returnCopy}
           </p>
           <button type="button" onClick={onResend} className="self-start text-sm text-indigo-700 underline">
             Resend
@@ -65,7 +86,7 @@ export function SignInPrompt({ state, onEmailChange, onSubmitEmail, onEditUrl, o
           }}
           className="flex flex-col gap-3"
         >
-          <p className="text-sm text-gray-700">Sign in with a one-time email link to get your report.</p>
+          <p className="text-sm text-gray-700">{introCopy}</p>
           <label htmlFor="sign-in-email" className="text-sm font-medium text-gray-700">
             Email
           </label>

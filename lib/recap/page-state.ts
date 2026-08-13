@@ -1,3 +1,4 @@
+import { isValidEmailFormat } from '@/lib/auth/sign-in-flow-state';
 import type { RecapPlatform } from './types';
 
 export type RecapHandleInputs = Record<RecapPlatform, string>;
@@ -10,21 +11,49 @@ export type RecapPageState =
   | { status: 'readyToGenerate'; handles: RecapHandleInputs }
   | { status: 'generating'; handles: RecapHandleInputs; stillWorking: boolean }
   | { status: 'redirectingToCard'; recapCardId: string }
-  | { status: 'generationFailed'; handles: RecapHandleInputs; error: string };
+  | { status: 'generationFailed'; handles: RecapHandleInputs; error: string }
+  // Sign-in sub-flow, mirroring lib/auth/sign-in-flow-state.ts so the same
+  // <SignInPrompt> component drives it.
+  | { status: 'needsSignIn'; email: string; notice: string | null }
+  | { status: 'submittingMagicLink'; email: string }
+  | { status: 'checkEmail'; email: string }
+  | { status: 'magicLinkError'; email: string; error: string };
 
 export type RecapPageEvent =
   | { type: 'BOOTSTRAPPED'; handles: RecapHandleInputs; recapCardId: string | null }
   | { type: 'BOOTSTRAP_FAILED' }
+  | { type: 'BOOTSTRAP_UNAUTHORIZED' }
   | { type: 'HANDLE_CHANGED'; platform: RecapPlatform; value: string }
   | { type: 'HANDLES_SAVED' }
   | { type: 'HANDLES_SAVE_FAILED'; error: string }
   | { type: 'GENERATE' }
   | { type: 'GENERATE_STILL_WORKING' }
   | { type: 'GENERATE_SUCCESS'; recapCardId: string }
-  | { type: 'GENERATE_FAILED'; error: string };
+  | { type: 'GENERATE_FAILED'; error: string }
+  | { type: 'EMAIL_CHANGED'; email: string }
+  | { type: 'SUBMIT_EMAIL' }
+  | { type: 'MAGIC_LINK_SENT' }
+  | { type: 'MAGIC_LINK_FAILED'; error: string }
+  | { type: 'RESEND_EMAIL' }
+  | { type: 'RETRY_EMAIL' };
 
-function hasAnyHandle(handles: RecapHandleInputs): boolean {
+export function hasAnyHandle(handles: RecapHandleInputs): boolean {
   return Boolean(handles.youtube || handles.tiktok || handles.instagram);
+}
+
+/**
+ * The states in which the handle inputs are live: a creator can type into
+ * them and save. Generation failing must not freeze the form — fixing a
+ * typo or adding a platform is the most likely way out of that failure.
+ */
+export const HANDLE_EDITING_STATUSES = ['noHandlesConnected', 'readyToGenerate', 'generationFailed'] as const;
+
+export type HandleEditingStatus = (typeof HANDLE_EDITING_STATUSES)[number];
+
+export function isHandleEditingState(
+  state: RecapPageState
+): state is Extract<RecapPageState, { status: HandleEditingStatus }> {
+  return (HANDLE_EDITING_STATUSES as readonly string[]).includes(state.status);
 }
 
 export function createInitialRecapPageState(): RecapPageState {
@@ -48,18 +77,25 @@ export function recapPageReducer(state: RecapPageState, event: RecapPageEvent): 
         error: "We couldn't load your recap settings. Please refresh and try again.",
       };
 
+    case 'BOOTSTRAP_UNAUTHORIZED':
+      return { status: 'needsSignIn', email: '', notice: null };
+
     case 'HANDLE_CHANGED':
-      return state.status === 'noHandlesConnected' || state.status === 'readyToGenerate'
+      return isHandleEditingState(state)
         ? { ...state, handles: { ...state.handles, [event.platform]: event.value } }
         : state;
 
     case 'HANDLES_SAVED':
-      return state.status === 'noHandlesConnected' || state.status === 'readyToGenerate'
+      if (!isHandleEditingState(state)) return state;
+      // A save that clears every platform succeeds server-side but leaves
+      // nothing to generate from — don't offer a Generate button that can
+      // only 400.
+      return hasAnyHandle(state.handles)
         ? { status: 'readyToGenerate', handles: state.handles }
-        : state;
+        : { status: 'noHandlesConnected', handles: state.handles, error: null };
 
     case 'HANDLES_SAVE_FAILED':
-      return state.status === 'noHandlesConnected' || state.status === 'readyToGenerate'
+      return isHandleEditingState(state)
         ? { status: 'noHandlesConnected', handles: state.handles, error: event.error }
         : state;
 
@@ -76,6 +112,30 @@ export function recapPageReducer(state: RecapPageState, event: RecapPageEvent): 
 
     case 'GENERATE_FAILED':
       return state.status === 'generating' ? { status: 'generationFailed', handles: state.handles, error: event.error } : state;
+
+    case 'EMAIL_CHANGED':
+      return state.status === 'needsSignIn' || state.status === 'magicLinkError'
+        ? { ...state, email: event.email }
+        : state;
+
+    case 'SUBMIT_EMAIL':
+      if (state.status !== 'needsSignIn' && state.status !== 'magicLinkError') return state;
+      if (!isValidEmailFormat(state.email)) return state;
+      return { status: 'submittingMagicLink', email: state.email };
+
+    case 'MAGIC_LINK_SENT':
+      return state.status === 'submittingMagicLink' ? { status: 'checkEmail', email: state.email } : state;
+
+    case 'MAGIC_LINK_FAILED':
+      return state.status === 'submittingMagicLink'
+        ? { status: 'magicLinkError', email: state.email, error: event.error }
+        : state;
+
+    case 'RESEND_EMAIL':
+      return state.status === 'checkEmail' ? { status: 'submittingMagicLink', email: state.email } : state;
+
+    case 'RETRY_EMAIL':
+      return state.status === 'checkEmail' ? { status: 'needsSignIn', email: state.email, notice: null } : state;
 
     default:
       return state;

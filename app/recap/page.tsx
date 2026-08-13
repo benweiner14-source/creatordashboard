@@ -1,9 +1,15 @@
 'use client';
 
-import { useEffect, useReducer, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useReducer, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Spinner } from '@/components/Spinner';
-import { recapPageReducer, createInitialRecapPageState, type RecapHandleInputs } from '@/lib/recap/page-state';
+import { SignInPrompt } from '@/components/SignInPrompt';
+import {
+  recapPageReducer,
+  createInitialRecapPageState,
+  isHandleEditingState,
+  type RecapHandleInputs,
+} from '@/lib/recap/page-state';
 import type { RecapPlatform } from '@/lib/recap/types';
 
 const PLATFORM_LABELS: Record<RecapPlatform, string> = {
@@ -12,16 +18,26 @@ const PLATFORM_LABELS: Record<RecapPlatform, string> = {
   instagram: 'Instagram handle',
 };
 
-export default function RecapPage() {
+function RecapPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // /recap?edit=1 is how a creator gets back to the handle form after a card
+  // already exists for this month — without it the bootstrap redirect makes
+  // /recap a dead end until the month rolls over.
+  const editMode = searchParams.get('edit') === '1';
   const [state, dispatch] = useReducer(recapPageReducer, createInitialRecapPageState());
   const stillWorkingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetch('/api/recap')
-      .then((res) => res.json())
-      .then((data) => {
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.status === 401) {
+          dispatch({ type: 'BOOTSTRAP_UNAUTHORIZED' });
+          return;
+        }
+        const data = await res.json();
         if (cancelled) return;
         if (data.error) {
           dispatch({ type: 'BOOTSTRAP_FAILED' });
@@ -32,7 +48,7 @@ export default function RecapPage() {
           tiktok: data.handles.tiktok ?? '',
           instagram: data.handles.instagram ?? '',
         };
-        dispatch({ type: 'BOOTSTRAPPED', handles, recapCardId: data.recapCardId });
+        dispatch({ type: 'BOOTSTRAPPED', handles, recapCardId: editMode ? null : data.recapCardId });
       })
       .catch(() => {
         if (!cancelled) dispatch({ type: 'BOOTSTRAP_FAILED' });
@@ -40,7 +56,7 @@ export default function RecapPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [editMode]);
 
   useEffect(() => {
     if (state.status === 'redirectingToCard') {
@@ -57,7 +73,7 @@ export default function RecapPage() {
   }, [state.status]);
 
   async function saveHandles() {
-    if (state.status !== 'noHandlesConnected' && state.status !== 'readyToGenerate') return;
+    if (!isHandleEditingState(state)) return;
     try {
       const res = await fetch('/api/recap/handles', {
         method: 'POST',
@@ -93,8 +109,56 @@ export default function RecapPage() {
     }
   }
 
+  async function submitMagicLink(email: string) {
+    try {
+      const response = await fetch('/api/auth/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, redirectPath: '/recap' }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        dispatch({ type: 'MAGIC_LINK_FAILED', error: data.error ?? 'Something went wrong. Please try again.' });
+        return;
+      }
+      dispatch({ type: 'MAGIC_LINK_SENT' });
+    } catch {
+      dispatch({ type: 'MAGIC_LINK_FAILED', error: "We couldn't reach the server. Check your connection and try again." });
+    }
+  }
+
   if (state.status === 'loading' || state.status === 'redirectingToCard') {
     return <p>Loading…</p>;
+  }
+
+  if (
+    state.status === 'needsSignIn' ||
+    state.status === 'submittingMagicLink' ||
+    state.status === 'checkEmail' ||
+    state.status === 'magicLinkError'
+  ) {
+    return (
+      <main className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
+        <h1 className="text-2xl font-bold text-gray-900">Monthly recap card</h1>
+        <SignInPrompt
+          state={state}
+          introCopy="Sign in with a one-time email link to set up your recap card."
+          returnCopy="Click it to continue and we'll bring you right back here."
+          onEmailChange={(email) => dispatch({ type: 'EMAIL_CHANGED', email })}
+          onSubmitEmail={() => {
+            const { email } = state;
+            dispatch({ type: 'SUBMIT_EMAIL' });
+            void submitMagicLink(email);
+          }}
+          onResend={() => {
+            const { email } = state;
+            dispatch({ type: 'RESEND_EMAIL' });
+            void submitMagicLink(email);
+          }}
+          onRetryEmail={() => dispatch({ type: 'RETRY_EMAIL' })}
+        />
+      </main>
+    );
   }
 
   return (
@@ -111,14 +175,18 @@ export default function RecapPage() {
               value={state.handles[platform]}
               onChange={(e) => dispatch({ type: 'HANDLE_CHANGED', platform, value: e.target.value })}
               placeholder="@handle or profile URL"
-              className="rounded-lg border border-gray-300 px-4 py-2 font-normal"
+              // Generation is the one state where the form legitimately can't
+              // accept edits — say so rather than silently swallowing them.
+              disabled={state.status === 'generating'}
+              className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
             />
           </label>
         ))}
         <button
           type="button"
           onClick={saveHandles}
-          className="self-start rounded-full border border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-700"
+          disabled={state.status === 'generating'}
+          className="self-start rounded-full border border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50"
         >
           Save platforms
         </button>
@@ -159,5 +227,13 @@ export default function RecapPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function RecapPage() {
+  return (
+    <Suspense fallback={<p>Loading…</p>}>
+      <RecapPageInner />
+    </Suspense>
   );
 }
