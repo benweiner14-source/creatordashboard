@@ -8,4 +8,9 @@ describe('HomePage', () => {
     const link = screen.getByRole('link', { name: /run a free diagnostic/i });
     expect(link).toHaveAttribute('href', '/diagnostic');
   });
+
+  it('links to the recap page', () => {
+    render(<HomePage />);
+    expect(screen.getByRole('link', { name: /recap card/i })).toHaveAttribute('href', '/recap');
+  });
 });

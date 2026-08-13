@@ -17,6 +17,9 @@ export default function HomePage() {
       >
         Run a free diagnostic
       </Link>
+      <Link href="/recap" className="text-indigo-700 underline">
+        Get your monthly recap card
+      </Link>
     </main>
   );
 }
