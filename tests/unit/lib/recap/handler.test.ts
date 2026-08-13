@@ -112,6 +112,59 @@ describe('handleRecapRequest', () => {
     expect(saveRecapCardSpy).not.toHaveBeenCalled();
   });
 
+  it('reports a total outage distinctly from a genuinely empty month, and gives the attempt back', async () => {
+    const youtubeClient = createFakeYouTubeClient();
+    vi.spyOn(youtubeClient, 'getChannelUploads').mockRejectedValue(new Error('youtube down'));
+    const scraperClient = createFakeScraperClient();
+    vi.spyOn(scraperClient, 'fetchProfilePosts').mockRejectedValue(new Error('apify down'));
+    const deps = makeDeps({
+      youtubeClient,
+      scraperClient,
+      getProfileHandles: async () => ({ youtube: 'creator', tiktok: 'creator', instagram: null }),
+    });
+    const saveRecapCardSpy = vi.spyOn(deps, 'saveRecapCard');
+    const releaseEventSpy = vi.spyOn(deps.rateLimitStore, 'releaseEvent');
+
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+
+    expect(result.status).toBe(503);
+    expect(result.body.error).not.toMatch(/nothing was published/i);
+    expect(result.body.error).toMatch(/couldn't reach any of your connected platforms/i);
+    expect(result.body.warnings).toEqual(['youtube_scrape_failed', 'tiktok_scrape_failed']);
+    expect(saveRecapCardSpy).not.toHaveBeenCalled();
+    // The scrape never really ran, so it must not burn one of today's attempts.
+    expect(releaseEventSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not consume an attempt across repeated total outages', async () => {
+    const youtubeClient = createFakeYouTubeClient();
+    vi.spyOn(youtubeClient, 'getChannelUploads').mockRejectedValue(new Error('youtube down'));
+    const deps = makeDeps({ youtubeClient });
+
+    for (let i = 0; i < RECAP_GENERATION_PROFILE_LIMIT + 2; i++) {
+      const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+      expect(result.status).toBe(503);
+    }
+  });
+
+  it('still calls an empty month empty when the platform that failed was not the only one connected', async () => {
+    const youtubeClient = createFakeYouTubeClient();
+    vi.spyOn(youtubeClient, 'getChannelUploads').mockRejectedValue(new Error('youtube down'));
+    const deps = makeDeps({
+      youtubeClient,
+      scraperClient: createFakeScraperClient({}, []),
+      getProfileHandles: async () => ({ youtube: 'creator', tiktok: 'creator', instagram: null }),
+    });
+    const releaseEventSpy = vi.spyOn(deps.rateLimitStore, 'releaseEvent');
+
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+
+    expect(result.status).toBe(422);
+    expect(result.body.error).toMatch(/nothing was published/i);
+    expect(result.body.warnings).toEqual(['youtube_scrape_failed']);
+    expect(releaseEventSpy).not.toHaveBeenCalled();
+  });
+
   it('rate-limits repeated generation attempts per profile per day', async () => {
     const deps = makeDeps({ scraperClient: createFakeScraperClient({}, []), youtubeClient: createFakeYouTubeClient({}, []) });
     let result;

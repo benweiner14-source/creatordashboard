@@ -134,6 +134,18 @@ export async function handleRecapRequest(deps: RecapHandlerDeps, context: RecapR
 
     const aggregation = aggregateRecap(postsByPlatform);
     if (!aggregation.topPost || aggregation.totals.postCount === 0) {
+      if (warnings.length === connected.length) {
+        // Every connected platform's fetch *threw*. That leaves
+        // postsByPlatform empty exactly like a genuinely quiet month, but
+        // it is our failure, not a real result — so the attempt is given
+        // back, and the creator is told what actually happened rather
+        // than being told they published nothing.
+        await releaseRateLimitEventIfNeeded({ store: deps.rateLimitStore, eventId: rateLimitResult.eventId });
+        return {
+          status: 503,
+          body: { error: "We couldn't reach any of your connected platforms. Please try again in a bit.", warnings },
+        };
+      }
       // A real, costly scrape ran and genuinely found nothing this
       // month — not our own failure, so the rate-limit event is NOT
       // released; it's a legitimate use of one of today's attempts. No
