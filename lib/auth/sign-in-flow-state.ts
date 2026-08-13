@@ -48,7 +48,9 @@ export function createInitialSignInFlowState(params: { url?: string; authError?:
 export function signInFlowReducer(state: SignInFlowState, event: SignInFlowEvent): SignInFlowState {
   switch (event.type) {
     case 'URL_CHANGED':
-      return state.status === 'idle' ? { ...state, url: event.url } : state;
+      return state.status === 'idle' || state.status === 'diagnosticError'
+        ? { ...state, url: event.url }
+        : state;
 
     case 'SUBMIT_DIAGNOSTIC':
       if (state.status !== 'idle' && state.status !== 'diagnosticError') return state;

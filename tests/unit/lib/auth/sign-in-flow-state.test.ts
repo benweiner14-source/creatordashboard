@@ -83,6 +83,24 @@ describe('signInFlowReducer — diagnostic submission path', () => {
     const state: SignInFlowState = { status: 'submittingDiagnostic', url: 'https://tiktok.com/x', stillWorking: false };
     expect(signInFlowReducer(state, { type: 'URL_CHANGED', url: 'https://tiktok.com/y' })).toBe(state);
   });
+
+  it('updates the url on URL_CHANGED from idle', () => {
+    const state: SignInFlowState = { status: 'idle', url: 'https://tiktok.com/x', error: null };
+    expect(signInFlowReducer(state, { type: 'URL_CHANGED', url: 'https://tiktok.com/y' })).toEqual({
+      status: 'idle',
+      url: 'https://tiktok.com/y',
+      error: null,
+    });
+  });
+
+  it('updates the url on URL_CHANGED from diagnosticError', () => {
+    const state: SignInFlowState = { status: 'diagnosticError', url: 'https://tiktok.com/x', error: 'boom' };
+    expect(signInFlowReducer(state, { type: 'URL_CHANGED', url: 'https://tiktok.com/y' })).toEqual({
+      status: 'diagnosticError',
+      url: 'https://tiktok.com/y',
+      error: 'boom',
+    });
+  });
 });
 
 describe('signInFlowReducer — sign-in path', () => {
@@ -93,6 +111,41 @@ describe('signInFlowReducer — sign-in path', () => {
       url: 'https://tiktok.com/x',
       error: null,
     });
+  });
+
+  it('updates the email on EMAIL_CHANGED from needsSignIn, preserving url and notice', () => {
+    const state: SignInFlowState = {
+      status: 'needsSignIn',
+      url: 'https://tiktok.com/x',
+      email: '',
+      notice: 'That sign-in link expired or was already used. Enter your email again to get a new one.',
+    };
+    expect(signInFlowReducer(state, { type: 'EMAIL_CHANGED', email: 'creator@example.com' })).toEqual({
+      status: 'needsSignIn',
+      url: 'https://tiktok.com/x',
+      email: 'creator@example.com',
+      notice: 'That sign-in link expired or was already used. Enter your email again to get a new one.',
+    });
+  });
+
+  it('updates the email on EMAIL_CHANGED from magicLinkError, preserving url and error', () => {
+    const state: SignInFlowState = {
+      status: 'magicLinkError',
+      url: 'https://tiktok.com/x',
+      email: 'creator@example.com',
+      error: 'boom',
+    };
+    expect(signInFlowReducer(state, { type: 'EMAIL_CHANGED', email: 'creator2@example.com' })).toEqual({
+      status: 'magicLinkError',
+      url: 'https://tiktok.com/x',
+      email: 'creator2@example.com',
+      error: 'boom',
+    });
+  });
+
+  it('ignores EMAIL_CHANGED from an unrelated state (impossible-state guard)', () => {
+    const state: SignInFlowState = { status: 'idle', url: 'https://tiktok.com/x', error: null };
+    expect(signInFlowReducer(state, { type: 'EMAIL_CHANGED', email: 'creator@example.com' })).toBe(state);
   });
 
   it('ignores SUBMIT_EMAIL with an invalid email format (impossible-state guard)', () => {
