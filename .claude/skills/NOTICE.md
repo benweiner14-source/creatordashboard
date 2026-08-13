@@ -12,3 +12,16 @@ skills. See `using-superpowers/SKILL.md` for the entry point.
 Not modified from upstream except for selection (not every skill in the
 source repo was copied — only the ones relevant to building this
 product). Re-sync manually from upstream if these fall behind.
+
+# Vendored: Designer Skills Pack (interaction-design)
+
+`form-design`, `error-handling-ux`, `loading-states`, and `state-machine`
+are vendored from [Owl-Listener/designer-skills](https://github.com/Owl-Listener/designer-skills)
+(MIT License, Copyright (c) 2026 MC Dean), commit at time of import.
+
+Used for UI/UX work involving forms, error states, and multi-state flows
+(e.g. the sign-in flow's email form and check-your-email/error states).
+Only these four of the repo's 107 skills were copied — the rest (design
+research, systems, strategy, visual critique, etc.) weren't relevant to
+this product's current needs. Re-sync manually from upstream if these
+fall behind.
