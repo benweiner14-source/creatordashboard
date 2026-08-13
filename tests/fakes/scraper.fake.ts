@@ -1,7 +1,10 @@
-import type { ScraperClient, SocialPostMetadata } from '@/lib/integrations/scraper';
+import type { ScraperClient, SocialPostMetadata, ProfilePost } from '@/lib/integrations/scraper';
 import { detectSocialPlatform } from '@/lib/integrations/scraper';
 
-export function createFakeScraperClient(overrides: Partial<SocialPostMetadata> = {}): ScraperClient {
+export function createFakeScraperClient(
+  overrides: Partial<SocialPostMetadata> = {},
+  profilePosts: ProfilePost[] = []
+): ScraperClient {
   const metadata: SocialPostMetadata = {
     platform: 'tiktok',
     id: 'fake-post-id',
@@ -16,5 +19,6 @@ export function createFakeScraperClient(overrides: Partial<SocialPostMetadata> =
   return {
     detectPlatform: detectSocialPlatform,
     fetchPost: async () => metadata,
+    fetchProfilePosts: async () => profilePosts,
   };
 }
