@@ -20,7 +20,7 @@ export interface SignInPromptProps {
 
 export function SignInPrompt({ state, onEmailChange, onSubmitEmail, onEditUrl, onResend }: SignInPromptProps) {
   const [blurError, setBlurError] = useState<string | null>(null);
-  const email = state.status === 'checkEmail' ? state.email : state.email;
+  const email = state.email;
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-gray-200 p-4">
@@ -28,7 +28,7 @@ export function SignInPrompt({ state, onEmailChange, onSubmitEmail, onEditUrl, o
         <span>
           Checking: <span className="font-medium text-gray-900">{state.url}</span>
         </span>
-        {state.status !== 'checkEmail' && (
+        {state.status !== 'checkEmail' && state.status !== 'submittingMagicLink' && (
           <button type="button" onClick={onEditUrl} className="text-indigo-700 underline">
             Not this link? Edit
           </button>

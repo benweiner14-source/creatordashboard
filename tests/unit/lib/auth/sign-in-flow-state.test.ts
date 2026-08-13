@@ -113,6 +113,20 @@ describe('signInFlowReducer — sign-in path', () => {
     });
   });
 
+  it('returns to idle preserving the url on EDIT_URL from magicLinkError', () => {
+    const state: SignInFlowState = {
+      status: 'magicLinkError',
+      url: 'https://tiktok.com/x',
+      email: 'creator@example.com',
+      error: 'boom',
+    };
+    expect(signInFlowReducer(state, { type: 'EDIT_URL' })).toEqual({
+      status: 'idle',
+      url: 'https://tiktok.com/x',
+      error: null,
+    });
+  });
+
   it('updates the email on EMAIL_CHANGED from needsSignIn, preserving url and notice', () => {
     const state: SignInFlowState = {
       status: 'needsSignIn',

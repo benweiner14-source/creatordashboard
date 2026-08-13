@@ -79,7 +79,9 @@ export function signInFlowReducer(state: SignInFlowState, event: SignInFlowEvent
       return state.status === 'diagnosticError' ? { status: 'idle', url: state.url, error: null } : state;
 
     case 'EDIT_URL':
-      return state.status === 'needsSignIn' ? { status: 'idle', url: state.url, error: null } : state;
+      return state.status === 'needsSignIn' || state.status === 'magicLinkError'
+        ? { status: 'idle', url: state.url, error: null }
+        : state;
 
     case 'EMAIL_CHANGED':
       return state.status === 'needsSignIn' || state.status === 'magicLinkError'

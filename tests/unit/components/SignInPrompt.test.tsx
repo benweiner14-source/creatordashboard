@@ -58,6 +58,22 @@ describe('SignInPrompt', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Sending…');
   });
 
+  it('hides the edit-url button while submittingMagicLink', () => {
+    renderPrompt({ status: 'submittingMagicLink', url: 'https://tiktok.com/x', email: 'creator@example.com' });
+    expect(screen.queryByRole('button', { name: /not this link\? edit/i })).not.toBeInTheDocument();
+  });
+
+  it('calls onEditUrl when the edit link is clicked from magicLinkError', () => {
+    const handlers = renderPrompt({
+      status: 'magicLinkError',
+      url: 'https://tiktok.com/x',
+      email: 'creator@example.com',
+      error: "You've requested a few sign-in links in a row. Wait a minute and try again.",
+    });
+    fireEvent.click(screen.getByRole('button', { name: /not this link\? edit/i }));
+    expect(handlers.onEditUrl).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the confirmation message and a resend button in checkEmail', () => {
     const handlers = renderPrompt({ status: 'checkEmail', url: 'https://tiktok.com/x', email: 'creator@example.com' });
     expect(screen.getByText(/check your email/i)).toHaveTextContent('creator@example.com');
