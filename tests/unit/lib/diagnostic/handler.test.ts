@@ -110,4 +110,74 @@ describe('handleDiagnosticRequest', () => {
     expect(scraperClient.fetchPost).not.toHaveBeenCalled();
     expect(claudeClient.generateDiagnosticReport).not.toHaveBeenCalled();
   });
+
+  it('records the rate-limit event before calling any external API', async () => {
+    const store = createInMemoryRateLimitStore();
+    const callOrder: string[] = [];
+    const originalCheckAndRecord = store.checkAndRecordAtomically;
+    store.checkAndRecordAtomically = async (...args: Parameters<typeof originalCheckAndRecord>) => {
+      callOrder.push('checkAndRecord');
+      return originalCheckAndRecord(...args);
+    };
+    const fakeYouTubeClient = createFakeYouTubeClient();
+    const youtubeClient = {
+      ...fakeYouTubeClient,
+      getVideoMetadata: async (...args: Parameters<typeof fakeYouTubeClient.getVideoMetadata>) => {
+        callOrder.push('youtube');
+        return fakeYouTubeClient.getVideoMetadata(...args);
+      },
+    };
+    const deps = makeDeps({ rateLimitStore: store, youtubeClient });
+
+    await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/watch?v=abc123',
+    });
+
+    expect(callOrder).toEqual(['checkAndRecord', 'youtube']);
+  });
+
+  it('releases the rate-limit event when report generation fails, so the slot is not consumed', async () => {
+    const store = createInMemoryRateLimitStore();
+    const claudeClient = {
+      generateDiagnosticReport: async () => {
+        throw new Error('Claude API request failed');
+      },
+    };
+    const deps = makeDeps({ rateLimitStore: store, claudeClient });
+
+    await expect(
+      handleDiagnosticRequest(deps, {
+        profileId: 'profile-1',
+        ip: '203.0.113.1',
+        url: 'https://www.youtube.com/watch?v=abc123',
+      })
+    ).rejects.toThrow('Claude API request failed');
+
+    const second = await handleDiagnosticRequest(makeDeps({ rateLimitStore: store }), {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/watch?v=abc123',
+    });
+    expect(second.status).toBe(200);
+  });
+
+  it('releases the rate-limit event when the URL is unsupported, so the slot is not consumed', async () => {
+    const store = createInMemoryRateLimitStore();
+
+    const first = await handleDiagnosticRequest(makeDeps({ rateLimitStore: store }), {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://example.com/post',
+    });
+    expect(first.status).toBe(400);
+
+    const second = await handleDiagnosticRequest(makeDeps({ rateLimitStore: store }), {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/watch?v=abc123',
+    });
+    expect(second.status).toBe(200);
+  });
 });

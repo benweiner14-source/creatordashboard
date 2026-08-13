@@ -67,6 +67,23 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      check_and_record_rate_limit: {
+        Args: {
+          p_profile_id: string;
+          p_ip_hash: string;
+          p_event_type: string;
+          p_profile_limit: number;
+          p_ip_limit: number;
+          p_window_start: string;
+          p_now: string;
+        };
+        Returns: { allowed: boolean; reason: string | null; event_id: string | null }[];
+      };
+      release_rate_limit_event: {
+        Args: { p_event_id: string };
+        Returns: undefined;
+      };
+    };
   };
 }

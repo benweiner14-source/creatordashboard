@@ -1,5 +1,5 @@
 import type { RateLimitStore } from '@/lib/rate-limit';
-import { checkRateLimit, recordRateLimitEvent, hashIp } from '@/lib/rate-limit';
+import { checkAndRecordRateLimit, releaseRateLimitEvent, hashIp } from '@/lib/rate-limit';
 import type { YouTubeClient } from '@/lib/integrations/youtube';
 import type { ScraperClient } from '@/lib/integrations/scraper';
 import type { ClaudeReportClient } from '@/lib/integrations/claude';
@@ -30,6 +30,20 @@ export interface DiagnosticHandlerResult {
   body: Record<string, unknown>;
 }
 
+async function releaseIfNeeded(store: RateLimitStore, eventId: string | undefined): Promise<void> {
+  if (!eventId) return;
+  try {
+    await releaseRateLimitEvent({ store, eventId });
+  } catch (releaseErr) {
+    // A failed compensating release is logged, not thrown: the original
+    // error/response is what the caller needs to see. Worst case, the
+    // event stays recorded and the profile's slot is consumed by this
+    // failure — the same outcome the pre-atomicity code always had, not a
+    // regression introduced by adding this compensation.
+    console.error('Failed to release rate limit event:', releaseErr);
+  }
+}
+
 export async function handleDiagnosticRequest(
   deps: DiagnosticHandlerDeps,
   context: DiagnosticRequestContext
@@ -39,7 +53,7 @@ export async function handleDiagnosticRequest(
   }
 
   const ipHash = hashIp(context.ip, deps.ipSalt);
-  const rateLimitResult = await checkRateLimit({
+  const rateLimitResult = await checkAndRecordRateLimit({
     store: deps.rateLimitStore,
     profileId: context.profileId,
     ipHash,
@@ -59,41 +73,48 @@ export async function handleDiagnosticRequest(
     };
   }
 
-  let platform: 'youtube' | 'tiktok' | 'instagram' | null = null;
-  let postStats: Parameters<typeof generateDiagnosticReport>[0]['postStats'] | null = null;
+  const eventId = rateLimitResult.eventId;
 
-  const youtubeId = deps.youtubeClient.extractVideoId(context.url);
-  if (youtubeId) {
-    platform = 'youtube';
-    const metadata = await deps.youtubeClient.getVideoMetadata(youtubeId);
-    postStats = {
-      captionOrTitle: metadata.title,
-      publishedAt: metadata.publishedAt,
-      durationSeconds: metadata.durationSeconds,
-      viewCount: metadata.viewCount,
-      likeCount: metadata.likeCount,
-      commentCount: metadata.commentCount,
-    };
-  } else {
-    const detected = deps.scraperClient.detectPlatform(context.url);
-    if (!detected) {
-      return { status: 400, body: { error: 'That link is not a supported YouTube, TikTok, or Instagram URL.' } };
+  try {
+    let platform: 'youtube' | 'tiktok' | 'instagram' | null = null;
+    let postStats: Parameters<typeof generateDiagnosticReport>[0]['postStats'] | null = null;
+
+    const youtubeId = deps.youtubeClient.extractVideoId(context.url);
+    if (youtubeId) {
+      platform = 'youtube';
+      const metadata = await deps.youtubeClient.getVideoMetadata(youtubeId);
+      postStats = {
+        captionOrTitle: metadata.title,
+        publishedAt: metadata.publishedAt,
+        durationSeconds: metadata.durationSeconds,
+        viewCount: metadata.viewCount,
+        likeCount: metadata.likeCount,
+        commentCount: metadata.commentCount,
+      };
+    } else {
+      const detected = deps.scraperClient.detectPlatform(context.url);
+      if (!detected) {
+        await releaseIfNeeded(deps.rateLimitStore, eventId);
+        return { status: 400, body: { error: 'That link is not a supported YouTube, TikTok, or Instagram URL.' } };
+      }
+      platform = detected;
+      const post = await deps.scraperClient.fetchPost(context.url);
+      postStats = {
+        captionOrTitle: post.caption,
+        publishedAt: post.publishedAt,
+        durationSeconds: post.durationSeconds,
+        viewCount: post.viewCount,
+        likeCount: post.likeCount,
+        commentCount: post.commentCount,
+      };
     }
-    platform = detected;
-    const post = await deps.scraperClient.fetchPost(context.url);
-    postStats = {
-      captionOrTitle: post.caption,
-      publishedAt: post.publishedAt,
-      durationSeconds: post.durationSeconds,
-      viewCount: post.viewCount,
-      likeCount: post.likeCount,
-      commentCount: post.commentCount,
-    };
+
+    const report = await generateDiagnosticReport({ platform, postStats, claudeClient: deps.claudeClient });
+    const saved = await deps.saveDiagnostic({ profileId: context.profileId, platform, inputUrl: context.url, report });
+
+    return { status: 200, body: { id: saved.id, report } };
+  } catch (err) {
+    await releaseIfNeeded(deps.rateLimitStore, eventId);
+    throw err;
   }
-
-  const report = await generateDiagnosticReport({ platform, postStats, claudeClient: deps.claudeClient });
-  const saved = await deps.saveDiagnostic({ profileId: context.profileId, platform, inputUrl: context.url, report });
-  await recordRateLimitEvent({ store: deps.rateLimitStore, profileId: context.profileId, ipHash, eventType: 'diagnostic_request' });
-
-  return { status: 200, body: { id: saved.id, report } };
 }
