@@ -41,3 +41,12 @@ ready to connect real infrastructure:
 5. Create a Vercel project (`vercel link`), set the same environment
    variables plus `YOUTUBE_API_KEY`, `APIFY_API_TOKEN`, `ANTHROPIC_API_KEY`,
    and `RATE_LIMIT_IP_SALT` in the Vercel dashboard, then `vercel deploy`.
+
+**Self-hosting instead of Vercel?** The per-IP rate-limit cap trusts the
+`x-forwarded-for` header to identify a client's IP — on Vercel this is safe
+automatically (its edge network sets that header itself, so a client
+can't forge it). Anywhere else, set `TRUSTED_PROXY_HOPS` in your
+environment to the number of reverse-proxy hops in front of the app that
+you trust (see `.env.example`), or the app will deliberately not trust
+the header at all and every request will share one "unknown IP" bucket —
+safe, but it means the per-IP cap won't do anything until configured.

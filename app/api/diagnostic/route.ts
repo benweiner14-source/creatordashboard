@@ -5,6 +5,7 @@ import { createYouTubeClient } from '@/lib/integrations/youtube';
 import { createApifyScraperClient } from '@/lib/integrations/scraper';
 import { createClaudeReportClient } from '@/lib/integrations/claude';
 import { handleDiagnosticRequest } from '@/lib/diagnostic/handler';
+import { deriveClientIp } from '@/lib/ip';
 
 export async function POST(request: Request) {
   const { url } = (await request.json()) as { url?: string };
@@ -18,7 +19,11 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabase.auth.getUser();
     const serviceClient = createSupabaseServiceRoleClient();
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '0.0.0.0';
+    const ip = deriveClientIp({
+      headers: request.headers,
+      isTrustedPlatform: process.env.VERCEL === '1',
+      trustedProxyHops: process.env.TRUSTED_PROXY_HOPS ? Number(process.env.TRUSTED_PROXY_HOPS) : undefined,
+    });
 
     const result = await handleDiagnosticRequest(
       {
