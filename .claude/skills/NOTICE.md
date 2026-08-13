@@ -25,3 +25,17 @@ Only these four of the repo's 107 skills were copied — the rest (design
 research, systems, strategy, visual critique, etc.) weren't relevant to
 this product's current needs. Re-sync manually from upstream if these
 fall behind.
+
+# Vendored: naming
+
+`naming` is vendored from [glacierphonk/naming](https://github.com/glacierphonk/naming)
+(MIT License, Copyright (c) 2026 GlacierPhonk), commit `e7af8a5`.
+
+A metaphor-driven naming process (naming brief → metaphor exploration →
+candidate generation → anti-pattern filtering → availability checks →
+scoring → presentation) for naming products, brands, and projects. Used
+here to work through a final product name for the "Creator Dashboard"
+working title. Not modified from upstream except for selection (README,
+LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, and repo/lint metadata were
+dropped as non-functional for the skill itself). Re-sync manually from
+upstream if this falls behind.
