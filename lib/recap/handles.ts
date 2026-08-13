@@ -6,17 +6,49 @@ const HANDLE_HOSTS: Record<RecapPlatform, string[]> = {
   instagram: ['instagram.com'],
 };
 
+/**
+ * Path segments that are route markers, not handles. `/channel/UCabc`,
+ * `/c/SomeCreator`, `/p/abc123` and friends used to normalize to
+ * "channel", "c" and "p" and get stored as the creator's handle, only
+ * failing much later at generation time. Rejecting them here keeps
+ * validation inline on save, as the spec requires. Resolving a
+ * /channel/UC... id into a usable handle is deliberately out of scope —
+ * the creator is asked for their @handle instead.
+ */
+const RESERVED_PATH_SEGMENTS = new Set([
+  'channel',
+  'c',
+  'user',
+  'p',
+  'reel',
+  'reels',
+  'tv',
+  'watch',
+  'shorts',
+  'video',
+  'stories',
+]);
+
+function hostMatches(hostname: string, host: string): boolean {
+  return hostname === host || hostname.endsWith(`.${host}`);
+}
+
 export function normalizeHandle(platform: RecapPlatform, rawInput: string): string | null {
   const trimmed = rawInput.trim();
   if (!trimmed) return null;
 
   try {
     const parsed = new URL(trimmed);
-    if (!HANDLE_HOSTS[platform].some((host) => parsed.hostname.includes(host))) return null;
+    // Suffix match, not `includes` — otherwise tiktok.com.evil.com passes.
+    if (!HANDLE_HOSTS[platform].some((host) => hostMatches(parsed.hostname, host))) return null;
     const segments = parsed.pathname.split('/').filter(Boolean);
-    const handleSegment = segments.find((s) => s.startsWith('@')) ?? segments[0];
-    if (!handleSegment) return null;
-    return handleSegment.replace(/^@/, '');
+    const atSegment = segments.find((s) => s.startsWith('@'));
+    if (!atSegment) {
+      const first = segments[0];
+      if (!first || RESERVED_PATH_SEGMENTS.has(first.toLowerCase())) return null;
+      return first;
+    }
+    return atSegment.replace(/^@/, '');
   } catch {
     // Not a URL — treat as a bare handle.
     const bare = trimmed.replace(/^@/, '');
