@@ -47,17 +47,23 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           fontFamily: 'sans-serif',
         }}
       >
+        {/* Satori rejects any <div> with more than one child node unless it
+            declares display: flex/contents/none, and JSX turns interleaved
+            {expression}/text into multiple children. Every text line below is
+            therefore a single template-literal child. */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: 28, opacity: 0.8 }}>{monthLabel} Recap</div>
-          <div style={{ fontSize: 96, fontWeight: 700, marginTop: 12 }}>{formatCompactNumber(totals.views)} views</div>
+          <div style={{ fontSize: 28, opacity: 0.8 }}>{`${monthLabel} Recap`}</div>
+          <div style={{ fontSize: 96, fontWeight: 700, marginTop: 12 }}>
+            {`${formatCompactNumber(totals.views)} views`}
+          </div>
           <div style={{ fontSize: 28, marginTop: 8, opacity: 0.9 }}>
-            {formatCompactNumber(totals.postCount)} posts · {formatCompactNumber(totals.likes)} likes
+            {`${formatCompactNumber(totals.postCount)} posts · ${formatCompactNumber(totals.likes)} likes`}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 22, opacity: 0.8 }}>Top post</div>
           <div style={{ fontSize: 30, fontWeight: 600 }}>
-            {PLATFORM_LABELS[topPost.platform] ?? topPost.platform} · {formatCompactNumber(topPost.viewCount)} views
+            {`${PLATFORM_LABELS[topPost.platform] ?? topPost.platform} · ${formatCompactNumber(topPost.viewCount)} views`}
           </div>
           <div style={{ fontSize: 22, opacity: 0.85, maxWidth: 900 }}>{topPost.captionOrTitle.slice(0, 90)}</div>
         </div>
@@ -72,6 +78,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         <div style={{ fontSize: 20, opacity: 0.6 }}>Creator Dashboard</div>
       </div>
     ),
-    { width: 1080, height: 1350 }
+    {
+      width: 1080,
+      height: 1350,
+      // The underlying recap_cards row is immutable once generated, and this
+      // is the URL embedded in every share — cache it hard.
+      headers: { 'Cache-Control': 'public, max-age=31536000, immutable' },
+    }
   );
 }
