@@ -65,4 +65,77 @@ describe('createYouTubeClient', () => {
     const client = createYouTubeClient('test-api-key');
     await expect(client.getVideoMetadata('missing-id')).rejects.toThrow('No YouTube video found');
   });
+
+  describe('getChannelUploads', () => {
+    it('resolves the uploads playlist by handle, then fetches and normalizes recent videos', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ items: [{ contentDetails: { relatedPlaylists: { uploads: 'UUuploads1' } } }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ items: [{ contentDetails: { videoId: 'vid1' } }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [
+              {
+                snippet: { title: 'Video one', description: '', publishedAt: '2026-08-03T00:00:00Z', tags: [] },
+                statistics: { viewCount: '2000', likeCount: '150', commentCount: '20' },
+                contentDetails: { duration: 'PT1M' },
+              },
+            ],
+          }),
+        });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createYouTubeClient('test-api-key');
+      const videos = await client.getChannelUploads('@creator');
+
+      expect(videos).toEqual([
+        {
+          id: 'vid1',
+          title: 'Video one',
+          description: '',
+          publishedAt: '2026-08-03T00:00:00Z',
+          durationSeconds: 60,
+          viewCount: 2000,
+          likeCount: 150,
+          commentCount: 20,
+          tags: [],
+        },
+      ]);
+      expect(String(fetchMock.mock.calls[0][0])).toContain('forHandle=%40creator');
+      expect(String(fetchMock.mock.calls[1][0])).toContain('playlistId=UUuploads1');
+    });
+
+    it('throws when no channel is found for the handle', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ items: [] }) }));
+      const client = createYouTubeClient('test-api-key');
+      await expect(client.getChannelUploads('missing-handle')).rejects.toThrow('No YouTube channel found');
+    });
+
+    it('returns an empty array when the channel has no uploads', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ items: [{ contentDetails: { relatedPlaylists: { uploads: 'UUuploads1' } } }] }),
+        })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ items: [] }) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createYouTubeClient('test-api-key');
+      const videos = await client.getChannelUploads('@creator');
+      expect(videos).toEqual([]);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+  });
 });

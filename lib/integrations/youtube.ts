@@ -13,6 +13,12 @@ export interface VideoMetadata {
 export interface YouTubeClient {
   extractVideoId(url: string): string | null;
   getVideoMetadata(videoId: string): Promise<VideoMetadata>;
+  /**
+   * Public channel uploads — no OAuth needed, works off the same API key
+   * as getVideoMetadata. Bounded to maxResults regardless of channel size;
+   * callers filter further to a target month. See spec §2.2.
+   */
+  getChannelUploads(handle: string, maxResults?: number): Promise<VideoMetadata[]>;
 }
 
 export function extractYouTubeVideoId(url: string): string | null {
@@ -42,6 +48,35 @@ function parseIso8601Duration(iso: string): number {
   return (Number(hours) || 0) * 3600 + (Number(minutes) || 0) * 60 + (Number(seconds) || 0);
 }
 
+function mapVideoItem(item: {
+  id: string;
+  snippet: { title: string; description: string; publishedAt: string; tags?: string[] };
+  statistics: { viewCount?: string; likeCount?: string; commentCount?: string };
+  contentDetails: { duration: string };
+}): VideoMetadata {
+  return {
+    id: item.id,
+    title: item.snippet.title,
+    description: item.snippet.description,
+    publishedAt: item.snippet.publishedAt,
+    durationSeconds: parseIso8601Duration(item.contentDetails.duration),
+    viewCount: Number(item.statistics.viewCount ?? 0),
+    likeCount: Number(item.statistics.likeCount ?? 0),
+    commentCount: Number(item.statistics.commentCount ?? 0),
+    tags: item.snippet.tags ?? [],
+  };
+}
+
+async function fetchYouTubeJson(url: URL): Promise<any> {
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`YouTube API request failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+const CHANNEL_UPLOADS_MAX_RESULTS = 50;
+
 export function createYouTubeClient(apiKey: string): YouTubeClient {
   return {
     extractVideoId: extractYouTubeVideoId,
@@ -51,26 +86,44 @@ export function createYouTubeClient(apiKey: string): YouTubeClient {
       url.searchParams.set('part', 'snippet,statistics,contentDetails');
       url.searchParams.set('key', apiKey);
 
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        throw new Error(`YouTube API request failed with status ${response.status}`);
-      }
-      const data = await response.json();
+      const data = await fetchYouTubeJson(url);
       const item = data.items?.[0];
       if (!item) {
         throw new Error(`No YouTube video found for id ${videoId}`);
       }
-      return {
-        id: videoId,
-        title: item.snippet.title,
-        description: item.snippet.description,
-        publishedAt: item.snippet.publishedAt,
-        durationSeconds: parseIso8601Duration(item.contentDetails.duration),
-        viewCount: Number(item.statistics.viewCount ?? 0),
-        likeCount: Number(item.statistics.likeCount ?? 0),
-        commentCount: Number(item.statistics.commentCount ?? 0),
-        tags: item.snippet.tags ?? [],
-      };
+      return mapVideoItem({ ...item, id: videoId });
+    },
+    async getChannelUploads(handle: string, maxResults = CHANNEL_UPLOADS_MAX_RESULTS): Promise<VideoMetadata[]> {
+      const cleanHandle = handle.startsWith('@') ? handle : `@${handle}`;
+
+      const channelsUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+      channelsUrl.searchParams.set('part', 'contentDetails');
+      channelsUrl.searchParams.set('forHandle', cleanHandle);
+      channelsUrl.searchParams.set('key', apiKey);
+      const channelsData = await fetchYouTubeJson(channelsUrl);
+      const channel = channelsData.items?.[0];
+      if (!channel) {
+        throw new Error(`No YouTube channel found for handle ${handle}`);
+      }
+      const uploadsPlaylistId = channel.contentDetails.relatedPlaylists.uploads;
+
+      const playlistUrl = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+      playlistUrl.searchParams.set('part', 'contentDetails');
+      playlistUrl.searchParams.set('playlistId', uploadsPlaylistId);
+      playlistUrl.searchParams.set('maxResults', String(maxResults));
+      playlistUrl.searchParams.set('key', apiKey);
+      const playlistData = await fetchYouTubeJson(playlistUrl);
+      const videoIds: string[] = (playlistData.items ?? []).map((i: any) => i.contentDetails.videoId);
+      if (videoIds.length === 0) return [];
+
+      const videosUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
+      videosUrl.searchParams.set('id', videoIds.join(','));
+      videosUrl.searchParams.set('part', 'snippet,statistics,contentDetails');
+      videosUrl.searchParams.set('key', apiKey);
+      const videosData = await fetchYouTubeJson(videosUrl);
+      return (videosData.items ?? []).map((item: any, index: number) =>
+        mapVideoItem({ ...item, id: item.id ?? videoIds[index] })
+      );
     },
   };
 }
