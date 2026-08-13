@@ -28,11 +28,12 @@ function DiagnosticInputPageInner() {
     }
   }, [state.status]);
 
+  const redirectDiagnosticId = state.status === 'redirectingToReport' ? state.diagnosticId : undefined;
   useEffect(() => {
-    if (state.status === 'redirectingToReport') {
-      router.push(`/diagnostic/${state.diagnosticId}`);
+    if (redirectDiagnosticId) {
+      router.push(`/diagnostic/${redirectDiagnosticId}`);
     }
-  }, [state, router]);
+  }, [redirectDiagnosticId, router]);
 
   async function submitDiagnostic(url: string) {
     try {

@@ -14,6 +14,7 @@ import DiagnosticInputPage from '@/app/diagnostic/page';
 describe('DiagnosticInputPage', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
     pushMock.mockClear();
     mockSearchParams = new URLSearchParams();
   });
@@ -107,6 +108,24 @@ describe('DiagnosticInputPage', () => {
 
     expect(screen.getByLabelText(/paste a youtube, tiktok, or instagram link/i)).toHaveValue('https://www.tiktok.com/@user/video/123');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('escalates the loading message after 8 seconds', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockReturnValue(new Promise(() => {})); // never resolves, keeps it in submittingDiagnostic
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticInputPage />);
+    fireEvent.change(screen.getByLabelText(/paste a youtube, tiktok, or instagram link/i), {
+      target: { value: 'https://www.tiktok.com/@user/video/123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /get my report/i }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Analyzing…');
+
+    await vi.advanceTimersByTimeAsync(8000);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/still working/i);
   });
 
   it('lands directly in the sign-in prompt with a notice when returning from an expired magic link', () => {
