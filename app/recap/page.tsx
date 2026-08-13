@@ -58,17 +58,24 @@ export default function RecapPage() {
 
   async function saveHandles() {
     if (state.status !== 'noHandlesConnected' && state.status !== 'readyToGenerate') return;
-    const res = await fetch('/api/recap/handles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state.handles),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      dispatch({ type: 'HANDLES_SAVE_FAILED', error: data.error ?? 'Something went wrong saving your handles.' });
-      return;
+    try {
+      const res = await fetch('/api/recap/handles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.handles),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        dispatch({ type: 'HANDLES_SAVE_FAILED', error: data.error ?? 'Something went wrong saving your handles.' });
+        return;
+      }
+      dispatch({ type: 'HANDLES_SAVED' });
+    } catch {
+      dispatch({
+        type: 'HANDLES_SAVE_FAILED',
+        error: "We couldn't reach the server. Check your connection and try again.",
+      });
     }
-    dispatch({ type: 'HANDLES_SAVED' });
   }
 
   async function generate() {

@@ -78,6 +78,26 @@ describe('RecapPage', () => {
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 
+  it('shows an error when saving handles fails to reach the server', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ handles: { youtube: null, tiktok: null, instagram: null }, recapCardId: null }),
+      })
+      .mockRejectedValueOnce(new Error('network error'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<RecapPage />);
+    await waitFor(() => screen.getByLabelText(/youtube channel handle/i));
+    fireEvent.change(screen.getByLabelText(/youtube channel handle/i), { target: { value: 'creator' } });
+    fireEvent.click(screen.getByRole('button', { name: /save platforms/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/couldn't reach the server/i)
+    );
+  });
+
   it('saves handles and shows the generate button on success', async () => {
     const fetchMock = vi
       .fn()
