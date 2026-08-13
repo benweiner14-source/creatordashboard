@@ -2,8 +2,26 @@ export interface Database {
   public: {
     Tables: {
       profiles: {
-        Row: { id: string; email: string; display_name: string | null; niche: string | null; created_at: string };
-        Insert: { id: string; email: string; display_name?: string | null; niche?: string | null; created_at?: string };
+        Row: {
+          id: string;
+          email: string;
+          display_name: string | null;
+          niche: string | null;
+          youtube_channel_handle: string | null;
+          tiktok_handle: string | null;
+          instagram_handle: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          display_name?: string | null;
+          niche?: string | null;
+          youtube_channel_handle?: string | null;
+          tiktok_handle?: string | null;
+          instagram_handle?: string | null;
+          created_at?: string;
+        };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
         Relationships: [];
       };
@@ -63,6 +81,30 @@ export interface Database {
         Row: { id: string; niche: string; source_type: string; source_identifier: string; last_scraped_at: string | null; created_at: string };
         Insert: { id?: string; niche: string; source_type: string; source_identifier: string; last_scraped_at?: string | null; created_at?: string };
         Update: Partial<Database['public']['Tables']['niche_community_sources']['Insert']>;
+        Relationships: [];
+      };
+      recap_cards: {
+        Row: {
+          id: string;
+          profile_id: string;
+          month: string;
+          platform_data: unknown;
+          totals: unknown;
+          top_post: unknown;
+          warnings: string[];
+          generated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          month: string;
+          platform_data: unknown;
+          totals: unknown;
+          top_post: unknown;
+          warnings?: string[];
+          generated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['recap_cards']['Insert']>;
         Relationships: [];
       };
     };

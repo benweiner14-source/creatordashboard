@@ -79,4 +79,15 @@ describe('supabase migrations', () => {
     expect(sql).toContain('where identity_hash = p_identity_hash');
     expect(sql).toContain('rate_limit_events_identity_hash_created_at_idx');
   });
+
+  it('includes a migration adding recap platform handles to profiles and a recap_cards table', () => {
+    const sql = readMigrationContaining('create_recap_cards');
+    expect(sql).toContain('add column youtube_channel_handle text');
+    expect(sql).toContain('add column tiktok_handle text');
+    expect(sql).toContain('add column instagram_handle text');
+    expect(sql).toContain('create table if not exists public.recap_cards');
+    expect(sql).toContain('unique (profile_id, month)');
+    expect(sql).toContain('"Recap cards are viewable by owner"');
+    expect(sql).toContain('"Recap cards are insertable by owner"');
+  });
 });
