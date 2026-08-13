@@ -73,6 +73,31 @@ describe('DiagnosticInputPage', () => {
     );
   });
 
+  it('shows an inline error and preserves the email when the magic-link request fails', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: 'You must be signed in to run a diagnostic.' }) })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: "You've requested a few sign-in links in a row. Wait a minute and try again." }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticInputPage />);
+    fireEvent.change(screen.getByLabelText(/paste a youtube, tiktok, or instagram link/i), {
+      target: { value: 'https://www.tiktok.com/@user/video/123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /get my report/i }));
+    await waitFor(() => screen.getByLabelText('Email'));
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'creator@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /send sign-in link/i }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Wait a minute'));
+    expect(screen.getByLabelText('Email')).toHaveValue('creator@example.com');
+  });
+
   it('shows an error message and preserves the url when the diagnostic request fails', async () => {
     vi.stubGlobal(
       'fetch',
@@ -134,7 +159,7 @@ describe('DiagnosticInputPage', () => {
     );
     render(<DiagnosticInputPage />);
 
-    expect(screen.getByText(/expired or was already used/i)).toBeInTheDocument();
+    expect(screen.getByText(/didn't work.*expired/i)).toBeInTheDocument();
     expect(screen.getByText(/checking:/i)).toHaveTextContent('https://www.tiktok.com/@user/video/123');
   });
 });

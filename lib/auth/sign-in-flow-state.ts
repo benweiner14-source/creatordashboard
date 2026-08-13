@@ -15,7 +15,6 @@ export type SignInFlowEvent =
   | { type: 'DIAGNOSTIC_SUCCESS'; diagnosticId: string }
   | { type: 'DIAGNOSTIC_UNAUTHORIZED' }
   | { type: 'DIAGNOSTIC_FAILED'; error: string }
-  | { type: 'RETRY_DIAGNOSTIC' }
   | { type: 'EDIT_URL' }
   | { type: 'EMAIL_CHANGED'; email: string }
   | { type: 'SUBMIT_EMAIL' }
@@ -39,7 +38,8 @@ export function createInitialSignInFlowState(params: { url?: string; authError?:
       status: 'needsSignIn',
       url,
       email: '',
-      notice: 'That sign-in link expired or was already used. Enter your email again to get a new one.',
+      notice:
+        "That sign-in link didn't work — it may have expired, already been used, or been opened on a different device than the one you requested it from. Enter your email again to get a new one.",
     };
   }
   return { status: 'idle', url, error: null };
@@ -75,9 +75,6 @@ export function signInFlowReducer(state: SignInFlowState, event: SignInFlowEvent
         ? { status: 'diagnosticError', url: state.url, error: event.error }
         : state;
 
-    case 'RETRY_DIAGNOSTIC':
-      return state.status === 'diagnosticError' ? { status: 'idle', url: state.url, error: null } : state;
-
     case 'EDIT_URL':
       return state.status === 'needsSignIn' || state.status === 'magicLinkError'
         ? { status: 'idle', url: state.url, error: null }
@@ -109,7 +106,7 @@ export function signInFlowReducer(state: SignInFlowState, event: SignInFlowEvent
         : state;
 
     case 'RETRY_EMAIL':
-      return state.status === 'magicLinkError'
+      return state.status === 'checkEmail'
         ? { status: 'needsSignIn', url: state.url, email: state.email, notice: null }
         : state;
 

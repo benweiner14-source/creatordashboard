@@ -28,6 +28,16 @@ ready to connect real infrastructure:
    and `SUPABASE_SERVICE_ROLE_KEY`.
 4. Enable email magic-link auth under Authentication → Providers (enabled by
    default; no password provider is used).
+   **Also required:** add `<your-app-origin>/auth/callback` (e.g.
+   `https://your-app.vercel.app/auth/callback` and, for local dev,
+   `http://localhost:3000/auth/callback`) to the project's **Redirect URLs**
+   allow list under Authentication → URL Configuration. If it's missing,
+   Supabase silently ignores the `emailRedirectTo` passed with each magic
+   link and falls back to the Site URL instead — the sign-in round trip
+   (including the preserved diagnostic URL) will silently fail in
+   production even though every automated test still passes, since the
+   tests all mock the Supabase client and never exercise the real
+   allow-list check.
 5. Create a Vercel project (`vercel link`), set the same environment
    variables plus `YOUTUBE_API_KEY`, `APIFY_API_TOKEN`, `ANTHROPIC_API_KEY`,
    and `RATE_LIMIT_IP_SALT` in the Vercel dashboard, then `vercel deploy`.

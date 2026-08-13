@@ -1,5 +1,23 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleAuthCallback, extractUrlParam } from '@/lib/auth/callback';
+import { handleAuthCallback, extractUrlParam, isSafeRelativePath } from '@/lib/auth/callback';
+
+describe('isSafeRelativePath', () => {
+  it('accepts a root-relative path', () => {
+    expect(isSafeRelativePath('/diagnostic?url=x')).toBe(true);
+  });
+
+  it('rejects an absolute URL', () => {
+    expect(isSafeRelativePath('https://evil.example')).toBe(false);
+  });
+
+  it('rejects a protocol-relative URL', () => {
+    expect(isSafeRelativePath('//evil.example')).toBe(false);
+  });
+
+  it('rejects a value that does not start with a slash', () => {
+    expect(isSafeRelativePath('diagnostic')).toBe(false);
+  });
+});
 
 describe('extractUrlParam', () => {
   it('reads the url query param out of a path+query string', () => {
@@ -44,5 +62,27 @@ describe('handleAuthCallback', () => {
     const redirectUrl = new URL(result.redirectUrl);
     expect(redirectUrl.searchParams.get('authError')).toBe('expired');
     expect(redirectUrl.searchParams.has('url')).toBe(false);
+  });
+
+  it('falls back to /diagnostic on the app origin when next is an absolute URL (open-redirect guard)', async () => {
+    const exchangeCodeForSession = vi.fn().mockResolvedValue({ error: null });
+    const result = await handleAuthCallback(
+      { exchangeCodeForSession },
+      { code: 'valid-code', next: 'https://evil.example', origin: 'https://app.example.com' }
+    );
+    const redirectUrl = new URL(result.redirectUrl);
+    expect(redirectUrl.origin).toBe('https://app.example.com');
+    expect(redirectUrl.pathname).toBe('/diagnostic');
+  });
+
+  it('falls back to /diagnostic without throwing when next is malformed', async () => {
+    const exchangeCodeForSession = vi.fn().mockResolvedValue({ error: null });
+    const result = await handleAuthCallback(
+      { exchangeCodeForSession },
+      { code: 'valid-code', next: 'http://', origin: 'https://app.example.com' }
+    );
+    const redirectUrl = new URL(result.redirectUrl);
+    expect(redirectUrl.origin).toBe('https://app.example.com');
+    expect(redirectUrl.pathname).toBe('/diagnostic');
   });
 });

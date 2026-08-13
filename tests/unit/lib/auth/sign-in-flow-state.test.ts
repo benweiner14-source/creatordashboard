@@ -25,7 +25,8 @@ describe('createInitialSignInFlowState', () => {
       status: 'needsSignIn',
       url: 'https://tiktok.com/x',
       email: '',
-      notice: 'That sign-in link expired or was already used. Enter your email again to get a new one.',
+      notice:
+        "That sign-in link didn't work — it may have expired, already been used, or been opened on a different device than the one you requested it from. Enter your email again to get a new one.",
     });
   });
 
@@ -68,15 +69,6 @@ describe('signInFlowReducer — diagnostic submission path', () => {
     const state: SignInFlowState = { status: 'submittingDiagnostic', url: 'https://tiktok.com/x', stillWorking: false };
     const next = signInFlowReducer(state, { type: 'DIAGNOSTIC_FAILED', error: 'boom' });
     expect(next).toEqual({ status: 'diagnosticError', url: 'https://tiktok.com/x', error: 'boom' });
-  });
-
-  it('returns to idle preserving the url on RETRY_DIAGNOSTIC', () => {
-    const state: SignInFlowState = { status: 'diagnosticError', url: 'https://tiktok.com/x', error: 'boom' };
-    expect(signInFlowReducer(state, { type: 'RETRY_DIAGNOSTIC' })).toEqual({
-      status: 'idle',
-      url: 'https://tiktok.com/x',
-      error: null,
-    });
   });
 
   it('ignores URL_CHANGED while a submission is in flight (impossible-state guard)', () => {
@@ -132,13 +124,15 @@ describe('signInFlowReducer — sign-in path', () => {
       status: 'needsSignIn',
       url: 'https://tiktok.com/x',
       email: '',
-      notice: 'That sign-in link expired or was already used. Enter your email again to get a new one.',
+      notice:
+        "That sign-in link didn't work — it may have expired, already been used, or been opened on a different device than the one you requested it from. Enter your email again to get a new one.",
     };
     expect(signInFlowReducer(state, { type: 'EMAIL_CHANGED', email: 'creator@example.com' })).toEqual({
       status: 'needsSignIn',
       url: 'https://tiktok.com/x',
       email: 'creator@example.com',
-      notice: 'That sign-in link expired or was already used. Enter your email again to get a new one.',
+      notice:
+        "That sign-in link didn't work — it may have expired, already been used, or been opened on a different device than the one you requested it from. Enter your email again to get a new one.",
     });
   });
 
@@ -209,19 +203,24 @@ describe('signInFlowReducer — sign-in path', () => {
     });
   });
 
-  it('returns to needsSignIn with notice cleared on RETRY_EMAIL from magicLinkError', () => {
+  it('returns to needsSignIn with notice cleared and email preserved on RETRY_EMAIL from checkEmail', () => {
+    const state: SignInFlowState = { status: 'checkEmail', url: 'https://tiktok.com/x', email: 'creator@gmial.com' };
+    expect(signInFlowReducer(state, { type: 'RETRY_EMAIL' })).toEqual({
+      status: 'needsSignIn',
+      url: 'https://tiktok.com/x',
+      email: 'creator@gmial.com',
+      notice: null,
+    });
+  });
+
+  it('ignores RETRY_EMAIL from any other state (impossible-state guard)', () => {
     const state: SignInFlowState = {
       status: 'magicLinkError',
       url: 'https://tiktok.com/x',
       email: 'creator@example.com',
       error: 'boom',
     };
-    expect(signInFlowReducer(state, { type: 'RETRY_EMAIL' })).toEqual({
-      status: 'needsSignIn',
-      url: 'https://tiktok.com/x',
-      email: 'creator@example.com',
-      notice: null,
-    });
+    expect(signInFlowReducer(state, { type: 'RETRY_EMAIL' })).toBe(state);
   });
 });
 

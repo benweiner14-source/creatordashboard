@@ -18,7 +18,7 @@ export interface SignInPromptProps {
   onRetryEmail: () => void;
 }
 
-export function SignInPrompt({ state, onEmailChange, onSubmitEmail, onEditUrl, onResend }: SignInPromptProps) {
+export function SignInPrompt({ state, onEmailChange, onSubmitEmail, onEditUrl, onResend, onRetryEmail }: SignInPromptProps) {
   const [blurError, setBlurError] = useState<string | null>(null);
   const email = state.email;
 
@@ -47,6 +47,9 @@ export function SignInPrompt({ state, onEmailChange, onSubmitEmail, onEditUrl, o
           </p>
           <button type="button" onClick={onResend} className="self-start text-sm text-indigo-700 underline">
             Resend
+          </button>
+          <button type="button" onClick={onRetryEmail} className="self-start text-sm text-indigo-700 underline">
+            Wrong address? Change it
           </button>
         </div>
       ) : (

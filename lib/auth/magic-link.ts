@@ -1,4 +1,5 @@
 import { isValidEmailFormat } from './sign-in-flow-state';
+import { isSafeRelativePath } from './callback';
 
 export interface MagicLinkDeps {
   signInWithOtp: (params: { email: string; emailRedirectTo: string }) => Promise<{
@@ -25,7 +26,8 @@ export async function requestMagicLink(
     return { status: 400, body: { error: "That doesn't look like a valid email address. Double-check it and try again." } };
   }
 
-  const emailRedirectTo = `${params.origin}/auth/callback?next=${encodeURIComponent(params.redirectPath)}`;
+  const redirectPath = isSafeRelativePath(params.redirectPath) ? params.redirectPath : '/diagnostic';
+  const emailRedirectTo = `${params.origin}/auth/callback?next=${encodeURIComponent(redirectPath)}`;
   const { error } = await deps.signInWithOtp({ email: params.email, emailRedirectTo });
 
   if (error) {

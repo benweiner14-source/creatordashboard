@@ -12,6 +12,16 @@ export interface CallbackHandlerResult {
   redirectUrl: string;
 }
 
+/**
+ * Guards against open redirects: only a same-origin, root-relative path is
+ * safe to hand to `new URL(path, origin)`. An absolute URL (e.g.
+ * `https://evil.example`) or a protocol-relative URL (`//evil.example`)
+ * would otherwise be honored verbatim.
+ */
+export function isSafeRelativePath(path: string): boolean {
+  return path.startsWith('/') && !path.startsWith('//');
+}
+
 export async function handleAuthCallback(
   deps: CallbackHandlerDeps,
   context: CallbackRequestContext
@@ -19,7 +29,8 @@ export async function handleAuthCallback(
   if (context.code) {
     const { error } = await deps.exchangeCodeForSession(context.code);
     if (!error) {
-      return { redirectUrl: new URL(context.next, context.origin).toString() };
+      const safeNext = isSafeRelativePath(context.next) ? context.next : '/diagnostic';
+      return { redirectUrl: new URL(safeNext, context.origin).toString() };
     }
   }
 

@@ -48,13 +48,14 @@
 - `DIAGNOSTIC_SUCCESS` — 200 from `POST /api/diagnostic`.
 - `DIAGNOSTIC_UNAUTHORIZED` — 401 from `POST /api/diagnostic`.
 - `DIAGNOSTIC_FAILED` — 400 / 429 / 500 from `POST /api/diagnostic`, or a network/fetch error.
-- `EDIT_URL` — from `needsSignIn`, discards the read-only summary and returns to `idle` with the URL still editable (no confirmation needed — nothing destructive, the value isn't cleared).
+- `EDIT_URL` — from `needsSignIn` or `magicLinkError`, discards the read-only summary and returns to `idle` with the URL still editable (no confirmation needed — nothing destructive, the value isn't cleared). This is `magicLinkError`'s escape route back to a clean slate; there is no separate retry event for that state.
 - `SUBMIT_EMAIL` — guard: `isValidEmail(email)`, checked on blur, not on keystroke.
 - `MAGIC_LINK_SENT` — 200 from `POST /api/auth/magic-link`.
 - `MAGIC_LINK_FAILED` — non-200 from `POST /api/auth/magic-link`, or a network/fetch error.
 - `RESEND_EMAIL` — from `checkEmail`, re-fires `SUBMIT_EMAIL` with the same address.
-- `RETRY_EMAIL` — from `magicLinkError`, returns to `needsSignIn` (error cleared, email preserved).
-- `RETRY_DIAGNOSTIC` — from `diagnosticError`, returns to `idle` (error cleared, url preserved).
+- `RETRY_EMAIL` — from `checkEmail`, returns to `needsSignIn` (notice cleared, email preserved), so a mistyped-but-valid address (e.g. `creator@gmial.com` — passes format validation and Supabase, but isn't what the user meant to type) can be corrected instead of only ever resent as-is.
+
+Note: `magicLinkError` does not have its own `RETRY_EMAIL` transition — it would be redundant with `EDIT_URL`, which already gets you from `magicLinkError` back to a fully editable state. Similarly, `diagnosticError` has no dedicated retry event (a prior `RETRY_DIAGNOSTIC` event was removed as dead code) — it already supports direct edit-and-resubmit via `URL_CHANGED`/`SUBMIT_DIAGNOSTIC`, both of which work from that state.
 
 ### Transitions
 
@@ -68,10 +69,12 @@ needsSignIn       --SUBMIT_EMAIL-->             submittingMagicLink
 needsSignIn       --EDIT_URL-->                 idle
 submittingMagicLink --MAGIC_LINK_SENT-->        checkEmail
 submittingMagicLink --MAGIC_LINK_FAILED-->      magicLinkError
+magicLinkError     --EDIT_URL-->                idle
 
 checkEmail        --RESEND_EMAIL-->             submittingMagicLink
-magicLinkError     --RETRY_EMAIL-->             needsSignIn
-diagnosticError    --RETRY_DIAGNOSTIC-->        idle
+checkEmail        --RETRY_EMAIL-->              needsSignIn
+diagnosticError    --URL_CHANGED-->             diagnosticError
+diagnosticError    --SUBMIT_DIAGNOSTIC-->       submittingDiagnostic
 ```
 
 Every state has a way out (no dead ends): `magicLinkError` and `diagnosticError` both loop back to a retryable state rather than a terminal one.
@@ -84,7 +87,7 @@ Every state has a way out (no dead ends): `magicLinkError` and `diagnosticError`
 
 ### Entry/exit actions
 
-- **`idle` (on entry):** nothing cleared unless arriving via `RETRY_DIAGNOSTIC` (error cleared, url kept) or on mount from a successful auth-callback round trip (url populated from the `?url=` query param, field left editable, no auto-submit).
+- **`idle` (on entry):** nothing cleared unless arriving via `EDIT_URL` from `needsSignIn`/`magicLinkError` (error cleared, url kept), directly from `diagnosticError` via `URL_CHANGED`/`SUBMIT_DIAGNOSTIC` (no distinct retry event — see the events-list note above), or on mount from a successful auth-callback round trip (url populated from the `?url=` query param, field left editable, no auto-submit).
 - **`submittingDiagnostic` (on entry):** disable the button, show a small spinner + "Analyzing…". After 8 seconds elapsed (a `setTimeout`, cleared on exit), swap the text to "Still working — checking your video's stats and putting the report together…" per `loading-states`' "1–10s: clear loading state" / "over 10s: detailed progress" guidance — this call chain (YouTube/scraper fetch + Claude generation) realistically runs 5–15s.
 - **`needsSignIn` (on entry):** preserve the pasted URL exactly as submitted; render it as a read-only summary line ("Checking: `<url>`") rather than a second editable copy, to avoid two sources of truth for the same value. Focus moves to the new email field.
 - **`submittingMagicLink` (on entry):** disable the email field and button, show a spinner (this call is fast — Supabase OTP request — no escalating-message tier needed).
@@ -140,7 +143,7 @@ Security note: regardless of whether the email belongs to an existing account, t
 
 ### 4b. Expired/invalid magic-link callback code
 
-Handled structurally in §2 — the user lands back in `needsSignIn` (URL preserved) with the message "That sign-in link expired or was already used. Enter your email again to get a new one." This is a "what happened + why + what to do" message in one sentence, appropriate for a low-stakes, easily-retried failure.
+Handled structurally in §2 — the user lands back in `needsSignIn` (URL preserved) with the message "That sign-in link didn't work — it may have expired, already been used, or been opened on a different device than the one you requested it from. Enter your email again to get a new one." (Revised from an earlier "expired or was already used" wording once it became clear that opening the link on a different device than the one that requested it — an inherent limit of `@supabase/ssr`'s PKCE flow — is the most common real-world cause, and the original copy didn't mention it.) This is still a "what happened + why + what to do" message in one sentence, appropriate for a low-stakes, easily-retried failure.
 
 ### 4c. Diagnostic-submission errors (unchanged server responses, new/confirmed client copy)
 
@@ -150,7 +153,7 @@ Handled structurally in §2 — the user lands back in `needsSignIn` (URL preser
 | 429 (rate-limited) | Use the handler's existing message verbatim (already correct: distinguishes profile-limit vs IP-limit) plus, when `retryAfter` is present, append "You can try again after `<formatted date>`." |
 | 500 / network error | "Something went wrong on our end generating your report. Try again in a moment — your link hasn't been used up." (The last clause matters: it's the one free diagnostic, so the user needs explicit reassurance that a server error didn't burn their rate-limit slot. This is already true server-side — the rate-limit event is only recorded after a successful save — this message just makes that guarantee visible.) |
 
-All three preserve the URL field value (`diagnosticError` never clears `url`) and route back through `RETRY_DIAGNOSTIC`.
+All three preserve the URL field value (`diagnosticError` never clears `url`) and are retried directly from that state via `URL_CHANGED`/`SUBMIT_DIAGNOSTIC` — no dedicated retry event.
 
 ---
 

@@ -37,6 +37,19 @@ describe('requestMagicLink', () => {
     expect(result.body).toEqual({ error: "You've requested a few sign-in links in a row. Wait a minute and try again." });
   });
 
+  it('falls back to /diagnostic when redirectPath is an absolute URL (open-redirect guard)', async () => {
+    const signInWithOtp = vi.fn().mockResolvedValue({ error: null });
+    const result = await requestMagicLink(
+      { signInWithOtp },
+      { email: 'creator@example.com', redirectPath: 'https://evil.example', origin: 'https://app.example.com' }
+    );
+    expect(result.status).toBe(200);
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: 'creator@example.com',
+      emailRedirectTo: `https://app.example.com/auth/callback?next=${encodeURIComponent('/diagnostic')}`,
+    });
+  });
+
   it('returns a generic server error for other Supabase failures, without leaking account existence', async () => {
     const signInWithOtp = vi.fn().mockResolvedValue({ error: { message: 'boom' } });
     const result = await requestMagicLink(

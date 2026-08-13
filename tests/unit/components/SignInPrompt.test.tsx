@@ -81,6 +81,12 @@ describe('SignInPrompt', () => {
     expect(handlers.onResend).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a "wrong address" button in checkEmail that calls onRetryEmail', () => {
+    const handlers = renderPrompt({ status: 'checkEmail', url: 'https://tiktok.com/x', email: 'creator@gmial.com' });
+    fireEvent.click(screen.getByRole('button', { name: /wrong address/i }));
+    expect(handlers.onRetryEmail).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the server error message and preserves the email in magicLinkError', () => {
     renderPrompt({
       status: 'magicLinkError',
