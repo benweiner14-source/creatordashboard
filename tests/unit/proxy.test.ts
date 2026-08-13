@@ -9,9 +9,9 @@ vi.mock('@supabase/ssr', () => ({
   })),
 }));
 
-import { middleware } from '@/middleware';
+import { proxy } from '@/proxy';
 
-describe('middleware', () => {
+describe('proxy', () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-placeholder-key';
@@ -20,7 +20,7 @@ describe('middleware', () => {
 
   it('refreshes the session by calling getUser and returns a response', async () => {
     const request = new NextRequest('https://app.example.com/diagnostic');
-    const response = await middleware(request);
+    const response = await proxy(request);
     expect(getUserMock).toHaveBeenCalledTimes(1);
     expect(response).toBeInstanceOf(Response);
   });
