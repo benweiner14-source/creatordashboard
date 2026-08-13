@@ -4,9 +4,25 @@ export const FREE_DIAGNOSTIC_WINDOW_DAYS = 30;
 export const FREE_DIAGNOSTIC_LIMIT_PER_PROFILE = 1;
 export const MAX_PROFILES_PER_IP_WINDOW = 3;
 
+export interface AtomicRateLimitCheckResult {
+  allowed: boolean;
+  reason?: 'profile_limit' | 'ip_limit';
+  eventId?: string;
+}
+
 export interface RateLimitStore {
   countEventsSince(params: { profileId?: string; ipHash?: string; eventType: string; since: Date }): Promise<number>;
   recordEvent(params: { profileId: string | null; ipHash: string; eventType: string; createdAt?: Date }): Promise<void>;
+  checkAndRecordAtomically(params: {
+    profileId: string;
+    ipHash: string;
+    eventType: string;
+    profileLimit: number;
+    ipLimit: number;
+    windowStart: Date;
+    now: Date;
+  }): Promise<AtomicRateLimitCheckResult>;
+  releaseEvent(eventId: string): Promise<void>;
 }
 
 export interface RateLimitCheckParams {

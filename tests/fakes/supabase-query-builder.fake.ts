@@ -2,10 +2,22 @@ export interface FakeRow {
   [key: string]: unknown;
 }
 
-export function createFakeSupabaseClient(initialRows: Record<string, FakeRow[]> = {}) {
+export type FakeRpcHandler = (params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+
+export function createFakeSupabaseClient(
+  initialRows: Record<string, FakeRow[]> = {},
+  rpcHandlers: Record<string, FakeRpcHandler> = {}
+) {
   const tables: Record<string, FakeRow[]> = { ...initialRows };
 
   return {
+    async rpc(name: string, params: Record<string, unknown>) {
+      const handler = rpcHandlers[name];
+      if (!handler) {
+        throw new Error(`No fake RPC handler registered for "${name}"`);
+      }
+      return handler(params);
+    },
     from(table: string) {
       const rows = tables[table] ?? (tables[table] = []);
       return {
