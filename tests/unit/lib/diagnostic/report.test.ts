@@ -27,4 +27,25 @@ describe('generateDiagnosticReport', () => {
     expect(report.explanationSegments.some((s) => s.type === 'term')).toBe(true);
     expect(report.glossaryTerms.some((t) => t.slug === 'hook-rate')).toBe(true);
   });
+
+  it('threads shareCount/saveCount through to the hook-strength score for tiktok', async () => {
+    const claudeClient = createFakeClaudeReportClient();
+    const basePostStats = {
+      captionOrTitle: 'Untitled',
+      publishedAt: '2026-08-11T19:00:00Z',
+      durationSeconds: 30,
+      viewCount: 10000,
+      likeCount: 200,
+      commentCount: 100,
+    };
+
+    const baseline = await generateDiagnosticReport({ platform: 'tiktok', postStats: basePostStats, claudeClient });
+    const shareHeavy = await generateDiagnosticReport({
+      platform: 'tiktok',
+      postStats: { ...basePostStats, shareCount: 500, saveCount: 500 },
+      claudeClient,
+    });
+
+    expect(shareHeavy.scores.hookStrength.score).toBeGreaterThan(baseline.scores.hookStrength.score);
+  });
 });

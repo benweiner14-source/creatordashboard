@@ -7,6 +7,12 @@ export interface SocialPostMetadata {
   viewCount: number;
   likeCount: number;
   commentCount: number;
+  // Only populated for TikTok — Apify's TikTok scraper exposes shareCount
+  // and collectCount (saves), but Instagram doesn't publicly expose either,
+  // even to scrapers. See
+  // docs/superpowers/specs/2026-08-13-diagnostic-benchmark-sources.md.
+  shareCount?: number;
+  saveCount?: number;
 }
 
 export interface ScraperClient {
@@ -62,6 +68,8 @@ export function createApifyScraperClient(apiToken: string): ScraperClient {
         viewCount: Number(item.playCount ?? item.videoViewCount ?? item.viewCount ?? 0),
         likeCount: Number(item.diggCount ?? item.likesCount ?? item.likeCount ?? 0),
         commentCount: Number(item.commentCount ?? 0),
+        shareCount: platform === 'tiktok' && item.shareCount !== undefined ? Number(item.shareCount) : undefined,
+        saveCount: platform === 'tiktok' && item.collectCount !== undefined ? Number(item.collectCount) : undefined,
       };
     },
   };

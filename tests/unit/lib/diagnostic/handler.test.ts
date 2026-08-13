@@ -46,6 +46,31 @@ describe('handleDiagnosticRequest', () => {
     expect(result.status).toBe(200);
   });
 
+  it('threads the scraper client\'s shareCount/saveCount through to the report', async () => {
+    const baselineDeps = makeDeps({
+      scraperClient: createFakeScraperClient({ likeCount: 200, commentCount: 100 }),
+    });
+    const baseline = await handleDiagnosticRequest(baselineDeps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.tiktok.com/@user/video/123',
+    });
+    const shareHeavyDeps = makeDeps({
+      scraperClient: createFakeScraperClient({ likeCount: 200, commentCount: 100, shareCount: 500, saveCount: 500 }),
+    });
+    const shareHeavy = await handleDiagnosticRequest(shareHeavyDeps, {
+      profileId: 'profile-2',
+      ip: '203.0.113.2',
+      url: 'https://www.tiktok.com/@user/video/123',
+    });
+
+    const baselineScore = (baseline.body.report as { scores: { hookStrength: { score: number } } }).scores
+      .hookStrength.score;
+    const shareHeavyScore = (shareHeavy.body.report as { scores: { hookStrength: { score: number } } }).scores
+      .hookStrength.score;
+    expect(shareHeavyScore).toBeGreaterThan(baselineScore);
+  });
+
   it('rejects an unsupported URL', async () => {
     const result = await handleDiagnosticRequest(makeDeps(), {
       profileId: 'profile-1',

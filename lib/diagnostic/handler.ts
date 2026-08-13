@@ -106,6 +106,8 @@ export async function handleDiagnosticRequest(
         viewCount: post.viewCount,
         likeCount: post.likeCount,
         commentCount: post.commentCount,
+        shareCount: post.shareCount,
+        saveCount: post.saveCount,
       };
     }
 

@@ -87,6 +87,66 @@ describe('scoreHookStrength', () => {
     expect(commentHeavy.score).toBe(likeHeavy.score);
   });
 
+  it('gives a TikTok post a distribution bonus when shares+saves are disproportionately high relative to likes', () => {
+    const baseline = scoreHookStrength({
+      platform: 'tiktok',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 200,
+      commentCount: 100,
+    });
+    const shareHeavy = scoreHookStrength({
+      platform: 'tiktok',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 200,
+      commentCount: 100,
+      shareCount: 50,
+      saveCount: 50,
+    });
+    expect(shareHeavy.score).toBeGreaterThan(baseline.score);
+  });
+
+  it('does not apply the distribution bonus when shares+saves are a small fraction of likes', () => {
+    const baseline = scoreHookStrength({
+      platform: 'tiktok',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 200,
+      commentCount: 100,
+    });
+    const smallShares = scoreHookStrength({
+      platform: 'tiktok',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 200,
+      commentCount: 100,
+      shareCount: 1,
+      saveCount: 1,
+    });
+    expect(smallShares.score).toBe(baseline.score);
+  });
+
+  it('never applies the distribution bonus on instagram, even with a huge share/save ratio', () => {
+    const result = scoreHookStrength({
+      platform: 'instagram',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 10,
+      commentCount: 5,
+      shareCount: 1000,
+      saveCount: 1000,
+    });
+    const withoutShares = scoreHookStrength({
+      platform: 'instagram',
+      captionOrTitle: 'Untitled',
+      viewCount: 10000,
+      likeCount: 10,
+      commentCount: 5,
+    });
+    expect(result.score).toBe(withoutShares.score);
+  });
+
   it('scores the same 4% engagement rate differently depending on platform', () => {
     const tiktokResult = scoreHookStrength({
       platform: 'tiktok',

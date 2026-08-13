@@ -34,6 +34,8 @@ describe('createApifyScraperClient', () => {
           playCount: 20000,
           diggCount: 1500,
           commentCount: 80,
+          shareCount: 45,
+          collectCount: 30,
         },
       ],
     });
@@ -51,7 +53,34 @@ describe('createApifyScraperClient', () => {
       viewCount: 20000,
       likeCount: 1500,
       commentCount: 80,
+      shareCount: 45,
+      saveCount: 30,
     });
+  });
+
+  it('maps shareCount/saveCount to undefined when Apify does not include them (e.g. Instagram)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [
+        {
+          id: 'abc123',
+          caption: 'A reel',
+          timestamp: '2026-08-01T10:00:00Z',
+          duration: 20,
+          videoViewCount: 5000,
+          likesCount: 300,
+          commentCount: 50,
+        },
+      ],
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApifyScraperClient('test-token');
+    const post = await client.fetchPost('https://www.instagram.com/reel/abc123/');
+
+    expect(post.shareCount).toBeUndefined();
+    expect(post.saveCount).toBeUndefined();
   });
 
   it('throws for an unsupported URL', async () => {

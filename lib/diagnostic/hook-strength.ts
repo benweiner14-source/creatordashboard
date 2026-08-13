@@ -6,6 +6,12 @@ export interface HookStrengthInput {
   viewCount: number;
   likeCount: number;
   commentCount: number;
+  // Only ever populated for TikTok (see lib/integrations/scraper.ts) — no
+  // sourced numeric ratio exists for how much these should matter, so
+  // they're kept out of the calibrated engagementRate/threshold system
+  // entirely and only drive the small flat bonus below.
+  shareCount?: number;
+  saveCount?: number;
 }
 
 const HOOK_PATTERN = /(\?|\bhow\b|\bwhy\b|\bwait\b|\bstop\b|\d+)/i;
@@ -34,6 +40,19 @@ function engagementRateToScore(engagementRate: number, thresholds: { moderate: n
   return 40 + (engagementRate - thresholds.moderate) * slope;
 }
 
+// TikTok is documented (2026-08 platform-monitoring finding) as weighting
+// shares and saves above likes, alongside comments (see
+// computeEngagementRate's TIKTOK_COMMENT_WEIGHT). Unlike comments, no
+// source gives any numeric ratio for shares/saves at all, and raw share
+// counts are typically far rarer than likes — a per-count multiplier big
+// enough to matter would be a much bigger guess than the comment weight
+// was. So this stays a small, flat, clearly-labeled bonus keyed off a
+// ratio (not folded into the calibrated engagementRate/threshold system),
+// triggered only when shares+saves are disproportionately high relative to
+// likes. See docs/superpowers/specs/2026-08-13-diagnostic-benchmark-sources.md.
+const DISTRIBUTION_BONUS_RATIO = 0.05;
+const DISTRIBUTION_BONUS_POINTS = 8;
+
 export function scoreHookStrength(input: HookStrengthInput): ScoreResult {
   const engagementRate = computeEngagementRate(input.platform, input.likeCount, input.commentCount, input.viewCount);
   const hasHookPattern = HOOK_PATTERN.test(input.captionOrTitle);
@@ -55,6 +74,15 @@ export function scoreHookStrength(input: HookStrengthInput): ScoreResult {
     reasons.push('Your title or caption uses a curiosity pattern (a question, a number, or a "how/why") — the first few seconds are when most viewers decide whether to keep watching, and a curiosity pattern gives them a reason to stay.');
   } else {
     reasons.push('Your title or caption does not use an obvious curiosity pattern (a question, a number, or a "how/why"), which can make the first few seconds less compelling — most viewers decide whether to keep watching almost immediately.');
+  }
+
+  if (input.platform === 'tiktok' && input.shareCount !== undefined && input.saveCount !== undefined) {
+    const likes = Math.max(input.likeCount, 1);
+    const distributionRatio = (input.shareCount + input.saveCount) / likes;
+    if (distributionRatio >= DISTRIBUTION_BONUS_RATIO) {
+      score += DISTRIBUTION_BONUS_POINTS;
+      reasons.push('Your shares and saves are disproportionately high relative to your likes — TikTok now weighs these as stronger distribution signals than likes, so this is a good sign for reach even if the raw like count looks modest.');
+    }
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)));

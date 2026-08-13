@@ -13,6 +13,9 @@ export interface DiagnosticPostStats {
   viewCount: number;
   likeCount: number;
   commentCount: number;
+  // Only ever populated for TikTok — see lib/integrations/scraper.ts.
+  shareCount?: number;
+  saveCount?: number;
 }
 
 export interface GenerateDiagnosticReportParams {
@@ -37,6 +40,8 @@ export async function generateDiagnosticReport(params: GenerateDiagnosticReportP
     viewCount: postStats.viewCount,
     likeCount: postStats.likeCount,
     commentCount: postStats.commentCount,
+    shareCount: postStats.shareCount,
+    saveCount: postStats.saveCount,
   };
   const retentionRiskInput: RetentionRiskInput = {
     platform,
