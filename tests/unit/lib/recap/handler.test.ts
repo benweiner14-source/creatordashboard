@@ -3,6 +3,7 @@ import { handleRecapRequest, RECAP_GENERATION_PROFILE_LIMIT } from '@/lib/recap/
 import { createInMemoryRateLimitStore } from '../../../fakes/rate-limit-store.fake';
 import { createFakeYouTubeClient } from '../../../fakes/youtube.fake';
 import { createFakeScraperClient } from '../../../fakes/scraper.fake';
+import { createFakeOAuthProviderClient } from '../../../fakes/oauth-provider.fake';
 import type { RecapCardRow, RecapHandles } from '@/lib/recap/types';
 import type { RecapHandlerDeps } from '@/lib/recap/handler';
 
@@ -19,6 +20,11 @@ function makeDeps(overrides: Partial<Parameters<typeof handleRecapRequest>[0]> =
       const row: RecapCardRow = { id: `card-${savedCards.length + 1}`, profileId: params.profileId, month: params.month, platformData: params.platformData, totals: params.totals, topPost: params.topPost, warnings: params.warnings, generatedAt: '2026-08-13T00:00:00Z' };
       savedCards.push(row);
       return row;
+    },
+    getPlatformConnection: async () => null,
+    oauthClients: {
+      tiktok: createFakeOAuthProviderClient(),
+      instagram: createFakeOAuthProviderClient(),
     },
     ...overrides,
   };
@@ -174,5 +180,65 @@ describe('handleRecapRequest', () => {
     }
     result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
     expect(result.status).toBe(429);
+  });
+
+  it('uses the OAuth-connected platform instead of the Apify path when a connection exists', async () => {
+    const scraperClient = createFakeScraperClient();
+    const fetchProfilePostsSpy = vi.spyOn(scraperClient, 'fetchProfilePosts');
+    const oauthFetchSpy = vi.fn(async () => [
+      { platform: 'tiktok' as const, id: 'oauth-1', caption: 'via OAuth', publishedAt: '2026-08-06T00:00:00Z', viewCount: 5000, likeCount: 300, commentCount: 20, permalink: 'https://tiktok.com/@creator/video/oauth-1' },
+    ]);
+    const deps = makeDeps({
+      scraperClient,
+      getProfileHandles: async () => ({ youtube: null, tiktok: 'creator', instagram: null }),
+      getPlatformConnection: async (_profileId, platform) => (platform === 'tiktok' ? { accessToken: 'access-1' } : null),
+      oauthClients: {
+        tiktok: createFakeOAuthProviderClient({ fetchProfilePosts: oauthFetchSpy }),
+        instagram: createFakeOAuthProviderClient(),
+      },
+    });
+
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(200);
+    expect(oauthFetchSpy).toHaveBeenCalledWith('access-1');
+    expect(fetchProfilePostsSpy).not.toHaveBeenCalled();
+    const body = result.body as { recapCard: RecapCardRow };
+    expect(body.recapCard.totals.postCount).toBe(1);
+  });
+
+  it('falls back to the Apify/handle path when a platform has a handle but no connection', async () => {
+    const deps = makeDeps({
+      getProfileHandles: async () => ({ youtube: null, tiktok: 'creator', instagram: null }),
+      scraperClient: createFakeScraperClient({}, [
+        { platform: 'tiktok', id: 't1', caption: 'via Apify', publishedAt: '2026-08-06T00:00:00Z', viewCount: 100, likeCount: 5, commentCount: 1, permalink: 'https://tiktok.com/@creator/video/t1' },
+      ]),
+    });
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(200);
+    const body = result.body as { recapCard: RecapCardRow };
+    expect(body.recapCard.totals.postCount).toBe(1);
+  });
+
+  it('allows generation from a connection alone, with no handle saved for that platform', async () => {
+    const deps = makeDeps({
+      getProfileHandles: async () => ({ youtube: null, tiktok: null, instagram: null }),
+      getPlatformConnection: async (_profileId, platform) => (platform === 'tiktok' ? { accessToken: 'access-1' } : null),
+      oauthClients: {
+        tiktok: createFakeOAuthProviderClient({
+          fetchProfilePosts: async () => [
+            { platform: 'tiktok' as const, id: 'oauth-1', caption: 'connected only', publishedAt: '2026-08-06T00:00:00Z', viewCount: 10, likeCount: 1, commentCount: 0, permalink: 'https://tiktok.com/@creator/video/oauth-1' },
+          ],
+        }),
+        instagram: createFakeOAuthProviderClient(),
+      },
+    });
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(200);
+  });
+
+  it('rejects when neither a handle nor a connection exists for any platform', async () => {
+    const deps = makeDeps({ getProfileHandles: async () => ({ youtube: null, tiktok: null, instagram: null }) });
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(400);
   });
 });

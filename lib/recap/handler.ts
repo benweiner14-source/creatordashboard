@@ -1,11 +1,13 @@
 import { checkAndRecordRateLimit, releaseRateLimitEventIfNeeded, hashIp, type RateLimitStore } from '@/lib/rate-limit';
 import type { YouTubeClient } from '@/lib/integrations/youtube';
-import type { ScraperClient } from '@/lib/integrations/scraper';
+import type { ScraperClient, ProfilePost } from '@/lib/integrations/scraper';
 import { filterPostsToMonth, aggregateRecap } from './aggregate';
 import type { AggregatablePost, PlatformTotals, RecapCardRow, RecapHandles, RecapPlatform, RecapTopPost } from './types';
 
 export const RECAP_GENERATION_PROFILE_LIMIT = 5;
 export const RECAP_GENERATION_IP_LIMIT = 10;
+
+type OAuthConnectedPlatform = 'tiktok' | 'instagram';
 
 export interface RecapHandlerDeps {
   rateLimitStore: RateLimitStore;
@@ -22,6 +24,14 @@ export interface RecapHandlerDeps {
     topPost: RecapTopPost;
     warnings: string[];
   }) => Promise<RecapCardRow>;
+  /**
+   * Returns an active, refresh-if-needed access token for a connected
+   * platform, or null if the platform isn't connected via OAuth (or the
+   * connection was cleared after a failed refresh). See
+   * docs/superpowers/specs/2026-08-14-oauth-fast-follow-design.md §4.
+   */
+  getPlatformConnection: (profileId: string, platform: OAuthConnectedPlatform) => Promise<{ accessToken: string } | null>;
+  oauthClients: Record<OAuthConnectedPlatform, { fetchProfilePosts: (accessToken: string) => Promise<ProfilePost[]> }>;
 }
 
 export interface RecapRequestContext {
@@ -47,7 +57,21 @@ export async function handleRecapRequest(deps: RecapHandlerDeps, context: RecapR
   }
 
   const handles = await deps.getProfileHandles(context.profileId);
-  const connected = (['youtube', 'tiktok', 'instagram'] as const).filter((p) => handles[p]);
+
+  // Fetched once up front — both for the "is anything connected" gate
+  // below and reused in the fetch loop, so a connected platform's token
+  // is never refreshed twice in one request. See spec §4.
+  const oauthConnections: Partial<Record<OAuthConnectedPlatform, { accessToken: string }>> = {};
+  for (const platform of ['tiktok', 'instagram'] as const) {
+    const connection = await deps.getPlatformConnection(context.profileId, platform);
+    if (connection) {
+      oauthConnections[platform] = connection;
+    }
+  }
+
+  const connected = (['youtube', 'tiktok', 'instagram'] as const).filter(
+    (p) => handles[p] || (p !== 'youtube' && oauthConnections[p as OAuthConnectedPlatform])
+  );
   if (connected.length === 0) {
     return { status: 400, body: { error: 'Connect at least one platform before generating a recap.' } };
   }
@@ -111,9 +135,12 @@ export async function handleRecapRequest(deps: RecapHandlerDeps, context: RecapR
 
     for (const platform of ['tiktok', 'instagram'] as const) {
       const handle = handles[platform];
-      if (!handle) continue;
+      const connection = oauthConnections[platform];
+      if (!connection && !handle) continue;
       try {
-        const posts = await deps.scraperClient.fetchProfilePosts(platform, handle);
+        const posts = connection
+          ? await deps.oauthClients[platform].fetchProfilePosts(connection.accessToken)
+          : await deps.scraperClient.fetchProfilePosts(platform, handle!);
         postsByPlatform[platform] = filterPostsToMonth(
           posts.map((p) => ({
             platform,
