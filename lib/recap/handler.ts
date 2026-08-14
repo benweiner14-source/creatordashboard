@@ -184,7 +184,13 @@ export async function handleRecapRequest(deps: RecapHandlerDeps, context: RecapR
 
     const aggregation = aggregateRecap(postsByPlatform);
     if (!aggregation.topPost || aggregation.totals.postCount === 0) {
-      if (warnings.length === connected.length) {
+      // `warnings` now also carries non-failure entries (`_connection_expired`
+      // for a platform that may not even be in `connected`, `_views_unavailable`
+      // on an outright successful fetch) — only `_scrape_failed` entries mean
+      // "this connected platform's fetch actually threw", so the outage check
+      // below counts just those, not the array's full length.
+      const scrapeFailureCount = warnings.filter((w) => w.endsWith('_scrape_failed')).length;
+      if (scrapeFailureCount === connected.length) {
         // Every connected platform's fetch *threw*. That leaves
         // postsByPlatform empty exactly like a genuinely quiet month, but
         // it is our failure, not a real result — so the attempt is given

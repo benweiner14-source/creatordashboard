@@ -294,4 +294,46 @@ describe('handleRecapRequest', () => {
     const body = result.body as { recapCard: RecapCardRow };
     expect(body.recapCard.warnings).not.toContain('instagram_views_unavailable');
   });
+
+  it('reports a genuinely quiet month (422), not a false outage (503), when the only warning is instagram_views_unavailable', async () => {
+    // Regression: instagram_views_unavailable is pushed on a SUCCESSFUL
+    // OAuth fetch, not a failure. If the outage check counted it as a
+    // failure it would wrongly 503 ("couldn't reach") a real empty month.
+    const deps = makeDeps({
+      getProfileHandles: async () => ({ youtube: null, tiktok: null, instagram: null }),
+      getPlatformConnection: async (_profileId, platform) =>
+        platform === 'instagram' ? { status: 'connected' as const, accessToken: 'access-1' } : { status: 'not_connected' as const },
+      oauthClients: {
+        tiktok: createFakeOAuthProviderClient(),
+        instagram: createFakeOAuthProviderClient({ fetchProfilePosts: async () => [] }), // fetch succeeds, genuinely nothing this month
+      },
+    });
+    const releaseEventSpy = vi.spyOn(deps.rateLimitStore, 'releaseEvent');
+
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(422);
+    expect(result.body.error).toMatch(/nothing was published/i);
+    expect(releaseEventSpy).not.toHaveBeenCalled();
+  });
+
+  it('still detects a true outage (503) even when a dangling connection_expired warning exists for an unconnected platform', async () => {
+    // Regression: a connection_expired warning can be pushed for a
+    // platform with no handle (so it's excluded from `connected`
+    // entirely). If the outage check counted it, warnings.length would
+    // outnumber connected.length and a real total outage would be missed.
+    const youtubeClient = createFakeYouTubeClient();
+    vi.spyOn(youtubeClient, 'getChannelUploads').mockRejectedValue(new Error('youtube down'));
+    const deps = makeDeps({
+      youtubeClient,
+      getProfileHandles: async () => ({ youtube: 'creator', tiktok: null, instagram: null }),
+      getPlatformConnection: async (_profileId, platform) =>
+        platform === 'tiktok' ? { status: 'connection_expired' as const } : { status: 'not_connected' as const },
+    });
+    const releaseEventSpy = vi.spyOn(deps.rateLimitStore, 'releaseEvent');
+
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(503);
+    expect(result.body.error).toMatch(/couldn't reach any of your connected platforms/i);
+    expect(releaseEventSpy).toHaveBeenCalledTimes(1);
+  });
 });
