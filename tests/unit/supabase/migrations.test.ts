@@ -90,4 +90,14 @@ describe('supabase migrations', () => {
     expect(sql).toContain('"Recap cards are viewable by owner"');
     expect(sql).toContain('"Recap cards are insertable by owner"');
   });
+
+  it('includes a platform_connections table migration with encrypted token columns', () => {
+    const sql = readMigrationContaining('create_platform_connections');
+    expect(sql).toContain('create table if not exists public.platform_connections');
+    expect(sql).toContain("platform text not null check (platform in ('tiktok', 'instagram'))");
+    expect(sql).toContain('access_token_encrypted text not null');
+    expect(sql).toContain('refresh_token_encrypted text');
+    expect(sql).toContain('unique (profile_id, platform)');
+    expect(sql).toContain('"Platform connections are viewable by owner"');
+  });
 });

@@ -107,6 +107,32 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['recap_cards']['Insert']>;
         Relationships: [];
       };
+      platform_connections: {
+        Row: {
+          id: string;
+          profile_id: string;
+          platform: 'tiktok' | 'instagram';
+          provider_user_id: string;
+          access_token_encrypted: string;
+          refresh_token_encrypted: string | null;
+          expires_at: string | null;
+          scopes: string[];
+          connected_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          platform: 'tiktok' | 'instagram';
+          provider_user_id: string;
+          access_token_encrypted: string;
+          refresh_token_encrypted?: string | null;
+          expires_at?: string | null;
+          scopes?: string[];
+          connected_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['platform_connections']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
