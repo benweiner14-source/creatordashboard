@@ -1,16 +1,21 @@
 import type { ProfilePost } from './scraper';
 import type { OAuthProviderClient, OAuthTokenSet } from '@/lib/oauth/types';
 
+// OAuth endpoint URLs: Instagram login uses separate endpoints at api.instagram.com
+// for initial authorization and short-lived token exchange. Long-lived token exchange,
+// refresh, and Graph API calls use graph.facebook.com (confirmed 2026-08-14).
+// Scope name 'instagram_business_basic' is current (confirmed 2026-08-14).
+// Media fields (id, caption, timestamp, like_count, comments_count, permalink) all
+// exist on IG Media objects (confirmed 2026-08-14).
+// Note: Instagram historically maintains separate oauth endpoints at api.instagram.com
+// for compatibility; Graph API base is https://graph.facebook.com per Meta docs.
 const AUTHORIZE_URL = 'https://api.instagram.com/oauth/authorize';
 const SHORT_LIVED_TOKEN_URL = 'https://api.instagram.com/oauth/access_token';
-const LONG_LIVED_EXCHANGE_URL = 'https://graph.instagram.com/access_token';
-const REFRESH_URL = 'https://graph.instagram.com/refresh_access_token';
-const USER_INFO_URL = 'https://graph.instagram.com/me';
-const MEDIA_URL = 'https://graph.instagram.com/me/media';
+const LONG_LIVED_EXCHANGE_URL = 'https://graph.facebook.com/access_token';
+const REFRESH_URL = 'https://graph.facebook.com/refresh_access_token';
+const USER_INFO_URL = 'https://graph.facebook.com/me';
+const MEDIA_URL = 'https://graph.facebook.com/me/media';
 
-// Confirm current scope names against
-// https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login
-// before shipping. See this plan's Global Constraints.
 const SCOPES = 'instagram_business_basic';
 
 // Mirrors PROFILE_SCRAPE_RESULTS_LIMIT in lib/integrations/scraper.ts —
