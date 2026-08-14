@@ -20,6 +20,9 @@ export default function HomePage() {
       <Link href="/recap" className="text-indigo-700 underline">
         Get your monthly recap card
       </Link>
+      <Link href="/ideas" className="text-indigo-700 underline">
+        Get weekly content ideas
+      </Link>
     </main>
   );
 }

@@ -13,4 +13,9 @@ describe('HomePage', () => {
     render(<HomePage />);
     expect(screen.getByRole('link', { name: /recap card/i })).toHaveAttribute('href', '/recap');
   });
+
+  it('links to the content ideas page', () => {
+    render(<HomePage />);
+    expect(screen.getByRole('link', { name: /content ideas/i })).toHaveAttribute('href', '/ideas');
+  });
 });
