@@ -117,6 +117,16 @@ describe('ideasPageReducer — generation', () => {
     });
   });
 
+  it('carries the cached flag through to ideasReady on GENERATE_SUCCESS when cached: true', () => {
+    const state: IdeasPageState = { status: 'generating', niche, stillWorking: false };
+    expect(ideasPageReducer(state, { type: 'GENERATE_SUCCESS', ideas: [IDEA], cached: true })).toEqual({
+      status: 'ideasReady',
+      niche,
+      ideas: [IDEA],
+      cached: true,
+    });
+  });
+
   it('moves to generationFailed preserving the niche on GENERATE_FAILED', () => {
     const state: IdeasPageState = { status: 'generating', niche, stillWorking: false };
     expect(ideasPageReducer(state, { type: 'GENERATE_FAILED', error: 'boom' })).toEqual({

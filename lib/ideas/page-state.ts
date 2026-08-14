@@ -6,7 +6,7 @@ export type IdeasPageState =
   | { status: 'needsNiche'; niche: string; error: string | null }
   | { status: 'readyToGenerate'; niche: string }
   | { status: 'generating'; niche: string; stillWorking: boolean }
-  | { status: 'ideasReady'; niche: string; ideas: ContentIdea[] }
+  | { status: 'ideasReady'; niche: string; ideas: ContentIdea[]; cached?: boolean }
   | { status: 'generationFailed'; niche: string; error: string }
   // Sign-in sub-flow, mirroring lib/recap/page-state.ts so the same
   // <SignInPrompt> component drives it.
@@ -24,7 +24,7 @@ export type IdeasPageEvent =
   | { type: 'NICHE_SAVE_FAILED'; error: string }
   | { type: 'GENERATE' }
   | { type: 'GENERATE_STILL_WORKING' }
-  | { type: 'GENERATE_SUCCESS'; ideas: ContentIdea[] }
+  | { type: 'GENERATE_SUCCESS'; ideas: ContentIdea[]; cached?: boolean }
   | { type: 'GENERATE_FAILED'; error: string }
   | { type: 'EDIT_NICHE' }
   | { type: 'EMAIL_CHANGED'; email: string }
@@ -86,7 +86,9 @@ export function ideasPageReducer(state: IdeasPageState, event: IdeasPageEvent): 
       return state.status === 'generating' ? { ...state, stillWorking: true } : state;
 
     case 'GENERATE_SUCCESS':
-      return state.status === 'generating' ? { status: 'ideasReady', niche: state.niche, ideas: event.ideas } : state;
+      return state.status === 'generating'
+        ? { status: 'ideasReady', niche: state.niche, ideas: event.ideas, ...(event.cached ? { cached: true } : {}) }
+        : state;
 
     case 'GENERATE_FAILED':
       return state.status === 'generating' ? { status: 'generationFailed', niche: state.niche, error: event.error } : state;

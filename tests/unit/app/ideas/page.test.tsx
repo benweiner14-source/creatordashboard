@@ -55,6 +55,159 @@ describe('IdeasPage', () => {
     expect(screen.getByText(/Bake a loaf in under 2 hours on camera/)).toBeInTheDocument();
   });
 
+  it('does not show a cached notice on plain bootstrap of an existing digest', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          niche: 'home baking',
+          digest: {
+            id: 'digest-1',
+            weekStart: '2026-08-10',
+            contentIdeas: [
+              {
+                workingTitle: 'Sourdough Speedrun',
+                pitch: 'Bake a loaf in under 2 hours on camera',
+                medium: 'reel',
+                format: 'Speed Recap',
+                whyItsHotNow: 'Sourdough resurgence trending this week',
+                sourceUrl: 'https://example.com/a',
+                whyItRanksHere: 'High reach from trend-jacking',
+                kpiSignals: ['reach'],
+                reelDetails: { suggestedLengthSeconds: 60, style: 'talking-head' },
+                carouselDetails: null,
+              },
+            ],
+          },
+        }),
+      })
+    );
+    render(<IdeasPage />);
+    await waitFor(() => expect(screen.getByText('Sourdough Speedrun')).toBeInTheDocument());
+    // Bootstrap loading an existing digest is not itself a "your edit was ignored"
+    // situation — the cached notice is specifically about a fresh POST that hit
+    // the cache, so no notice should render on plain bootstrap.
+    expect(screen.queryByText(/your niche update will apply starting next week/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a cached notice after generating when the response says cached: true', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digest: null }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          cached: true,
+          digest: {
+            id: 'digest-2',
+            weekStart: '2026-08-10',
+            contentIdeas: [
+              {
+                workingTitle: 'Sourdough Speedrun',
+                pitch: 'Bake a loaf in under 2 hours on camera',
+                medium: 'reel',
+                format: 'Speed Recap',
+                whyItsHotNow: 'Sourdough resurgence trending this week',
+                sourceUrl: 'https://example.com/a',
+                whyItRanksHere: 'High reach from trend-jacking',
+                kpiSignals: ['reach'],
+                reelDetails: { suggestedLengthSeconds: 60, style: 'talking-head' },
+                carouselDetails: null,
+              },
+            ],
+          },
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByRole('button', { name: /get this week's ideas/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get this week's ideas/i }));
+
+    await waitFor(() => expect(screen.getByText('Sourdough Speedrun')).toBeInTheDocument());
+    expect(screen.getByText(/your niche update will apply starting next week/i)).toBeInTheDocument();
+  });
+
+  it('does not show a cached notice after a fresh (non-cached) generation', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digest: null }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          digest: {
+            id: 'digest-3',
+            weekStart: '2026-08-10',
+            contentIdeas: [
+              {
+                workingTitle: 'Sourdough Speedrun',
+                pitch: 'Bake a loaf in under 2 hours on camera',
+                medium: 'reel',
+                format: 'Speed Recap',
+                whyItsHotNow: 'Sourdough resurgence trending this week',
+                sourceUrl: 'https://example.com/a',
+                whyItRanksHere: 'High reach from trend-jacking',
+                kpiSignals: ['reach'],
+                reelDetails: { suggestedLengthSeconds: 60, style: 'talking-head' },
+                carouselDetails: null,
+              },
+            ],
+          },
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByRole('button', { name: /get this week's ideas/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get this week's ideas/i }));
+
+    await waitFor(() => expect(screen.getByText('Sourdough Speedrun')).toBeInTheDocument());
+    expect(screen.queryByText(/your niche update will apply starting next week/i)).not.toBeInTheDocument();
+  });
+
+  it('does not render a clickable link for a javascript: sourceUrl', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digest: null }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          digest: {
+            id: 'digest-4',
+            weekStart: '2026-08-10',
+            contentIdeas: [
+              {
+                workingTitle: 'Sourdough Speedrun',
+                pitch: 'Bake a loaf in under 2 hours on camera',
+                medium: 'reel',
+                format: 'Speed Recap',
+                whyItsHotNow: 'Sourdough resurgence trending this week',
+                sourceUrl: 'javascript:alert(1)',
+                whyItRanksHere: 'High reach from trend-jacking',
+                kpiSignals: ['reach'],
+                reelDetails: { suggestedLengthSeconds: 60, style: 'talking-head' },
+                carouselDetails: null,
+              },
+            ],
+          },
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByRole('button', { name: /get this week's ideas/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get this week's ideas/i }));
+
+    await waitFor(() => expect(screen.getByText('Sourdough Speedrun')).toBeInTheDocument());
+    const sourceLink = screen.queryByRole('link', { name: /source/i });
+    if (sourceLink) {
+      expect(sourceLink).not.toHaveAttribute('href', 'javascript:alert(1)');
+    } else {
+      expect(sourceLink).toBeNull();
+    }
+  });
+
   it('shows the generate button once a niche is set, and generating renders the returned ideas', async () => {
     const fetchMock = vi
       .fn()

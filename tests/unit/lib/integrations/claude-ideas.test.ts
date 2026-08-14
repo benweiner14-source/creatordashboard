@@ -69,6 +69,29 @@ describe('createClaudeContentIdeasClient', () => {
     );
   });
 
+  it('throws a distinct truncation error when stop_reason is max_tokens, instead of the generic JSON-parse error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          stop_reason: 'max_tokens',
+          content: [
+            {
+              type: 'text',
+              text: "Here are this week's ideas:\n```json\n[{\"workingTitle\":\"Sourdough Speedrun\",\"pitch\":\"Bake a loaf",
+            },
+          ],
+        }),
+      })
+    );
+    const client = createClaudeContentIdeasClient('test-api-key');
+    await expect(client.generateContentIdeas('home baking', new Date('2026-08-13T00:00:00Z'))).rejects.toThrow(
+      'Claude API response was truncated (hit the token limit) before it could be parsed.'
+    );
+  });
+
   it('throws when the API request itself fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
     const client = createClaudeContentIdeasClient('test-api-key');

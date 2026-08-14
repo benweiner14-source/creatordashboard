@@ -53,7 +53,7 @@ export async function handleIdeasRequest(deps: IdeasHandlerDeps, context: IdeasR
 
   const existing = await deps.getExistingDigest(context.profileId, weekStart);
   if (existing) {
-    return { status: 200, body: { digest: existing } };
+    return { status: 200, body: { digest: existing, cached: true } };
   }
 
   const ipHash = hashIp(context.ip, deps.ipSalt);

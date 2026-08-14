@@ -77,7 +77,7 @@ export default function IdeasPage() {
         dispatch({ type: 'GENERATE_FAILED', error: data.error ?? 'Something went wrong generating your content ideas.' });
         return;
       }
-      dispatch({ type: 'GENERATE_SUCCESS', ideas: data.digest.contentIdeas });
+      dispatch({ type: 'GENERATE_SUCCESS', ideas: data.digest.contentIdeas, cached: data.cached ?? false });
     } catch {
       dispatch({ type: 'GENERATE_FAILED', error: "We couldn't reach the server. Check your connection and try again." });
     }
@@ -210,43 +210,51 @@ export default function IdeasPage() {
 
       {state.status === 'ideasReady' && (
         <div className="flex flex-col gap-4">
-          {state.ideas.map((idea, index) => (
-            <article key={index} className="flex flex-col gap-2 rounded-lg border border-gray-200 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-lg font-semibold text-gray-900">{idea.workingTitle}</h2>
-                <span className="whitespace-nowrap rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
-                  {MEDIUM_LABELS[idea.medium]} · {idea.format}
-                </span>
-              </div>
-              <p className="text-gray-700">{idea.pitch}</p>
-              <p className="text-sm text-gray-600">
-                <strong>Why it&apos;s hot now:</strong> {idea.whyItsHotNow}
-                {idea.sourceUrl && (
-                  <>
-                    {' — '}
-                    <a href={idea.sourceUrl} target="_blank" rel="noreferrer" className="text-indigo-700 underline">
-                      source
-                    </a>
-                  </>
+          {state.cached && (
+            <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+              These are this week&apos;s saved ideas — your niche update will apply starting next week.
+            </p>
+          )}
+          {state.ideas.map((idea, index) => {
+            const safeSourceUrl = idea.sourceUrl && /^https?:\/\//i.test(idea.sourceUrl) ? idea.sourceUrl : null;
+            return (
+              <article key={index} className="flex flex-col gap-2 rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-lg font-semibold text-gray-900">{idea.workingTitle}</h2>
+                  <span className="whitespace-nowrap rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+                    {MEDIUM_LABELS[idea.medium]} · {idea.format}
+                  </span>
+                </div>
+                <p className="text-gray-700">{idea.pitch}</p>
+                <p className="text-sm text-gray-600">
+                  <strong>Why it&apos;s hot now:</strong> {idea.whyItsHotNow}
+                  {safeSourceUrl && (
+                    <>
+                      {' — '}
+                      <a href={safeSourceUrl} target="_blank" rel="noreferrer" className="text-indigo-700 underline">
+                        source
+                      </a>
+                    </>
+                  )}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Why it ranks here:</strong> {idea.whyItRanksHere} ({idea.kpiSignals.join(', ')})
+                </p>
+                {idea.reelDetails && (
+                  <p className="text-sm text-gray-500">
+                    Reel: ~{idea.reelDetails.suggestedLengthSeconds}s,{' '}
+                    {idea.reelDetails.style === 'talking-head' ? 'talking-head' : 'VO over capture'}
+                  </p>
                 )}
-              </p>
-              <p className="text-sm text-gray-600">
-                <strong>Why it ranks here:</strong> {idea.whyItRanksHere} ({idea.kpiSignals.join(', ')})
-              </p>
-              {idea.reelDetails && (
-                <p className="text-sm text-gray-500">
-                  Reel: ~{idea.reelDetails.suggestedLengthSeconds}s,{' '}
-                  {idea.reelDetails.style === 'talking-head' ? 'talking-head' : 'VO over capture'}
-                </p>
-              )}
-              {idea.carouselDetails && (
-                <p className="text-sm text-gray-500">
-                  Carousel: {idea.carouselDetails.hookFormula} — &ldquo;{idea.carouselDetails.coverLine}&rdquo; (
-                  {idea.carouselDetails.slideCount} slides)
-                </p>
-              )}
-            </article>
-          ))}
+                {idea.carouselDetails && (
+                  <p className="text-sm text-gray-500">
+                    Carousel: {idea.carouselDetails.hookFormula} — &ldquo;{idea.carouselDetails.coverLine}&rdquo; (
+                    {idea.carouselDetails.slideCount} slides)
+                  </p>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
     </main>

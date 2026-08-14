@@ -58,7 +58,7 @@ describe('handleIdeasRequest', () => {
 
     const result = await handleIdeasRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
     expect(result.status).toBe(200);
-    expect(result.body).toEqual({ digest: existing });
+    expect(result.body).toEqual({ digest: existing, cached: true });
   });
 
   it('generates and saves a new digest, keying the week to the Monday of the current week', async () => {
