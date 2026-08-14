@@ -1,11 +1,17 @@
+// app/api/recap/route.ts
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server';
 import { createSupabaseRateLimitStore } from '@/lib/supabase/rate-limit-store';
 import { createYouTubeClient } from '@/lib/integrations/youtube';
 import { createApifyScraperClient } from '@/lib/integrations/scraper';
+import { createTikTokOAuthClient } from '@/lib/integrations/tiktok-oauth';
+import { createInstagramOAuthClient } from '@/lib/integrations/instagram-oauth';
 import { deriveClientIp } from '@/lib/ip';
 import { handleRecapRequest } from '@/lib/recap/handler';
+import { getPlatformConnection as lookupPlatformConnection } from '@/lib/oauth/connections';
+import { encryptToken } from '@/lib/crypto';
 import type { RecapCardRow } from '@/lib/recap/types';
+import type { OAuthPlatform } from '@/lib/oauth/types';
 
 function currentMonthKey(now: Date): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
@@ -56,11 +62,18 @@ export async function GET() {
     .eq('month', currentMonthKey(new Date()))
     .maybeSingle();
 
+  const { data: connectionRows } = await serviceClient.from('platform_connections').select('platform').eq('profile_id', user.id);
+  const connectedPlatforms = new Set((connectionRows ?? []).map((row) => row.platform));
+
   return NextResponse.json({
     handles: {
       youtube: profile?.youtube_channel_handle ?? null,
       tiktok: profile?.tiktok_handle ?? null,
       instagram: profile?.instagram_handle ?? null,
+    },
+    connections: {
+      tiktok: connectedPlatforms.has('tiktok'),
+      instagram: connectedPlatforms.has('instagram'),
     },
     recapCardId: existingCard?.id ?? null,
   });
@@ -78,6 +91,12 @@ export async function POST(request: Request) {
       isTrustedPlatform: process.env.VERCEL === '1',
       trustedProxyHops: process.env.TRUSTED_PROXY_HOPS ? Number(process.env.TRUSTED_PROXY_HOPS) : undefined,
     });
+
+    const encryptionKey = process.env.OAUTH_TOKEN_ENCRYPTION_KEY ?? '';
+    const oauthProviderClients = {
+      tiktok: createTikTokOAuthClient(process.env.TIKTOK_CLIENT_ID ?? '', process.env.TIKTOK_CLIENT_SECRET ?? ''),
+      instagram: createInstagramOAuthClient(process.env.INSTAGRAM_CLIENT_ID ?? '', process.env.INSTAGRAM_CLIENT_SECRET ?? ''),
+    };
 
     const result = await handleRecapRequest(
       {
@@ -117,6 +136,50 @@ export async function POST(request: Request) {
           }
           return mapRecapCardRow(data);
         },
+        getPlatformConnection: (profileId, platform) =>
+          lookupPlatformConnection(
+            {
+              providerClients: oauthProviderClients,
+              encryptionKey,
+              getConnectionRow: async (pid, p) => {
+                const { data } = await serviceClient
+                  .from('platform_connections')
+                  .select('*')
+                  .eq('profile_id', pid)
+                  .eq('platform', p)
+                  .maybeSingle();
+                if (!data) return null;
+                return {
+                  profileId: data.profile_id,
+                  platform: data.platform as OAuthPlatform,
+                  providerUserId: data.provider_user_id,
+                  accessTokenEncrypted: data.access_token_encrypted,
+                  refreshTokenEncrypted: data.refresh_token_encrypted,
+                  expiresAt: data.expires_at ? new Date(data.expires_at) : null,
+                };
+              },
+              updateConnectionTokens: async ({ profileId: pid, platform: p, accessToken, refreshToken, expiresAt }) => {
+                const { error } = await serviceClient
+                  .from('platform_connections')
+                  .update({
+                    access_token_encrypted: encryptToken(accessToken, encryptionKey),
+                    refresh_token_encrypted: refreshToken ? encryptToken(refreshToken, encryptionKey) : null,
+                    expires_at: expiresAt ? expiresAt.toISOString() : null,
+                  })
+                  .eq('profile_id', pid)
+                  .eq('platform', p);
+                if (error) {
+                  throw new Error(`Failed to update platform connection tokens: ${error.message}`);
+                }
+              },
+              deleteConnection: async (pid, p) => {
+                await serviceClient.from('platform_connections').delete().eq('profile_id', pid).eq('platform', p);
+              },
+            },
+            profileId,
+            platform
+          ),
+        oauthClients: oauthProviderClients,
       },
       { profileId: user?.id ?? null, ip, now: new Date() }
     );
