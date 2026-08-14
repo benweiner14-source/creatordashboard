@@ -21,7 +21,7 @@ function makeDeps(overrides: Partial<Parameters<typeof handleRecapRequest>[0]> =
       savedCards.push(row);
       return row;
     },
-    getPlatformConnection: async () => null,
+    getPlatformConnection: async () => ({ status: 'not_connected' as const }),
     oauthClients: {
       tiktok: createFakeOAuthProviderClient(),
       instagram: createFakeOAuthProviderClient(),
@@ -191,7 +191,8 @@ describe('handleRecapRequest', () => {
     const deps = makeDeps({
       scraperClient,
       getProfileHandles: async () => ({ youtube: null, tiktok: 'creator', instagram: null }),
-      getPlatformConnection: async (_profileId, platform) => (platform === 'tiktok' ? { accessToken: 'access-1' } : null),
+      getPlatformConnection: async (_profileId, platform) =>
+        platform === 'tiktok' ? { status: 'connected' as const, accessToken: 'access-1' } : { status: 'not_connected' as const },
       oauthClients: {
         tiktok: createFakeOAuthProviderClient({ fetchProfilePosts: oauthFetchSpy }),
         instagram: createFakeOAuthProviderClient(),
@@ -222,7 +223,8 @@ describe('handleRecapRequest', () => {
   it('allows generation from a connection alone, with no handle saved for that platform', async () => {
     const deps = makeDeps({
       getProfileHandles: async () => ({ youtube: null, tiktok: null, instagram: null }),
-      getPlatformConnection: async (_profileId, platform) => (platform === 'tiktok' ? { accessToken: 'access-1' } : null),
+      getPlatformConnection: async (_profileId, platform) =>
+        platform === 'tiktok' ? { status: 'connected' as const, accessToken: 'access-1' } : { status: 'not_connected' as const },
       oauthClients: {
         tiktok: createFakeOAuthProviderClient({
           fetchProfilePosts: async () => [
@@ -240,5 +242,56 @@ describe('handleRecapRequest', () => {
     const deps = makeDeps({ getProfileHandles: async () => ({ youtube: null, tiktok: null, instagram: null }) });
     const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
     expect(result.status).toBe(400);
+  });
+
+  it('warns connection_expired for a platform whose refresh token was definitively invalidated, falling back to its saved handle', async () => {
+    const deps = makeDeps({
+      getProfileHandles: async () => ({ youtube: null, tiktok: 'creator', instagram: null }),
+      getPlatformConnection: async (_profileId, platform) =>
+        platform === 'tiktok' ? { status: 'connection_expired' as const } : { status: 'not_connected' as const },
+      scraperClient: createFakeScraperClient({}, [
+        { platform: 'tiktok', id: 't1', caption: 'via Apify fallback', publishedAt: '2026-08-06T00:00:00Z', viewCount: 100, likeCount: 5, commentCount: 1, permalink: 'https://tiktok.com/@creator/video/t1' },
+      ]),
+    });
+
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(200);
+    const body = result.body as { recapCard: RecapCardRow };
+    expect(body.recapCard.warnings).toContain('tiktok_connection_expired');
+  });
+
+  it('flags instagram_views_unavailable when Instagram posts come from the OAuth connection', async () => {
+    const deps = makeDeps({
+      getProfileHandles: async () => ({ youtube: null, tiktok: null, instagram: null }),
+      getPlatformConnection: async (_profileId, platform) =>
+        platform === 'instagram' ? { status: 'connected' as const, accessToken: 'access-1' } : { status: 'not_connected' as const },
+      oauthClients: {
+        tiktok: createFakeOAuthProviderClient(),
+        instagram: createFakeOAuthProviderClient({
+          fetchProfilePosts: async () => [
+            { platform: 'instagram' as const, id: 'ig-1', caption: 'via OAuth', publishedAt: '2026-08-06T00:00:00Z', viewCount: 0, likeCount: 40, commentCount: 2, permalink: 'https://instagram.com/p/ig-1' },
+          ],
+        }),
+      },
+    });
+
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(200);
+    const body = result.body as { recapCard: RecapCardRow };
+    expect(body.recapCard.warnings).toContain('instagram_views_unavailable');
+  });
+
+  it('does not flag instagram_views_unavailable when Instagram data came from the Apify handle path', async () => {
+    const deps = makeDeps({
+      getProfileHandles: async () => ({ youtube: null, tiktok: null, instagram: 'creator' }),
+      scraperClient: createFakeScraperClient({}, [
+        { platform: 'instagram', id: 'ig-1', caption: 'via Apify', publishedAt: '2026-08-06T00:00:00Z', viewCount: 500, likeCount: 40, commentCount: 2, permalink: 'https://instagram.com/p/ig-1' },
+      ]),
+    });
+
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(200);
+    const body = result.body as { recapCard: RecapCardRow };
+    expect(body.recapCard.warnings).not.toContain('instagram_views_unavailable');
   });
 });

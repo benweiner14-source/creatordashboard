@@ -1,5 +1,6 @@
 import { decryptToken } from '@/lib/crypto';
 import type { OAuthPlatform, OAuthProviderClient } from './types';
+import { OAuthRefreshInvalidError } from './types';
 
 export interface PlatformConnectionRow {
   profileId: string;
@@ -24,9 +25,10 @@ export interface GetPlatformConnectionDeps {
   deleteConnection: (profileId: string, platform: OAuthPlatform) => Promise<void>;
 }
 
-export interface ActiveConnection {
-  accessToken: string;
-}
+export type PlatformConnectionResult =
+  | { status: 'connected'; accessToken: string }
+  | { status: 'not_connected' }
+  | { status: 'connection_expired' };
 
 // Refresh proactively once a token is within this window of expiring, not
 // only after it has already expired — avoids a request that starts
@@ -40,27 +42,36 @@ function needsRefresh(expiresAt: Date | null, now: Date): boolean {
 
 /**
  * Reads a creator's connection for a platform, refreshing the token first
- * if it's expired or about to expire. Returns null if there's no
- * connection, or if refresh was needed and failed — in the failure case
- * the broken row is deleted so /recap reflects "disconnected" on next
- * load. See docs/superpowers/specs/2026-08-14-oauth-fast-follow-design.md §3.
+ * if it's expired or about to expire. See
+ * docs/superpowers/specs/2026-08-14-oauth-fast-follow-design.md §3.
  */
 export async function getPlatformConnection(
   deps: GetPlatformConnectionDeps,
   profileId: string,
   platform: OAuthPlatform,
   now: Date = new Date()
-): Promise<ActiveConnection | null> {
+): Promise<PlatformConnectionResult> {
   const row = await deps.getConnectionRow(profileId, platform);
-  if (!row) return null;
+  if (!row) return { status: 'not_connected' };
 
-  const accessToken = decryptToken(row.accessTokenEncrypted, deps.encryptionKey);
-
-  if (!needsRefresh(row.expiresAt, now)) {
-    return { accessToken };
+  let accessToken: string;
+  let refreshToken: string | null;
+  try {
+    accessToken = decryptToken(row.accessTokenEncrypted, deps.encryptionKey);
+    refreshToken = row.refreshTokenEncrypted ? decryptToken(row.refreshTokenEncrypted, deps.encryptionKey) : null;
+  } catch (err) {
+    // A decryption failure is an operational problem (wrong/rotated
+    // encryption key, corrupted ciphertext), not evidence the creator's
+    // connection is actually broken — do NOT delete the row, since that
+    // would force every creator to re-consent once the real problem is
+    // fixed. Just treat this platform as unavailable for this request.
+    console.error(`Failed to decrypt ${platform} tokens for profile ${profileId}:`, err);
+    return { status: 'not_connected' };
   }
 
-  const refreshToken = row.refreshTokenEncrypted ? decryptToken(row.refreshTokenEncrypted, deps.encryptionKey) : null;
+  if (!needsRefresh(row.expiresAt, now)) {
+    return { status: 'connected', accessToken };
+  }
 
   try {
     const providerClient = deps.providerClients[platform];
@@ -72,18 +83,43 @@ export async function getPlatformConnection(
       refreshToken: refreshed.refreshToken,
       expiresAt: refreshed.expiresAt,
     });
-    return { accessToken: refreshed.accessToken };
+    return { status: 'connected', accessToken: refreshed.accessToken };
   } catch (err) {
-    console.error(`Failed to refresh ${platform} token for profile ${profileId}, clearing connection:`, err);
-    await deps.deleteConnection(profileId, platform);
-    return null;
+    if (err instanceof OAuthRefreshInvalidError) {
+      // The provider has definitively told us this refresh token is dead
+      // — this is the only case where deleting the connection is correct.
+      console.error(`${platform} refresh token invalid for profile ${profileId}, clearing connection:`, err);
+      await deps.deleteConnection(profileId, platform);
+      return { status: 'connection_expired' };
+    }
+    // Network blip, timeout, or a transient 5xx from the provider — the
+    // connection is very likely still fine. Leave the row intact so a
+    // later attempt can retry the refresh instead of forcing the creator
+    // through OAuth consent again.
+    console.error(`Transient error refreshing ${platform} token for profile ${profileId}, leaving connection intact:`, err);
+    return { status: 'not_connected' };
   }
 }
 
 export interface DisconnectPlatformDeps {
   deleteConnection: (profileId: string, platform: OAuthPlatform) => Promise<void>;
+  getConnectionRow: (profileId: string, platform: OAuthPlatform) => Promise<PlatformConnectionRow | null>;
+  providerClients: Record<OAuthPlatform, OAuthProviderClient>;
+  encryptionKey: string;
 }
 
 export async function disconnectPlatform(deps: DisconnectPlatformDeps, profileId: string, platform: OAuthPlatform): Promise<void> {
+  const row = await deps.getConnectionRow(profileId, platform);
+  const revoke = deps.providerClients[platform].revokeToken;
+  if (row && revoke) {
+    try {
+      const accessToken = decryptToken(row.accessTokenEncrypted, deps.encryptionKey);
+      await revoke(accessToken);
+    } catch (err) {
+      // Best-effort only — never block the local disconnect on a failed
+      // provider-side revoke (network error, already-expired token, etc.).
+      console.error(`Best-effort ${platform} token revoke failed for profile ${profileId}:`, err);
+    }
+  }
   await deps.deleteConnection(profileId, platform);
 }

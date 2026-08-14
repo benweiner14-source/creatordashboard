@@ -275,4 +275,15 @@ describe('recapPageReducer — connections', () => {
     const state: RecapPageState = { status: 'generating', handles, connections: { tiktok: true, instagram: false }, stillWorking: false };
     expect(recapPageReducer(state, { type: 'DISCONNECTED', platform: 'tiktok' })).toBe(state);
   });
+
+  it('DISCONNECT_FAILED surfaces an error while preserving handles and connections', () => {
+    const state: RecapPageState = { status: 'readyToGenerate', handles, connections: { tiktok: true, instagram: false } };
+    const next = recapPageReducer(state, { type: 'DISCONNECT_FAILED', error: 'boom' });
+    expect(next).toEqual({ status: 'noHandlesConnected', handles, connections: { tiktok: true, instagram: false }, error: 'boom' });
+  });
+
+  it('DISCONNECT_FAILED is ignored outside a handle-editing state', () => {
+    const state: RecapPageState = { status: 'generating', handles, connections: { tiktok: true, instagram: false }, stillWorking: false };
+    expect(recapPageReducer(state, { type: 'DISCONNECT_FAILED', error: 'boom' })).toBe(state);
+  });
 });

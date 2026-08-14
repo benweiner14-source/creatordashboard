@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createInstagramOAuthClient } from '@/lib/integrations/instagram-oauth';
+import { OAuthRefreshInvalidError } from '@/lib/oauth/types';
 
 describe('createInstagramOAuthClient', () => {
   afterEach(() => {
@@ -63,6 +64,14 @@ describe('createInstagramOAuthClient', () => {
     const refreshed = await client.refreshAccessToken({ accessToken: 'current-token', refreshToken: null, expiresAt: null });
     expect(refreshed.accessToken).toBe('refreshed-1');
     expect(refreshed.refreshToken).toBeNull();
+  });
+
+  it('throws OAuthRefreshInvalidError when the refresh request is rejected with a 400', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400 }));
+    const client = createInstagramOAuthClient('test-client-id', 'test-client-secret');
+    await expect(
+      client.refreshAccessToken({ accessToken: 'current-token', refreshToken: null, expiresAt: null })
+    ).rejects.toBeInstanceOf(OAuthRefreshInvalidError);
   });
 
   it('fetches and normalizes profile posts, with viewCount always 0 (known API limitation)', async () => {

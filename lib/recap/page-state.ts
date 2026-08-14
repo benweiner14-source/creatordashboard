@@ -34,6 +34,7 @@ export type RecapPageEvent =
   | { type: 'HANDLES_SAVED' }
   | { type: 'HANDLES_SAVE_FAILED'; error: string }
   | { type: 'DISCONNECTED'; platform: 'tiktok' | 'instagram' }
+  | { type: 'DISCONNECT_FAILED'; error: string }
   | { type: 'GENERATE' }
   | { type: 'GENERATE_STILL_WORKING' }
   | { type: 'GENERATE_SUCCESS'; recapCardId: string }
@@ -123,6 +124,14 @@ export function recapPageReducer(state: RecapPageState, event: RecapPageEvent): 
         ? { status: 'readyToGenerate', handles: state.handles, connections }
         : { status: 'noHandlesConnected', handles: state.handles, connections, error: null };
     }
+
+    case 'DISCONNECT_FAILED':
+      // Mirrors HANDLES_SAVE_FAILED: surface the error via the same
+      // noHandlesConnected/error mechanism the rest of this page uses,
+      // rather than leaving the Disconnect button looking inert.
+      return isHandleEditingState(state)
+        ? { status: 'noHandlesConnected', handles: state.handles, connections: state.connections, error: event.error }
+        : state;
 
     case 'GENERATE':
       return state.status === 'readyToGenerate' || state.status === 'generationFailed'

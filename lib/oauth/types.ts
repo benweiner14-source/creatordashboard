@@ -27,4 +27,22 @@ export interface OAuthProviderClient {
    */
   refreshAccessToken(current: OAuthTokenSet): Promise<OAuthTokenSet>;
   fetchProfilePosts(accessToken: string): Promise<ProfilePost[]>;
+  /**
+   * Best-effort call to the provider's own token-revocation endpoint, for
+   * platforms that document one. Optional because not every platform
+   * exposes a client-callable revoke — see lib/integrations/instagram-oauth.ts
+   * for the verified absence on Instagram's "Business Login for
+   * Instagram" product. Callers must treat a rejected promise as
+   * non-fatal and never let it block the local connection delete.
+   */
+  revokeToken?(accessToken: string): Promise<void>;
 }
+
+/**
+ * Thrown by refreshAccessToken when the provider indicates the refresh
+ * token itself is invalid, expired, or revoked (a definitive, permanent
+ * failure) — as opposed to a network blip or a transient 5xx, which
+ * should NOT cause the stored connection to be deleted. See
+ * docs/superpowers/specs/2026-08-14-oauth-fast-follow-design.md §3.
+ */
+export class OAuthRefreshInvalidError extends Error {}

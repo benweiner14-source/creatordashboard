@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createTikTokOAuthClient } from '@/lib/integrations/tiktok-oauth';
+import { OAuthRefreshInvalidError } from '@/lib/oauth/types';
 
 describe('createTikTokOAuthClient', () => {
   afterEach(() => {
@@ -53,10 +54,25 @@ describe('createTikTokOAuthClient', () => {
     expect(userId).toBe('user-open-id-1');
   });
 
-  it('throws when there is no refresh token to refresh with', async () => {
+  it('throws when the user info response has a body-level error envelope', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ error: { code: 'access_token_invalid', message: 'x', log_id: 'y' } }),
+      })
+    );
     const client = createTikTokOAuthClient('test-client-id', 'test-client-secret');
-    await expect(client.refreshAccessToken({ accessToken: 'a', refreshToken: null, expiresAt: null })).rejects.toThrow(
-      'No TikTok refresh token'
+    await expect(client.getProviderUserId('access-1')).rejects.toThrow('access_token_invalid');
+  });
+
+  it('throws OAuthRefreshInvalidError when there is no refresh token to refresh with', async () => {
+    const client = createTikTokOAuthClient('test-client-id', 'test-client-secret');
+    const promise = client.refreshAccessToken({ accessToken: 'a', refreshToken: null, expiresAt: null });
+    await expect(promise).rejects.toThrow('No TikTok refresh token');
+    await expect(client.refreshAccessToken({ accessToken: 'a', refreshToken: null, expiresAt: null })).rejects.toBeInstanceOf(
+      OAuthRefreshInvalidError
     );
   });
 
@@ -73,6 +89,14 @@ describe('createTikTokOAuthClient', () => {
     const refreshed = await client.refreshAccessToken({ accessToken: 'access-1', refreshToken: 'refresh-1', expiresAt: null });
     expect(refreshed.accessToken).toBe('access-2');
     expect(refreshed.refreshToken).toBe('refresh-2');
+  });
+
+  it('throws OAuthRefreshInvalidError when the refresh request is rejected with a 400', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400 }));
+    const client = createTikTokOAuthClient('test-client-id', 'test-client-secret');
+    await expect(
+      client.refreshAccessToken({ accessToken: 'access-1', refreshToken: 'refresh-1', expiresAt: null })
+    ).rejects.toBeInstanceOf(OAuthRefreshInvalidError);
   });
 
   it('fetches and normalizes profile posts into the shared ProfilePost shape', async () => {
@@ -112,5 +136,67 @@ describe('createTikTokOAuthClient', () => {
         permalink: 'https://www.tiktok.com/@creator/video/7000000000000000001',
       },
     ]);
+  });
+
+  it('paginates at 20 per page until has_more is false, accumulating posts across pages', async () => {
+    const makeVideo = (id: string) => ({
+      id,
+      video_description: `post ${id}`,
+      create_time: 1755100800,
+      share_url: `https://www.tiktok.com/@creator/video/${id}`,
+      view_count: 100,
+      like_count: 10,
+      comment_count: 1,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { videos: [makeVideo('1'), makeVideo('2')], cursor: 999, has_more: true } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { videos: [makeVideo('3')], has_more: false } }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createTikTokOAuthClient('test-client-id', 'test-client-secret');
+    const posts = await client.fetchProfilePosts('access-1');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(posts.map((p) => p.id)).toEqual(['1', '2', '3']);
+    const [, secondCallOptions] = fetchMock.mock.calls[1];
+    expect(JSON.parse(String(secondCallOptions.body))).toMatchObject({ cursor: 999 });
+  });
+
+  it('throws when the video list response has a body-level error envelope', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ error: { code: 'access_token_invalid', message: 'x', log_id: 'y' } }),
+      })
+    );
+    const client = createTikTokOAuthClient('test-client-id', 'test-client-secret');
+    await expect(client.fetchProfilePosts('access-1')).rejects.toThrow('access_token_invalid');
+  });
+
+  it('best-effort revokes the token on the documented revoke endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createTikTokOAuthClient('test-client-id', 'test-client-secret');
+    await client.revokeToken!('access-1');
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://open.tiktokapis.com/v2/oauth/revoke/');
+    expect(String(options.body)).toContain('token=access-1');
+  });
+
+  it('throws when the revoke request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    const client = createTikTokOAuthClient('test-client-id', 'test-client-secret');
+    await expect(client.revokeToken!('access-1')).rejects.toThrow('status 500');
   });
 });

@@ -143,7 +143,13 @@ describe('POST /api/oauth/[platform]/disconnect', () => {
     const eqPlatform = vi.fn().mockResolvedValue({ error: null });
     const eqProfile = vi.fn(() => ({ eq: eqPlatform }));
     const deleteMock = vi.fn(() => ({ eq: eqProfile }));
-    fromMock.mockReturnValue({ delete: deleteMock });
+    // getConnectionRow's select().eq().eq().maybeSingle() chain resolves to
+    // no row, so disconnectPlatform skips the best-effort revoke call.
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null });
+    const selectEqEq = vi.fn(() => ({ maybeSingle }));
+    const selectEq = vi.fn(() => ({ eq: selectEqEq }));
+    const selectMock = vi.fn(() => ({ eq: selectEq }));
+    fromMock.mockReturnValue({ delete: deleteMock, select: selectMock });
 
     const response = await disconnectPOST(new Request('https://app.example.com/api/oauth/tiktok/disconnect', { method: 'POST' }), makeParams('tiktok'));
     const body = await response.json();
@@ -152,5 +158,23 @@ describe('POST /api/oauth/[platform]/disconnect', () => {
     expect(deleteMock).toHaveBeenCalled();
     expect(eqProfile).toHaveBeenCalledWith('profile_id', 'user-1');
     expect(eqPlatform).toHaveBeenCalledWith('platform', 'tiktok');
+  });
+
+  it('returns a structured 500 when the Supabase delete fails', async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: 'user-1' } } });
+    const eqPlatform = vi.fn().mockResolvedValue({ error: { message: 'db unavailable' } });
+    const eqProfile = vi.fn(() => ({ eq: eqPlatform }));
+    const deleteMock = vi.fn(() => ({ eq: eqProfile }));
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null });
+    const selectEqEq = vi.fn(() => ({ maybeSingle }));
+    const selectEq = vi.fn(() => ({ eq: selectEqEq }));
+    const selectMock = vi.fn(() => ({ eq: selectEq }));
+    fromMock.mockReturnValue({ delete: deleteMock, select: selectMock });
+
+    const response = await disconnectPOST(new Request('https://app.example.com/api/oauth/tiktok/disconnect', { method: 'POST' }), makeParams('tiktok'));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: 'Something went wrong disconnecting that platform. Please try again.' });
   });
 });

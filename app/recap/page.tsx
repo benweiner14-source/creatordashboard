@@ -141,7 +141,12 @@ function RecapPageInner() {
     const res = await fetch(`/api/oauth/${platform}/disconnect`, { method: 'POST' }).catch(() => null);
     if (res?.ok) {
       dispatch({ type: 'DISCONNECTED', platform });
+      return;
     }
+    dispatch({
+      type: 'DISCONNECT_FAILED',
+      error: 'Something went wrong disconnecting that platform. Please try again.',
+    });
   }
 
   async function generate() {

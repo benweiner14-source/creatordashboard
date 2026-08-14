@@ -1,5 +1,6 @@
 import type { ProfilePost } from './scraper';
 import type { OAuthProviderClient, OAuthTokenSet } from '@/lib/oauth/types';
+import { OAuthRefreshInvalidError } from '@/lib/oauth/types';
 
 // OAuth endpoint URLs: This client implements "Business Login for Instagram" flow
 // (not "Facebook Login for Business"). See Meta's Instagram Platform docs:
@@ -22,6 +23,11 @@ const LONG_LIVED_EXCHANGE_URL = 'https://graph.instagram.com/access_token';
 const REFRESH_URL = 'https://graph.instagram.com/refresh_access_token';
 const USER_INFO_URL = 'https://graph.instagram.com/me';
 const MEDIA_URL = 'https://graph.instagram.com/me/media';
+
+// No revokeToken: Meta's "Business Login for Instagram" product docs
+// (same page cited above) document no callable revoke/deauthorize
+// endpoint — verified 2026-08-14. Tokens only end via natural 60-day
+// expiry or the creator revoking access in their own Instagram settings.
 
 const SCOPES = 'instagram_business_basic';
 
@@ -106,6 +112,11 @@ export function createInstagramOAuthClient(clientId: string, clientSecret: strin
       url.searchParams.set('access_token', current.accessToken);
       const response = await fetch(url.toString());
       if (!response.ok) {
+        if (response.status === 400 || response.status === 401) {
+          throw new OAuthRefreshInvalidError(
+            `Instagram token refresh rejected with status ${response.status} — token is invalid, expired, or revoked`
+          );
+        }
         throw new Error(`Instagram token refresh failed with status ${response.status}`);
       }
       const data = await response.json();

@@ -25,12 +25,23 @@ export interface RecapHandlerDeps {
     warnings: string[];
   }) => Promise<RecapCardRow>;
   /**
-   * Returns an active, refresh-if-needed access token for a connected
-   * platform, or null if the platform isn't connected via OAuth (or the
-   * connection was cleared after a failed refresh). See
-   * docs/superpowers/specs/2026-08-14-oauth-fast-follow-design.md §4.
+   * Returns the connection state for a platform: 'connected' with an
+   * access token if OAuth is usable right now, 'not_connected' if there's
+   * no connection (or it couldn't be used this request — decrypt
+   * failure, transient refresh error), or 'connection_expired' if the
+   * platform WAS connected but its refresh token has been definitively
+   * invalidated by the provider (the connection row has already been
+   * deleted by this point). See
+   * docs/superpowers/specs/2026-08-14-oauth-fast-follow-design.md §3.
    */
-  getPlatformConnection: (profileId: string, platform: OAuthConnectedPlatform) => Promise<{ accessToken: string } | null>;
+  getPlatformConnection: (
+    profileId: string,
+    platform: OAuthConnectedPlatform
+  ) => Promise<
+    | { status: 'connected'; accessToken: string }
+    | { status: 'not_connected' }
+    | { status: 'connection_expired' }
+  >;
   oauthClients: Record<OAuthConnectedPlatform, { fetchProfilePosts: (accessToken: string) => Promise<ProfilePost[]> }>;
 }
 
@@ -62,10 +73,13 @@ export async function handleRecapRequest(deps: RecapHandlerDeps, context: RecapR
   // below and reused in the fetch loop, so a connected platform's token
   // is never refreshed twice in one request. See spec §4.
   const oauthConnections: Partial<Record<OAuthConnectedPlatform, { accessToken: string }>> = {};
+  const connectionWarnings: string[] = [];
   for (const platform of ['tiktok', 'instagram'] as const) {
-    const connection = await deps.getPlatformConnection(context.profileId, platform);
-    if (connection) {
-      oauthConnections[platform] = connection;
+    const result = await deps.getPlatformConnection(context.profileId, platform);
+    if (result.status === 'connected') {
+      oauthConnections[platform] = { accessToken: result.accessToken };
+    } else if (result.status === 'connection_expired') {
+      connectionWarnings.push(`${platform}_connection_expired`);
     }
   }
 
@@ -109,7 +123,7 @@ export async function handleRecapRequest(deps: RecapHandlerDeps, context: RecapR
   }
 
   try {
-    const warnings: string[] = [];
+    const warnings: string[] = [...connectionWarnings];
     const postsByPlatform: Partial<Record<RecapPlatform, AggregatablePost[]>> = {};
 
     if (handles.youtube) {
@@ -141,6 +155,15 @@ export async function handleRecapRequest(deps: RecapHandlerDeps, context: RecapR
         const posts = connection
           ? await deps.oauthClients[platform].fetchProfilePosts(connection.accessToken)
           : await deps.scraperClient.fetchProfilePosts(platform, handle!);
+        if (connection && platform === 'instagram') {
+          // Instagram's OAuth API (instagram_business_basic scope) doesn't
+          // expose view counts without a separate Insights permission this
+          // app doesn't request — every Instagram post fetched via OAuth
+          // reports viewCount: 0, which would silently understate totals and
+          // prevent Instagram posts from ever winning "top post" if left
+          // unflagged. See lib/integrations/instagram-oauth.ts.
+          warnings.push('instagram_views_unavailable');
+        }
         postsByPlatform[platform] = filterPostsToMonth(
           posts.map((p) => ({
             platform,
