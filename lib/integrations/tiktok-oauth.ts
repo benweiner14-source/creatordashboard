@@ -1,15 +1,21 @@
 import type { ProfilePost } from './scraper';
 import type { OAuthProviderClient, OAuthTokenSet } from '@/lib/oauth/types';
 
+/**
+ * TikTok OAuth endpoints verified against live documentation on 2026-08-14:
+ * - https://developers.tiktok.com/doc/login-kit-web (authorize URL)
+ * - https://developers.tiktok.com/doc/oauth-user-access-token-management (token URL)
+ * - https://developers.tiktok.com/doc/tiktok-api-v2-get-user-info (user info endpoint)
+ * - https://developers.tiktok.com/doc/tiktok-api-v2-video-list (video list endpoint)
+ */
 const AUTHORIZE_URL = 'https://www.tiktok.com/v2/auth/authorize/';
 const TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/';
 const USER_INFO_URL = 'https://open.tiktokapis.com/v2/user/info/';
 const VIDEO_LIST_URL = 'https://open.tiktokapis.com/v2/video/list/';
 
 // user.info.basic identifies the creator; video.list reads their own
-// videos' stats — the two Display API scopes this feature needs. Verify
-// current scope names against https://developers.tiktok.com/doc/tiktok-api-scopes
-// before shipping. See this plan's Global Constraints.
+// videos' stats — the two Display API scopes this feature needs.
+// Verified against https://developers.tiktok.com/doc/tiktok-api-scopes on 2026-08-14.
 const SCOPES = 'user.info.basic,video.list';
 
 // Mirrors PROFILE_SCRAPE_RESULTS_LIMIT in lib/integrations/scraper.ts —
