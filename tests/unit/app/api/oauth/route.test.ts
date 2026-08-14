@@ -102,6 +102,15 @@ describe('GET /api/oauth/[platform]/callback', () => {
     );
     expect(response.headers.get('location')).toBe('https://app.example.com/recap?connected=tiktok');
     expect(cookieStore.delete).toHaveBeenCalledWith('oauth_state_tiktok');
+
+    // Prove tokens are actually encrypted before hitting the upsert, not
+    // just incidentally true because the code happens to call encryptToken.
+    const [upsertPayload] = upsertMock.mock.calls[0];
+    expect(upsertPayload.access_token_encrypted).toBeTruthy();
+    expect(upsertPayload.refresh_token_encrypted).toBeTruthy();
+    expect(upsertPayload.access_token_encrypted).not.toBe('access-1');
+    expect(upsertPayload.refresh_token_encrypted).not.toBe('refresh-1');
+
     vi.unstubAllGlobals();
   });
 
@@ -121,6 +130,12 @@ describe('POST /api/oauth/[platform]/disconnect', () => {
     getUserMock.mockResolvedValue({ data: { user: null } });
     const response = await disconnectPOST(new Request('https://app.example.com/api/oauth/tiktok/disconnect', { method: 'POST' }), makeParams('tiktok'));
     expect(response.status).toBe(401);
+  });
+
+  it('returns 400 for an unsupported platform', async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: 'user-1' } } });
+    const response = await disconnectPOST(new Request('https://app.example.com/api/oauth/youtube/disconnect', { method: 'POST' }), makeParams('youtube'));
+    expect(response.status).toBe(400);
   });
 
   it('deletes the connection row and returns ok when signed in', async () => {
