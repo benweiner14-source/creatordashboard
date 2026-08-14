@@ -92,6 +92,34 @@ describe('IdeasPage', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/ideas', { method: 'POST' });
   });
 
+  it('keeps the saved niche visible in the input while generating, instead of blanking it', async () => {
+    let resolveGenerate: (value: unknown) => void = () => {};
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digest: null }) })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveGenerate = resolve;
+          })
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByRole('button', { name: /get this week's ideas/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get this week's ideas/i }));
+
+    // While the POST /api/ideas request is still pending, state.status === 'generating'.
+    await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
+    expect(screen.getByLabelText(/your niche/i)).toHaveValue('home baking');
+
+    resolveGenerate({
+      ok: true,
+      json: async () => ({ digest: { id: 'digest-3', weekStart: '2026-08-10', contentIdeas: [] } }),
+    });
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
   it('shows an error and a retry button when generation fails', async () => {
     const fetchMock = vi
       .fn()

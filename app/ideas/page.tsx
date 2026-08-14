@@ -146,7 +146,7 @@ export default function IdeasPage() {
           <input
             id="ideas-niche"
             type="text"
-            value={state.status === 'ideasReady' ? state.niche : isNicheEditingState(state) ? state.niche : ''}
+            value={state.niche}
             onChange={(e) => dispatch({ type: 'NICHE_CHANGED', value: e.target.value })}
             placeholder="e.g. home baking, personal finance for Gen Z"
             disabled={state.status === 'generating' || state.status === 'ideasReady'}
