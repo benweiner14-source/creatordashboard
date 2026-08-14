@@ -132,6 +132,66 @@ describe('ideasPageReducer — generation', () => {
   });
 });
 
+describe('ideasPageReducer — sign-in sub-flow', () => {
+  it('collects the email from needsSignIn and submits it with a valid format', () => {
+    const typed = ideasPageReducer(
+      { status: 'needsSignIn', email: '', notice: null },
+      { type: 'EMAIL_CHANGED', email: 'creator@example.com' }
+    );
+    expect(typed).toEqual({ status: 'needsSignIn', email: 'creator@example.com', notice: null });
+    expect(ideasPageReducer(typed, { type: 'SUBMIT_EMAIL' })).toEqual({
+      status: 'submittingMagicLink',
+      email: 'creator@example.com',
+    });
+  });
+
+  it('updates email from magicLinkError state', () => {
+    const state: IdeasPageState = { status: 'magicLinkError', email: 'old@example.com', error: 'boom' };
+    expect(ideasPageReducer(state, { type: 'EMAIL_CHANGED', email: 'new@example.com' })).toEqual({
+      status: 'magicLinkError',
+      email: 'new@example.com',
+      error: 'boom',
+    });
+  });
+
+  it('refuses to submit an email that is not a valid format', () => {
+    const state: IdeasPageState = { status: 'needsSignIn', email: 'nope', notice: null };
+    expect(ideasPageReducer(state, { type: 'SUBMIT_EMAIL' })).toBe(state);
+  });
+
+  it('ignores SUBMIT_EMAIL from a state where it does not apply (impossible-state guard)', () => {
+    const state: IdeasPageState = { status: 'ideasReady', niche: 'home baking', ideas: [IDEA] };
+    expect(ideasPageReducer(state, { type: 'SUBMIT_EMAIL' })).toBe(state);
+  });
+
+  it('moves to checkEmail on MAGIC_LINK_SENT and back to submitting on RESEND_EMAIL', () => {
+    const sent = ideasPageReducer(
+      { status: 'submittingMagicLink', email: 'creator@example.com' },
+      { type: 'MAGIC_LINK_SENT' }
+    );
+    expect(sent).toEqual({ status: 'checkEmail', email: 'creator@example.com' });
+    expect(ideasPageReducer(sent, { type: 'RESEND_EMAIL' })).toEqual({
+      status: 'submittingMagicLink',
+      email: 'creator@example.com',
+    });
+  });
+
+  it('moves to needsSignIn on RETRY_EMAIL from checkEmail', () => {
+    const state: IdeasPageState = { status: 'checkEmail', email: 'creator@example.com' };
+    expect(ideasPageReducer(state, { type: 'RETRY_EMAIL' })).toEqual({
+      status: 'needsSignIn',
+      email: 'creator@example.com',
+      notice: null,
+    });
+  });
+
+  it('keeps the email on MAGIC_LINK_FAILED so it can be retried', () => {
+    expect(
+      ideasPageReducer({ status: 'submittingMagicLink', email: 'creator@example.com' }, { type: 'MAGIC_LINK_FAILED', error: 'boom' })
+    ).toEqual({ status: 'magicLinkError', email: 'creator@example.com', error: 'boom' });
+  });
+});
+
 describe('isNicheEditingState', () => {
   it('is true for needsNiche, readyToGenerate, and generationFailed', () => {
     expect(isNicheEditingState({ status: 'needsNiche', niche: '', error: null })).toBe(true);
