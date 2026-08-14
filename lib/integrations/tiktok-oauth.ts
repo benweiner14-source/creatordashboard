@@ -143,8 +143,12 @@ export function createTikTokOAuthClient(clientId: string, clientSecret: string):
       const results: ProfilePost[] = [];
       let cursor: number | undefined;
       let hasMore = true;
+      // Hard cap on page count, independent of `has_more`/`results.length`:
+      // an empty page with has_more still true, or a cursor that never
+      // advances, would otherwise loop until the platform times out.
+      const maxPages = Math.ceil(PROFILE_POSTS_MAX_RESULTS / TIKTOK_MAX_COUNT_PER_PAGE);
 
-      while (hasMore && results.length < PROFILE_POSTS_MAX_RESULTS) {
+      for (let page = 0; hasMore && results.length < PROFILE_POSTS_MAX_RESULTS && page < maxPages; page++) {
         const url = new URL(VIDEO_LIST_URL);
         url.searchParams.set(
           'fields',

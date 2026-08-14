@@ -14,21 +14,47 @@ interface RecapCardData {
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram' };
 
 /**
- * Turns the stored `{platform}_scrape_failed` markers into something a
- * creator can act on — otherwise a partially-scraped card silently
- * under-reports and nobody ever finds out why.
+ * Turns the stored warning markers into something a creator can act on —
+ * otherwise a partially-scraped or partially-flagged card silently
+ * under-reports and nobody ever finds out why. Each warning kind means a
+ * different thing (a fetch that threw vs. a connection that expired vs. a
+ * platform limitation on an otherwise-successful fetch), so each gets its
+ * own sentence rather than being folded into one generic "couldn't be
+ * reached" message.
  */
+function platformList(platforms: string[]): string {
+  return platforms.length === 1
+    ? platforms[0]
+    : `${platforms.slice(0, -1).join(', ')} and ${platforms[platforms.length - 1]}`;
+}
+
+function platformsFor(warnings: string[], suffix: string): string[] {
+  return warnings
+    .filter((warning) => warning.endsWith(suffix))
+    .map((warning) => warning.slice(0, -suffix.length))
+    .map((platform) => PLATFORM_LABELS[platform] ?? platform);
+}
+
 function describeWarnings(warnings: string[] | undefined): string | null {
-  const platforms = (warnings ?? [])
-    .map((warning) => warning.replace(/_scrape_failed$/, ''))
-    .map((platform) => PLATFORM_LABELS[platform] ?? platform)
-    .filter(Boolean);
-  if (platforms.length === 0) return null;
-  const list =
-    platforms.length === 1
-      ? platforms[0]
-      : `${platforms.slice(0, -1).join(', ')} and ${platforms[platforms.length - 1]}`;
-  return `Note: ${list} couldn't be reached when this card was generated, so those posts aren't counted here.`;
+  const all = warnings ?? [];
+  const notes: string[] = [];
+
+  const failed = platformsFor(all, '_scrape_failed');
+  if (failed.length > 0) {
+    notes.push(`${platformList(failed)} couldn't be reached when this card was generated, so those posts aren't counted here.`);
+  }
+
+  const expired = platformsFor(all, '_connection_expired');
+  if (expired.length > 0) {
+    notes.push(`Your ${platformList(expired)} connection expired before this card was generated — reconnect it on the recap page to include those posts next time.`);
+  }
+
+  if (all.includes('instagram_views_unavailable')) {
+    notes.push("Instagram view counts aren't available for connected accounts yet, so Instagram's view total here may be lower than actual.");
+  }
+
+  if (notes.length === 0) return null;
+  return `Note: ${notes.join(' ')}`;
 }
 
 export default function RecapCardPage() {

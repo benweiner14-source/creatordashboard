@@ -98,6 +98,49 @@ describe('RecapCardPage', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('TikTok and Instagram'));
   });
 
+  it('tells the creator their connection expired, distinctly from a scrape failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          recapCard: {
+            month: '2026-08-01',
+            totals: { views: 127000, likes: 8200, comments: 430, postCount: 14 },
+            topPost: { platform: 'youtube', captionOrTitle: 'Wait for it...', viewCount: 52000, permalink: 'https://youtube.com/watch?v=1' },
+            warnings: ['tiktok_connection_expired'],
+          },
+        }),
+      })
+    );
+
+    render(<RecapCardPage />);
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/your tiktok connection expired/i));
+    expect(screen.getByRole('status')).not.toHaveTextContent(/couldn't be reached/i);
+  });
+
+  it("flags Instagram's unavailable view counts without claiming Instagram couldn't be reached", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          recapCard: {
+            month: '2026-08-01',
+            totals: { views: 127000, likes: 8200, comments: 430, postCount: 14 },
+            topPost: { platform: 'tiktok', captionOrTitle: 'Wait for it...', viewCount: 52000, permalink: 'https://tiktok.com/@creator/video/1' },
+            warnings: ['instagram_views_unavailable'],
+          },
+        }),
+      })
+    );
+
+    render(<RecapCardPage />);
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/instagram view counts aren't available/i));
+    expect(screen.getByRole('status')).not.toHaveTextContent(/couldn't be reached/i);
+    expect(screen.getByRole('status')).not.toHaveTextContent('instagram_views_unavailable');
+  });
+
   it('shows an error message when the recap card is not found', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => ({ error: 'Recap card not found.' }) }));
     render(<RecapCardPage />);

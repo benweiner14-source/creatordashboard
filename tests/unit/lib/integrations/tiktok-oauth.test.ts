@@ -171,6 +171,33 @@ describe('createTikTokOAuthClient', () => {
     expect(JSON.parse(String(secondCallOptions.body))).toMatchObject({ cursor: 999 });
   });
 
+  it('stops after a bounded number of pages even if has_more never turns false', async () => {
+    // A page that keeps reporting has_more: true (a misbehaving API, or a
+    // cursor that never advances) must not hang the request forever.
+    const makeVideo = (id: string) => ({
+      id,
+      video_description: `post ${id}`,
+      create_time: 1755100800,
+      share_url: `https://www.tiktok.com/@creator/video/${id}`,
+      view_count: 100,
+      like_count: 10,
+      comment_count: 1,
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { videos: [makeVideo('x')], cursor: 1, has_more: true } }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createTikTokOAuthClient('test-client-id', 'test-client-secret');
+    const posts = await client.fetchProfilePosts('access-1');
+
+    // 50-post cap / 20-per-page = 3 pages max, regardless of has_more.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(posts.length).toBe(3);
+  });
+
   it('throws when the video list response has a body-level error envelope', async () => {
     vi.stubGlobal(
       'fetch',
