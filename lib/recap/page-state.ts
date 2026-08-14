@@ -5,13 +5,20 @@ export type RecapHandleInputs = Record<RecapPlatform, string>;
 
 export const EMPTY_HANDLE_INPUTS: RecapHandleInputs = { youtube: '', tiktok: '', instagram: '' };
 
+export interface RecapConnectionStatus {
+  tiktok: boolean;
+  instagram: boolean;
+}
+
+export const EMPTY_CONNECTIONS: RecapConnectionStatus = { tiktok: false, instagram: false };
+
 export type RecapPageState =
   | { status: 'loading' }
-  | { status: 'noHandlesConnected'; handles: RecapHandleInputs; error: string | null }
-  | { status: 'readyToGenerate'; handles: RecapHandleInputs }
-  | { status: 'generating'; handles: RecapHandleInputs; stillWorking: boolean }
+  | { status: 'noHandlesConnected'; handles: RecapHandleInputs; connections: RecapConnectionStatus; error: string | null }
+  | { status: 'readyToGenerate'; handles: RecapHandleInputs; connections: RecapConnectionStatus }
+  | { status: 'generating'; handles: RecapHandleInputs; connections: RecapConnectionStatus; stillWorking: boolean }
   | { status: 'redirectingToCard'; recapCardId: string }
-  | { status: 'generationFailed'; handles: RecapHandleInputs; error: string }
+  | { status: 'generationFailed'; handles: RecapHandleInputs; connections: RecapConnectionStatus; error: string }
   // Sign-in sub-flow, mirroring lib/auth/sign-in-flow-state.ts so the same
   // <SignInPrompt> component drives it.
   | { status: 'needsSignIn'; email: string; notice: string | null }
@@ -20,12 +27,13 @@ export type RecapPageState =
   | { status: 'magicLinkError'; email: string; error: string };
 
 export type RecapPageEvent =
-  | { type: 'BOOTSTRAPPED'; handles: RecapHandleInputs; recapCardId: string | null }
+  | { type: 'BOOTSTRAPPED'; handles: RecapHandleInputs; connections: RecapConnectionStatus; recapCardId: string | null }
   | { type: 'BOOTSTRAP_FAILED' }
   | { type: 'BOOTSTRAP_UNAUTHORIZED' }
   | { type: 'HANDLE_CHANGED'; platform: RecapPlatform; value: string }
   | { type: 'HANDLES_SAVED' }
   | { type: 'HANDLES_SAVE_FAILED'; error: string }
+  | { type: 'DISCONNECTED'; platform: 'tiktok' | 'instagram' }
   | { type: 'GENERATE' }
   | { type: 'GENERATE_STILL_WORKING' }
   | { type: 'GENERATE_SUCCESS'; recapCardId: string }
@@ -39,6 +47,14 @@ export type RecapPageEvent =
 
 export function hasAnyHandle(handles: RecapHandleInputs): boolean {
   return Boolean(handles.youtube || handles.tiktok || handles.instagram);
+}
+
+export function hasAnyConnection(connections: RecapConnectionStatus): boolean {
+  return connections.tiktok || connections.instagram;
+}
+
+function isReadyToGenerate(handles: RecapHandleInputs, connections: RecapConnectionStatus): boolean {
+  return hasAnyHandle(handles) || hasAnyConnection(connections);
 }
 
 /**
@@ -66,14 +82,15 @@ export function recapPageReducer(state: RecapPageState, event: RecapPageEvent): 
       if (event.recapCardId) {
         return { status: 'redirectingToCard', recapCardId: event.recapCardId };
       }
-      return hasAnyHandle(event.handles)
-        ? { status: 'readyToGenerate', handles: event.handles }
-        : { status: 'noHandlesConnected', handles: event.handles, error: null };
+      return isReadyToGenerate(event.handles, event.connections)
+        ? { status: 'readyToGenerate', handles: event.handles, connections: event.connections }
+        : { status: 'noHandlesConnected', handles: event.handles, connections: event.connections, error: null };
 
     case 'BOOTSTRAP_FAILED':
       return {
         status: 'noHandlesConnected',
         handles: EMPTY_HANDLE_INPUTS,
+        connections: EMPTY_CONNECTIONS,
         error: "We couldn't load your recap settings. Please refresh and try again.",
       };
 
@@ -90,18 +107,26 @@ export function recapPageReducer(state: RecapPageState, event: RecapPageEvent): 
       // A save that clears every platform succeeds server-side but leaves
       // nothing to generate from — don't offer a Generate button that can
       // only 400.
-      return hasAnyHandle(state.handles)
-        ? { status: 'readyToGenerate', handles: state.handles }
-        : { status: 'noHandlesConnected', handles: state.handles, error: null };
+      return isReadyToGenerate(state.handles, state.connections)
+        ? { status: 'readyToGenerate', handles: state.handles, connections: state.connections }
+        : { status: 'noHandlesConnected', handles: state.handles, connections: state.connections, error: null };
 
     case 'HANDLES_SAVE_FAILED':
       return isHandleEditingState(state)
-        ? { status: 'noHandlesConnected', handles: state.handles, error: event.error }
+        ? { status: 'noHandlesConnected', handles: state.handles, connections: state.connections, error: event.error }
         : state;
+
+    case 'DISCONNECTED': {
+      if (!isHandleEditingState(state)) return state;
+      const connections = { ...state.connections, [event.platform]: false };
+      return isReadyToGenerate(state.handles, connections)
+        ? { status: 'readyToGenerate', handles: state.handles, connections }
+        : { status: 'noHandlesConnected', handles: state.handles, connections, error: null };
+    }
 
     case 'GENERATE':
       return state.status === 'readyToGenerate' || state.status === 'generationFailed'
-        ? { status: 'generating', handles: state.handles, stillWorking: false }
+        ? { status: 'generating', handles: state.handles, connections: state.connections, stillWorking: false }
         : state;
 
     case 'GENERATE_STILL_WORKING':
@@ -111,7 +136,9 @@ export function recapPageReducer(state: RecapPageState, event: RecapPageEvent): 
       return state.status === 'generating' ? { status: 'redirectingToCard', recapCardId: event.recapCardId } : state;
 
     case 'GENERATE_FAILED':
-      return state.status === 'generating' ? { status: 'generationFailed', handles: state.handles, error: event.error } : state;
+      return state.status === 'generating'
+        ? { status: 'generationFailed', handles: state.handles, connections: state.connections, error: event.error }
+        : state;
 
     case 'EMAIL_CHANGED':
       return state.status === 'needsSignIn' || state.status === 'magicLinkError'

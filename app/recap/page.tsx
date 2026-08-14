@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useReducer, useRef } from 'react';
+import { Suspense, useEffect, useReducer, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
@@ -9,6 +9,7 @@ import {
   createInitialRecapPageState,
   isHandleEditingState,
   type RecapHandleInputs,
+  type RecapConnectionStatus,
 } from '@/lib/recap/page-state';
 import type { RecapPlatform } from '@/lib/recap/types';
 
@@ -17,6 +18,15 @@ const PLATFORM_LABELS: Record<RecapPlatform, string> = {
   tiktok: 'TikTok handle',
   instagram: 'Instagram handle',
 };
+
+const OAUTH_PLATFORM_NAMES: Record<'tiktok' | 'instagram', string> = {
+  tiktok: 'TikTok',
+  instagram: 'Instagram',
+};
+
+function isOAuthPlatform(platform: RecapPlatform): platform is 'tiktok' | 'instagram' {
+  return platform === 'tiktok' || platform === 'instagram';
+}
 
 function RecapPageInner() {
   const router = useRouter();
@@ -27,6 +37,35 @@ function RecapPageInner() {
   const editMode = searchParams.get('edit') === '1';
   const [state, dispatch] = useReducer(recapPageReducer, createInitialRecapPageState());
   const stillWorkingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Read once on first render — a full page navigation to the OAuth
+  // provider and back is how connected=/oauthError= ever get here.
+  const [toast] = useState<{ kind: 'success' | 'error'; message: string } | null>(() => {
+    const connected = searchParams.get('connected');
+    const oauthError = searchParams.get('oauthError');
+    if (connected === 'tiktok' || connected === 'instagram') {
+      return { kind: 'success', message: `${OAUTH_PLATFORM_NAMES[connected]} connected!` };
+    }
+    if (oauthError === 'denied') {
+      return { kind: 'error', message: "You didn't grant access — no problem, your existing setup is unaffected." };
+    }
+    if (oauthError) {
+      return { kind: 'error', message: 'Something went wrong connecting that platform. Please try again.' };
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (!toast) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('connected');
+    params.delete('oauthError');
+    const query = params.toString();
+    router.replace(query ? `/recap?${query}` : '/recap', { scroll: false });
+    // Only ever run once per mount — re-running on every searchParams
+    // change would immediately re-trigger from the replaced URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +87,11 @@ function RecapPageInner() {
           tiktok: data.handles.tiktok ?? '',
           instagram: data.handles.instagram ?? '',
         };
-        dispatch({ type: 'BOOTSTRAPPED', handles, recapCardId: editMode ? null : data.recapCardId });
+        const connections: RecapConnectionStatus = {
+          tiktok: Boolean(data.connections?.tiktok),
+          instagram: Boolean(data.connections?.instagram),
+        };
+        dispatch({ type: 'BOOTSTRAPPED', handles, connections, recapCardId: editMode ? null : data.recapCardId });
       })
       .catch(() => {
         if (!cancelled) dispatch({ type: 'BOOTSTRAP_FAILED' });
@@ -91,6 +134,13 @@ function RecapPageInner() {
         type: 'HANDLES_SAVE_FAILED',
         error: "We couldn't reach the server. Check your connection and try again.",
       });
+    }
+  }
+
+  async function disconnect(platform: 'tiktok' | 'instagram') {
+    const res = await fetch(`/api/oauth/${platform}/disconnect`, { method: 'POST' }).catch(() => null);
+    if (res?.ok) {
+      dispatch({ type: 'DISCONNECTED', platform });
     }
   }
 
@@ -166,22 +216,51 @@ function RecapPageInner() {
       <h1 className="text-2xl font-bold text-gray-900">Monthly recap card</h1>
       <p className="text-gray-600">Connect your platforms once, then generate a shareable card of this month&apos;s stats.</p>
 
+      {toast && (
+        <p role="alert" className={toast.kind === 'success' ? 'text-sm text-green-700' : 'text-sm text-red-600'}>
+          {toast.message}
+        </p>
+      )}
+
       <div className="flex flex-col gap-3">
-        {(['youtube', 'tiktok', 'instagram'] as const).map((platform) => (
-          <label key={platform} className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-            {PLATFORM_LABELS[platform]}
-            <input
-              type="text"
-              value={state.handles[platform]}
-              onChange={(e) => dispatch({ type: 'HANDLE_CHANGED', platform, value: e.target.value })}
-              placeholder="@handle or profile URL"
-              // Generation is the one state where the form legitimately can't
-              // accept edits — say so rather than silently swallowing them.
-              disabled={state.status === 'generating'}
-              className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
-            />
-          </label>
-        ))}
+        {(['youtube', 'tiktok', 'instagram'] as const).map((platform) => {
+          const connected = isOAuthPlatform(platform) && state.connections[platform];
+
+          if (connected && isOAuthPlatform(platform)) {
+            return (
+              <div key={platform} className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                {PLATFORM_LABELS[platform]}
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-300 px-4 py-2 font-normal">
+                  <span>Connected via {OAUTH_PLATFORM_NAMES[platform]} ✓</span>
+                  <button type="button" onClick={() => disconnect(platform)} className="text-indigo-700 underline">
+                    Disconnect
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <label key={platform} className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              {PLATFORM_LABELS[platform]}
+              <input
+                type="text"
+                value={state.handles[platform]}
+                onChange={(e) => dispatch({ type: 'HANDLE_CHANGED', platform, value: e.target.value })}
+                placeholder="@handle or profile URL"
+                // Generation is the one state where the form legitimately can't
+                // accept edits — say so rather than silently swallowing them.
+                disabled={state.status === 'generating'}
+                className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
+              />
+              {isOAuthPlatform(platform) && (
+                <a href={`/api/oauth/${platform}/authorize`} className="self-start text-xs text-indigo-700 underline">
+                  Or connect via {OAUTH_PLATFORM_NAMES[platform]}
+                </a>
+              )}
+            </label>
+          );
+        })}
         <button
           type="button"
           onClick={saveHandles}
