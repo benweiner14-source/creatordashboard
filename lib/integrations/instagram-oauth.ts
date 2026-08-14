@@ -1,20 +1,27 @@
 import type { ProfilePost } from './scraper';
 import type { OAuthProviderClient, OAuthTokenSet } from '@/lib/oauth/types';
 
-// OAuth endpoint URLs: Instagram login uses separate endpoints at api.instagram.com
-// for initial authorization and short-lived token exchange. Long-lived token exchange,
-// refresh, and Graph API calls use graph.facebook.com (confirmed 2026-08-14).
-// Scope name 'instagram_business_basic' is current (confirmed 2026-08-14).
-// Media fields (id, caption, timestamp, like_count, comments_count, permalink) all
-// exist on IG Media objects (confirmed 2026-08-14).
-// Note: Instagram historically maintains separate oauth endpoints at api.instagram.com
-// for compatibility; Graph API base is https://graph.facebook.com per Meta docs.
+// OAuth endpoint URLs: This client implements "Business Login for Instagram" flow
+// (not "Facebook Login for Business"). See Meta's Instagram Platform docs:
+// https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/overview
+// Business Login for Instagram uses:
+// - api.instagram.com for OAuth authorize/token endpoints
+// - graph.instagram.com for Graph API calls (token exchange/refresh/user info/media)
+// Note: This differs from "Facebook Login for Business" which uses graph.facebook.com.
+// Meta's docs distinguish these as separate integration paths with different hosts.
+// Both the Business Login for Instagram host (graph.instagram.com) and the specific
+// field names (id, caption, timestamp, like_count, comments_count, permalink) have
+// been confirmed against Meta's Instagram Platform documentation (2026-08-14).
+// Caveat: Multiple overlapping Instagram integration products exist in Meta's docs
+// (legacy Graph API, Instagram Graph API, Instagram API with Instagram Login). This
+// implementation targets the instagram_business_basic scope; validate against a real
+// sandbox app before production use to ensure endpoints match actual API behavior.
 const AUTHORIZE_URL = 'https://api.instagram.com/oauth/authorize';
 const SHORT_LIVED_TOKEN_URL = 'https://api.instagram.com/oauth/access_token';
-const LONG_LIVED_EXCHANGE_URL = 'https://graph.facebook.com/access_token';
-const REFRESH_URL = 'https://graph.facebook.com/refresh_access_token';
-const USER_INFO_URL = 'https://graph.facebook.com/me';
-const MEDIA_URL = 'https://graph.facebook.com/me/media';
+const LONG_LIVED_EXCHANGE_URL = 'https://graph.instagram.com/access_token';
+const REFRESH_URL = 'https://graph.instagram.com/refresh_access_token';
+const USER_INFO_URL = 'https://graph.instagram.com/me';
+const MEDIA_URL = 'https://graph.instagram.com/me/media';
 
 const SCOPES = 'instagram_business_basic';
 
