@@ -10,6 +10,8 @@ export interface Database {
           youtube_channel_handle: string | null;
           tiktok_handle: string | null;
           instagram_handle: string | null;
+          digest_email_opt_in: boolean;
+          digest_last_sent_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -20,6 +22,8 @@ export interface Database {
           youtube_channel_handle?: string | null;
           tiktok_handle?: string | null;
           instagram_handle?: string | null;
+          digest_email_opt_in?: boolean;
+          digest_last_sent_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
