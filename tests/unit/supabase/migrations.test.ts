@@ -100,4 +100,18 @@ describe('supabase migrations', () => {
     expect(sql).toContain('unique (profile_id, platform)');
     expect(sql).toContain('"Platform connections are viewable by owner"');
   });
+
+  it('includes a migration wrapping RLS auth.uid() calls in a select subquery for perf', () => {
+    const sql = readMigrationContaining('optimize_rls_auth_uid_calls');
+    expect(sql).toContain('alter policy "Profiles are viewable by owner"');
+    expect(sql).toContain('alter policy "Profiles are updatable by owner"');
+    expect(sql).toContain('alter policy "Diagnostics are viewable by owner"');
+    expect(sql).toContain('alter policy "Diagnostics are insertable by owner"');
+    expect(sql).toContain('alter policy "Weekly digests are viewable by owner"');
+    expect(sql).toContain('alter policy "Recap cards are viewable by owner"');
+    expect(sql).toContain('alter policy "Recap cards are insertable by owner"');
+    expect(sql).toContain('alter policy "Platform connections are viewable by owner"');
+    const wrappedCalls = sql.match(/using \(\(select auth\.uid\(\)\)|with check \(\(select auth\.uid\(\)\)/g) ?? [];
+    expect(wrappedCalls.length).toBe(8);
+  });
 });
