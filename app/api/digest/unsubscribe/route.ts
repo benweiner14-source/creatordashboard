@@ -12,7 +12,13 @@ export async function GET(request: Request) {
     {
       verifyToken: (profileId, token) => verifyUnsubscribeToken(profileId, token, secret),
       setOptOut: async (profileId) => {
-        await serviceClient.from('profiles').update({ digest_email_opt_in: false }).eq('id', profileId);
+        const { error } = await serviceClient
+          .from('profiles')
+          .update({ digest_email_opt_in: false })
+          .eq('id', profileId);
+        if (error) {
+          throw new Error(`Failed to opt out of digest emails: ${error.message}`);
+        }
       },
     },
     { profileId: url.searchParams.get('profile'), token: url.searchParams.get('token') }

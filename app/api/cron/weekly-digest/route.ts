@@ -6,6 +6,11 @@ import { runWeeklyDigestCron } from '@/lib/digest/cron-handler';
 import type { DigestRow } from '@/lib/digest/cron-handler';
 import type { ContentIdea } from '@/lib/integrations/claude-ideas';
 
+// Vercel's platform default execution limit is far shorter than a batch of
+// per-candidate Claude generations can need; request the maximum this route
+// segment is allowed rather than falling back to that default.
+export const maxDuration = 300;
+
 function mapDigestRow(row: {
   id: string;
   profile_id: string;
@@ -45,14 +50,32 @@ export async function GET(request: Request) {
   const result = await runWeeklyDigestCron(
     {
       getOptedInCandidates: async (limit) => {
-        const { data } = await serviceClient
+        const { data, error } = await serviceClient
           .from('profiles')
-          .select('id, email, niche')
+          .select('id, niche')
           .eq('digest_email_opt_in', true)
           .not('niche', 'is', null)
           .order('digest_last_sent_at', { ascending: true, nullsFirst: true })
           .limit(limit);
-        return (data ?? []).map((row) => ({ profileId: row.id, email: row.email, niche: row.niche as string }));
+        if (error) {
+          throw new Error(`Failed to fetch opted-in candidates: ${error.message}`);
+        }
+
+        // profiles.email is client-writable (no `with check` on the RLS
+        // update policy) and must never be trusted as a mail target — a
+        // signed-in user could rewrite it to redirect someone else's digest
+        // to an address they don't control. The verified address lives in
+        // Supabase Auth, so look it up per-candidate via the admin API and
+        // skip anyone whose lookup fails rather than failing the whole run.
+        const candidates: { profileId: string; email: string; niche: string }[] = [];
+        for (const row of data ?? []) {
+          const { data: userData, error: userError } = await serviceClient.auth.admin.getUserById(row.id);
+          if (userError || !userData?.user?.email) {
+            continue;
+          }
+          candidates.push({ profileId: row.id, email: userData.user.email, niche: row.niche as string });
+        }
+        return candidates;
       },
       getExistingDigest: async (profileId, weekStart) => {
         const { data } = await serviceClient
@@ -75,10 +98,22 @@ export async function GET(request: Request) {
         return mapDigestRow(data);
       },
       markDigestSent: async (digestId, sentAt) => {
-        await serviceClient.from('weekly_digests').update({ sent_at: sentAt.toISOString() }).eq('id', digestId);
+        const { error } = await serviceClient
+          .from('weekly_digests')
+          .update({ sent_at: sentAt.toISOString() })
+          .eq('id', digestId);
+        if (error) {
+          throw new Error(`Failed to mark digest sent: ${error.message}`);
+        }
       },
       markProfileDigestSent: async (profileId, sentAt) => {
-        await serviceClient.from('profiles').update({ digest_last_sent_at: sentAt.toISOString() }).eq('id', profileId);
+        const { error } = await serviceClient
+          .from('profiles')
+          .update({ digest_last_sent_at: sentAt.toISOString() })
+          .eq('id', profileId);
+        if (error) {
+          throw new Error(`Failed to mark profile digest sent: ${error.message}`);
+        }
       },
       contentIdeasClient: createClaudeContentIdeasClient(process.env.ANTHROPIC_API_KEY ?? ''),
       emailClient: createResendEmailClient(process.env.RESEND_API_KEY ?? '', process.env.DIGEST_FROM_EMAIL ?? ''),

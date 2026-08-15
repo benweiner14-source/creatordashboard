@@ -29,4 +29,12 @@ describe('unsubscribe token', () => {
     expect(() => verifyUnsubscribeToken('profile-1', 'not-valid-hex!!', secret)).not.toThrow();
     expect(verifyUnsubscribeToken('profile-1', 'not-valid-hex!!', secret)).toBe(false);
   });
+
+  it('throws when generating a token with an empty secret', () => {
+    expect(() => generateUnsubscribeToken('profile-1', '')).toThrow();
+  });
+
+  it('throws when verifying a token with an empty secret', () => {
+    expect(() => verifyUnsubscribeToken('profile-1', 'sometoken', '')).toThrow();
+  });
 });

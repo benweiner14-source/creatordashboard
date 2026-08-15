@@ -203,7 +203,7 @@ Same conventions as the rest of the app — pure DI logic tested with fakes, no 
 
 ## 7. Fast-follow: queue-based fan-out
 
-Flagged explicitly rather than silently deferred, since it's the natural next step if this outgrows Approach A: once the opted-in profile count approaches what a single Vercel function invocation can process within its max execution duration, replace the serial loop with a fan-out — the cron job enqueues one job per candidate (e.g., via Vercel Queues or an external queue like QStash), each processed in its own short-lived, independently-retried invocation. Nothing in this design blocks that migration later: the per-candidate pipeline (§3) is already a self-contained unit of work that doesn't depend on being called from inside a loop.
+Flagged explicitly rather than silently deferred, since it's the natural next step if this outgrows Approach A: each fresh generation is a Claude call using the `web_search` tool, realistically 30-90 seconds per candidate, against a practical Vercel ceiling of 300 seconds (`maxDuration`) — so a single invocation can realistically complete only around 3-8 fresh generations before running out of time, nowhere near the 200-candidate run cap. Once the number of candidates needing a fresh generation in a given week regularly exceeds that handful, replace the serial loop with a fan-out — the cron job enqueues one job per candidate (e.g., via Vercel Queues or an external queue like QStash), each processed in its own short-lived, independently-retried invocation. Nothing in this design blocks that migration later: the per-candidate pipeline (§3) is already a self-contained unit of work that doesn't depend on being called from inside a loop.
 
 ---
 
