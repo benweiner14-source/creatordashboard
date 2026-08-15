@@ -315,4 +315,66 @@ describe('IdeasPage', () => {
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ niche: 'home baking' }) })
     );
   });
+
+  it('shows the digest opt-in checkbox once a niche is set, unchecked by default', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: 'home baking', digestEmailOptIn: false, digest: null }) })
+    );
+    render(<IdeasPage />);
+    const checkbox = await screen.findByRole('checkbox', { name: /email me this every monday morning/i });
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it('does not show the digest opt-in checkbox before a niche is set', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: null, digest: null }) }));
+    render(<IdeasPage />);
+    await waitFor(() => expect(screen.getByLabelText(/your niche/i)).toBeInTheDocument());
+    expect(screen.queryByRole('checkbox', { name: /email me this every monday morning/i })).not.toBeInTheDocument();
+  });
+
+  it('reflects digestEmailOptIn: true from bootstrap as checked', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: 'home baking', digestEmailOptIn: true, digest: null }) })
+    );
+    render(<IdeasPage />);
+    const checkbox = await screen.findByRole('checkbox', { name: /email me this every monday morning/i });
+    expect(checkbox).toBeChecked();
+  });
+
+  it('toggling the checkbox on saves via POST /api/digest/opt-in', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digestEmailOptIn: false, digest: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    const checkbox = await screen.findByRole('checkbox', { name: /email me this every monday morning/i });
+    fireEvent.click(checkbox);
+
+    expect(checkbox).toBeChecked();
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/digest/opt-in',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ optIn: true }) })
+      )
+    );
+  });
+
+  it('reverts the checkbox and shows an error when saving the toggle fails', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digestEmailOptIn: false, digest: null }) })
+      .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Something went wrong.' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    const checkbox = await screen.findByRole('checkbox', { name: /email me this every monday morning/i });
+    fireEvent.click(checkbox);
+
+    await waitFor(() => expect(checkbox).not.toBeChecked());
+    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong.');
+  });
 });
