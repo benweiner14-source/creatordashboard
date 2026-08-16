@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useReducer, useRef } from 'react';
+import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
 import { ideasPageReducer, createInitialIdeasPageState, isNicheEditingState, hasDigestOptInState } from '@/lib/ideas/page-state';
@@ -165,6 +166,7 @@ export default function IdeasPage() {
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
+      <AppNav />
       <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
       <p className="text-gray-600">Set your niche once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
 
