@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useReducer, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
 import {
@@ -218,6 +219,7 @@ function RecapPageInner() {
 
   return (
     <main className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
+      <AppNav />
       <h1 className="text-2xl font-bold text-gray-900">Monthly recap card</h1>
       <p className="text-gray-600">Connect your platforms once, then generate a shareable card of this month&apos;s stats.</p>
 
