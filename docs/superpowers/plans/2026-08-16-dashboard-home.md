@@ -58,9 +58,9 @@ tests/unit/
   components/AppNav.test.tsx
   app/home/page.test.tsx
   app/page.test.tsx                    # NEW — covers the redirect
-  app/recap/page.test.tsx               # MODIFIED — usePathname mock added
-  app/ideas/page.test.tsx                # MODIFIED — usePathname mock added
-  app/diagnostic/page.test.tsx            # MODIFIED — usePathname mock + 2 fetch-stub fixes
+  app/recap/page.test.tsx               # MODIFIED — AppNav mocked to a no-op (see Task 10's ruling)
+  app/ideas/page.test.tsx                # MODIFIED — AppNav mocked to a no-op
+  app/diagnostic/page.test.tsx            # MODIFIED — AppNav mocked to a no-op (supersedes original usePathname+fetch-stub plan)
 
 tests/e2e/
   home-smoke.spec.ts          # NEW
@@ -1074,7 +1074,9 @@ git commit -m "feat: add AppNav shared navigation component"
 - Consumes: `AppNav` (Task 9)
 - Produces: nothing new consumed elsewhere
 
-`<AppNav>` self-fetches its own identity (Task 9's design), so mounting it here adds no new props or bootstrap fields to `/recap` — only a mount point and, for its tests, a `usePathname` addition to the existing `next/navigation` mock (`AppNav` calls `usePathname()` unconditionally for active-link highlighting, and the current mock only provides `useRouter`/`useSearchParams`).
+`<AppNav>` self-fetches its own identity (Task 9's design), so mounting it here adds no new props or bootstrap fields to `/recap` — only a mount point. Its own behavior (identity fetch, active-link highlighting, sign-out) is already fully covered by its dedicated suite (`tests/unit/components/AppNav.test.tsx`) — this test file only needs to confirm the mount point is correct.
+
+**Ruling (discovered during Task 10's first dispatch, applies to this task, Task 11, and Task 12 — see plan ledger):** `<AppNav>`'s independent `fetch('/api/session')` call is NOT safely inert against this file's existing tests. Several of them stub `fetch` with *ordered* `.mockResolvedValueOnce(...)` chains that assume exactly one call per page-triggered action; `<AppNav>`'s uncoordinated extra call consumes a queue slot out of turn and desyncs every subsequent response in that test, corrupting unrelated assertions (confirmed: 5/10 tests failed on first attempt). The original plan text (superseded below) assumed this coupling was safe — it wasn't. The fix is to mock `<AppNav>` itself out of this test file rather than touch the many order-dependent mocks.
 
 - [ ] **Step 1: Mount `<AppNav />` at the top of the authenticated render**
 
@@ -1097,31 +1099,20 @@ import { AppNav } from '@/components/AppNav';
       <h1 className="text-2xl font-bold text-gray-900">Monthly recap card</h1>
 ```
 
-- [ ] **Step 2: Update the test file's `next/navigation` mock**
+- [ ] **Step 2: Mock `<AppNav>` out of this test file**
 
-In `tests/unit/app/recap/page.test.tsx`, change:
-
-```tsx
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => searchParams,
-}));
-```
-
-to:
+In `tests/unit/app/recap/page.test.tsx`, add a new mock near the existing `next/navigation` mock (no change to that mock is needed — since the real `<AppNav>` never renders in this file, it never calls `usePathname()` either):
 
 ```tsx
-vi.mock('next/navigation', () => ({
-  usePathname: () => '/recap',
-  useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => searchParams,
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
 }));
 ```
 
 - [ ] **Step 3: Run the full test file to verify it still passes**
 
 Run: `npx vitest run tests/unit/app/recap/page.test.tsx`
-Expected: PASS — since `<AppNav>` self-fetches independently of this page's own `fetch` mocks and always renders `null` until its own `/api/session` call resolves (which none of these tests await or assert on), no existing assertion in this file is affected by the mount. If any test unexpectedly fails, it will be because that test asserts on `screen.getAllByRole`/exact DOM structure that AppNav's (initially-null) render doesn't affect — re-read the failure output before changing anything else.
+Expected: PASS, all tests — with `<AppNav>` mocked to a no-op, no extra `fetch` call is ever made from within this page in these tests, so every existing ordered `.mockResolvedValueOnce(...)` chain resolves exactly as it did before this task.
 
 - [ ] **Step 4: Run typecheck**
 
@@ -1147,6 +1138,8 @@ git commit -m "feat: mount AppNav on /recap"
 - Consumes: `AppNav` (Task 9)
 - Produces: nothing new consumed elsewhere
 
+Same ruling as Task 10 applies here (see that task's note) — mock `<AppNav>` out of this test file rather than adding `usePathname` to the `next/navigation` mock, since several of this file's tests also use ordered `.mockResolvedValueOnce(...)` chains that `<AppNav>`'s independent `fetch('/api/session')` call would desync.
+
 - [ ] **Step 1: Mount `<AppNav />` at the top of the authenticated render**
 
 ```tsx
@@ -1166,29 +1159,20 @@ import { AppNav } from '@/components/AppNav';
       <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
 ```
 
-- [ ] **Step 2: Update the test file's `next/navigation` mock**
+- [ ] **Step 2: Mock `<AppNav>` out of this test file**
 
-In `tests/unit/app/ideas/page.test.tsx`, change:
-
-```tsx
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
-```
-
-to:
+In `tests/unit/app/ideas/page.test.tsx`, add a new mock near the existing `next/navigation` mock (no change to that mock is needed):
 
 ```tsx
-vi.mock('next/navigation', () => ({
-  usePathname: () => '/ideas',
-  useRouter: () => ({ push: vi.fn() }),
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
 }));
 ```
 
 - [ ] **Step 3: Run the full test file to verify it still passes**
 
 Run: `npx vitest run tests/unit/app/ideas/page.test.tsx`
-Expected: PASS, for the same reason as Task 10 — `<AppNav>` fetches independently and renders `null` until resolved, so none of this file's existing `fetch`/DOM assertions are affected.
+Expected: PASS, all tests — with `<AppNav>` mocked to a no-op, none of this file's existing ordered `fetch` mock chains are disturbed.
 
 - [ ] **Step 4: Run typecheck**
 
@@ -1214,7 +1198,9 @@ git commit -m "feat: mount AppNav on /ideas"
 - Consumes: `AppNav` (Task 9)
 - Produces: nothing new consumed elsewhere
 
-`/diagnostic` is the one page where `<AppNav>` mounts **unconditionally** (not gated behind an authenticated-only branch), since this page deliberately lets an anonymous visitor start typing a URL before any sign-in check happens (`lib/auth/sign-in-flow-state.ts`). `<AppNav>` renders nothing until its own `/api/session` check resolves, so this doesn't add friction — it just means, unlike Tasks 10/11, this page's tests **do** need fixing, because `<AppNav>` now fires a `fetch('/api/session')` call on every render of this page, including two tests that specifically assert on `fetch` call behavior.
+`/diagnostic` is the one page where `<AppNav>` mounts **unconditionally** (not gated behind an authenticated-only branch), since this page deliberately lets an anonymous visitor start typing a URL before any sign-in check happens (`lib/auth/sign-in-flow-state.ts`). `<AppNav>` renders nothing until its own `/api/session` check resolves, so this doesn't add friction.
+
+**Ruling (see Task 10's note and the plan ledger):** the original plan text for this task fixed only the 2 tests with no/asserted-empty `fetch` stubs, on the assumption every other test's ordered `.mockResolvedValueOnce(...)` chain was safe against `<AppNav>`'s independent call. That assumption is the same one that failed on Task 10 — this file has the identical class of tests (e.g. the sign-in sub-flow tests chain a 401 response then a magic-link response) and would fail the same way. The fix is the same one used for Tasks 10/11: mock `<AppNav>` out of this test file entirely, which makes the two previously-planned test-body fixes unnecessary — with `<AppNav>` mocked to a no-op, it makes zero `fetch` calls, so both of those tests pass completely unchanged.
 
 - [ ] **Step 1: Mount `<AppNav />` unconditionally at the top of the page**
 
@@ -1235,99 +1221,27 @@ import { AppNav } from '@/components/AppNav';
       <h1 className="text-2xl font-bold text-gray-900">Run a diagnostic</h1>
 ```
 
-- [ ] **Step 2: Update the test file's `next/navigation` mock**
+- [ ] **Step 2: Mock `<AppNav>` out of this test file**
 
-In `tests/unit/app/diagnostic/page.test.tsx`, change:
+In `tests/unit/app/diagnostic/page.test.tsx`, add a new mock near the existing `next/navigation` mock (no change to that mock is needed, and no change to any existing test body is needed either):
 
 ```tsx
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => mockSearchParams,
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
 }));
 ```
 
-to:
-
-```tsx
-vi.mock('next/navigation', () => ({
-  usePathname: () => '/diagnostic',
-  useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => mockSearchParams,
-}));
-```
-
-- [ ] **Step 3: Fix the test that asserts no fetch call happens on plain mount**
-
-This test currently asserts `fetch` is never called on a plain prefill-without-submit — that's no longer true, since `<AppNav>` now always calls `fetch('/api/session')` on mount. Change it to assert the page itself never makes its own diagnostic-related call, which is the test's actual intent:
-
-```tsx
-// tests/unit/app/diagnostic/page.test.tsx — replace this test:
-  it('pre-fills the url from ?url= on mount without auto-submitting', () => {
-    mockSearchParams = new URLSearchParams('url=' + encodeURIComponent('https://www.tiktok.com/@user/video/123'));
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(<DiagnosticInputPage />);
-
-    expect(screen.getByLabelText(/paste a youtube, tiktok, or instagram link/i)).toHaveValue('https://www.tiktok.com/@user/video/123');
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-// with:
-  it('pre-fills the url from ?url= on mount without auto-submitting', () => {
-    mockSearchParams = new URLSearchParams('url=' + encodeURIComponent('https://www.tiktok.com/@user/video/123'));
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) });
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(<DiagnosticInputPage />);
-
-    expect(screen.getByLabelText(/paste a youtube, tiktok, or instagram link/i)).toHaveValue('https://www.tiktok.com/@user/video/123');
-    // AppNav's own /api/session check is expected; the page itself must not
-    // have made a diagnostic-related call on plain mount.
-    expect(fetchMock).not.toHaveBeenCalledWith('/api/diagnostic', expect.anything());
-  });
-```
-
-- [ ] **Step 4: Fix the test with no fetch stub at all**
-
-This test currently renders the page with no `fetch` stub, which is now unsafe since `<AppNav>` calls `fetch` unconditionally on mount:
-
-```tsx
-// tests/unit/app/diagnostic/page.test.tsx — replace this test:
-  it('lands directly in the sign-in prompt with a notice when returning from an expired magic link', () => {
-    mockSearchParams = new URLSearchParams(
-      'url=' + encodeURIComponent('https://www.tiktok.com/@user/video/123') + '&authError=expired'
-    );
-    render(<DiagnosticInputPage />);
-
-    expect(screen.getByText(/didn't work.*expired/i)).toBeInTheDocument();
-    expect(screen.getByText(/checking:/i)).toHaveTextContent('https://www.tiktok.com/@user/video/123');
-  });
-
-// with:
-  it('lands directly in the sign-in prompt with a notice when returning from an expired magic link', () => {
-    mockSearchParams = new URLSearchParams(
-      'url=' + encodeURIComponent('https://www.tiktok.com/@user/video/123') + '&authError=expired'
-    );
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }));
-    render(<DiagnosticInputPage />);
-
-    expect(screen.getByText(/didn't work.*expired/i)).toBeInTheDocument();
-    expect(screen.getByText(/checking:/i)).toHaveTextContent('https://www.tiktok.com/@user/video/123');
-  });
-```
-
-- [ ] **Step 5: Run the full test file to verify it passes**
+- [ ] **Step 3: Run the full test file to verify it still passes**
 
 Run: `npx vitest run tests/unit/app/diagnostic/page.test.tsx`
-Expected: PASS — all other tests in this file already stub `fetch` with either a persistent `mockResolvedValue` or a queued chain where `<AppNav>`'s extra call lands after the assertions under test have already resolved; none of them assert `fetch` call counts or exact call sequences the way the two fixed tests did.
+Expected: PASS, all tests, with zero test-body changes — including the two tests that (per the superseded plan text) would otherwise have needed fixing; mocking `<AppNav>` out removes the extra `fetch` call at the source, so their original assertions (`not.toHaveBeenCalled()`, and rendering with no stub at all) hold exactly as they did before this task.
 
-- [ ] **Step 6: Run typecheck**
+- [ ] **Step 4: Run typecheck**
 
 Run: `npm run typecheck`
 Expected: no errors
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add app/diagnostic/page.tsx tests/unit/app/diagnostic/page.test.tsx
@@ -1357,6 +1271,17 @@ const pushMock = vi.fn();
 vi.mock('next/navigation', () => ({
   usePathname: () => '/home',
   useRouter: () => ({ push: pushMock }),
+}));
+
+// Per the ruling in Task 10: <AppNav>'s independent fetch('/api/session')
+// call is not safely inert against a host page's own fetch mock. This
+// file's mock happens to be a persistent mockResolvedValue (not an ordered
+// queue), so it's not actually at risk the way Tasks 10-12's files were —
+// but mocking AppNav out here too keeps the pattern consistent and removes
+// any future fragility if this test file's mocks ever change shape.
+// AppNav's own behavior is already fully covered by its dedicated suite.
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
 }));
 
 import HomePage from '@/app/home/page';
