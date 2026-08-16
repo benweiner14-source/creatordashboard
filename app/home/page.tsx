@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { AppNav } from '@/components/AppNav';
 import { HomeCard } from '@/components/HomeCard';
 import { PlatformBadge, type BadgePlatform } from '@/components/PlatformBadge';
@@ -84,12 +85,12 @@ function DiagnosticCard({ diagnostic }: { diagnostic: HomeData['diagnostic'] }) 
           Paste a link and get a plain-English breakdown of your hook, retention, timing, and format — takes under a
           minute.
         </p>
-        <a
+        <Link
           href="/diagnostic"
           className="mt-auto self-start rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-900"
         >
           Run a diagnostic
-        </a>
+        </Link>
       </HomeCard>
     );
   }
@@ -129,9 +130,9 @@ function DiagnosticCard({ diagnostic }: { diagnostic: HomeData['diagnostic'] }) 
 
       <div className="mt-auto flex items-center justify-between gap-3">
         <span className="text-xs text-gray-400">Checked {formatRelativeDays(new Date(diagnostic.createdAt), new Date())}</span>
-        <a href="/diagnostic" className="text-sm font-semibold text-indigo-900">
+        <Link href="/diagnostic" className="text-sm font-semibold text-indigo-900">
           Run another →
-        </a>
+        </Link>
       </div>
     </HomeCard>
   );
@@ -145,12 +146,12 @@ function RecapCard({ recap }: { recap: HomeData['recap'] }) {
           Generate this month&apos;s recap
         </h3>
         <p className="text-sm text-white/90">Connect a platform once, then get a shareable card of this month&apos;s stats.</p>
-        <a
+        <Link
           href="/recap"
           className="mt-auto self-start rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-900"
         >
           Get my recap
-        </a>
+        </Link>
       </HomeCard>
     );
   }
@@ -199,9 +200,9 @@ function RecapCard({ recap }: { recap: HomeData['recap'] }) {
         <span className="text-xs text-gray-400">
           Updated {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(recap.generatedAt))}
         </span>
-        <a href="/recap" className="text-sm font-semibold text-indigo-900">
+        <Link href="/recap" className="text-sm font-semibold text-indigo-900">
           View full recap →
-        </a>
+        </Link>
       </div>
     </HomeCard>
   );
@@ -215,13 +216,12 @@ function IdeasCard({ ideas }: { ideas: HomeData['ideas'] }) {
           Set your niche to get this week&apos;s ideas
         </h3>
         <p className="text-sm text-white/90">Takes 10 seconds — we&apos;ll research what&apos;s trending for you every Monday.</p>
-        <a
+        <Link
           href="/ideas"
-          role="button"
           className="mt-auto self-start rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-900"
         >
           Set my niche
-        </a>
+        </Link>
       </HomeCard>
     );
   }
@@ -233,13 +233,12 @@ function IdeasCard({ ideas }: { ideas: HomeData['ideas'] }) {
           Get this week&apos;s ideas
         </h3>
         <p className="text-sm text-white/90">We&apos;ll research what&apos;s trending for {ideas.niche} right now.</p>
-        <a
+        <Link
           href="/ideas"
-          role="button"
           className="mt-auto self-start rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-900"
         >
           Get my ideas
-        </a>
+        </Link>
       </HomeCard>
     );
   }
@@ -254,9 +253,9 @@ function IdeasCard({ ideas }: { ideas: HomeData['ideas'] }) {
         <p className="text-xs text-gray-400">+{ideas.digest.ideaCount - 1} more</p>
       )}
       <div className="mt-auto flex justify-end">
-        <a href="/ideas" className="text-sm font-semibold text-indigo-900">
+        <Link href="/ideas" className="text-sm font-semibold text-indigo-900">
           View all ideas →
-        </a>
+        </Link>
       </div>
     </HomeCard>
   );

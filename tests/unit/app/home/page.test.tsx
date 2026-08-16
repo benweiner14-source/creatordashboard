@@ -98,7 +98,7 @@ describe('HomePage', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => homeResponse() }));
     render(<HomePage />);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Set my niche' })).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Set my niche' })).toBeInTheDocument()
     );
   });
 
@@ -108,7 +108,7 @@ describe('HomePage', () => {
       vi.fn().mockResolvedValue({ ok: true, json: async () => homeResponse({ ideas: { niche: 'home baking', digest: null } }) })
     );
     render(<HomePage />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Get my ideas' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Get my ideas' })).toBeInTheDocument());
   });
 
   it('shows the idea teaser when this week already has a digest', async () => {
