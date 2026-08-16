@@ -114,4 +114,10 @@ describe('supabase migrations', () => {
     const wrappedCalls = sql.match(/using \(\(select auth\.uid\(\)\)|with check \(\(select auth\.uid\(\)\)/g) ?? [];
     expect(wrappedCalls.length).toBe(8);
   });
+
+  it('includes a migration adding weekly digest opt-in and last-sent tracking to profiles', () => {
+    const sql = readMigrationContaining('add_weekly_digest_email_fields');
+    expect(sql).toContain('add column digest_email_opt_in boolean not null default false');
+    expect(sql).toContain('add column digest_last_sent_at timestamptz');
+  });
 });

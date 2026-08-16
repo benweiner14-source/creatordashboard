@@ -3,7 +3,7 @@
 import { useEffect, useReducer, useRef } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
-import { ideasPageReducer, createInitialIdeasPageState, isNicheEditingState } from '@/lib/ideas/page-state';
+import { ideasPageReducer, createInitialIdeasPageState, isNicheEditingState, hasDigestOptInState } from '@/lib/ideas/page-state';
 import type { ContentIdea } from '@/lib/integrations/claude-ideas';
 
 const MEDIUM_LABELS: Record<ContentIdea['medium'], string> = {
@@ -31,7 +31,12 @@ export default function IdeasPage() {
           dispatch({ type: 'BOOTSTRAP_FAILED' });
           return;
         }
-        dispatch({ type: 'BOOTSTRAPPED', niche: data.niche ?? '', ideas: data.digest?.contentIdeas ?? null });
+        dispatch({
+          type: 'BOOTSTRAPPED',
+          niche: data.niche ?? '',
+          ideas: data.digest?.contentIdeas ?? null,
+          digestEmailOptIn: data.digestEmailOptIn ?? false,
+        });
       })
       .catch(() => {
         if (!cancelled) dispatch({ type: 'BOOTSTRAP_FAILED' });
@@ -98,6 +103,29 @@ export default function IdeasPage() {
       dispatch({ type: 'MAGIC_LINK_SENT' });
     } catch {
       dispatch({ type: 'MAGIC_LINK_FAILED', error: "We couldn't reach the server. Check your connection and try again." });
+    }
+  }
+
+  async function toggleDigestOptIn(optIn: boolean) {
+    if (!hasDigestOptInState(state)) return;
+    const previousValue = state.digestEmailOptIn;
+    dispatch({ type: 'DIGEST_OPT_IN_TOGGLED', optIn });
+    try {
+      const res = await fetch('/api/digest/opt-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ optIn }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        dispatch({ type: 'DIGEST_OPT_IN_SAVE_FAILED', previousValue, error: data.error ?? 'Something went wrong saving that.' });
+      }
+    } catch {
+      dispatch({
+        type: 'DIGEST_OPT_IN_SAVE_FAILED',
+        previousValue,
+        error: "We couldn't reach the server. Check your connection and try again.",
+      });
     }
   }
 
@@ -172,6 +200,25 @@ export default function IdeasPage() {
           </button>
         )}
       </div>
+
+      {hasDigestOptInState(state) && state.status !== 'needsNiche' && (
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={state.digestEmailOptIn}
+              onChange={(e) => toggleDigestOptIn(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            Email me this every Monday morning
+          </label>
+          {state.digestOptInError && (
+            <p role="alert" className="text-sm text-red-600">
+              {state.digestOptInError}
+            </p>
+          )}
+        </div>
+      )}
 
       {state.status === 'needsNiche' && state.error && (
         <p role="alert" className="text-sm text-red-600">

@@ -26,7 +26,11 @@ export async function GET() {
   }
 
   const serviceClient = createSupabaseServiceRoleClient();
-  const { data: profile } = await serviceClient.from('profiles').select('niche').eq('id', user.id).single();
+  const { data: profile } = await serviceClient
+    .from('profiles')
+    .select('niche, digest_email_opt_in')
+    .eq('id', user.id)
+    .single();
 
   const { data: existingDigest } = await serviceClient
     .from('weekly_digests')
@@ -37,6 +41,7 @@ export async function GET() {
 
   return NextResponse.json({
     niche: profile?.niche ?? null,
+    digestEmailOptIn: profile?.digest_email_opt_in ?? false,
     digest: existingDigest ? mapDigestRow(existingDigest) : null,
   });
 }

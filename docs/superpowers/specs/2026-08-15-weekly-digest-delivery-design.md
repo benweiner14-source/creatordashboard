@@ -1,0 +1,217 @@
+# Weekly Digest Delivery Design Spec
+
+**Date:** 2026-08-15
+**Classification:** Architectural (per `brainstorming`) — two new subsystems (a scheduled job and an email-sending integration), neither of which exists in this repo today, plus one new UI affordance on `/ideas` and two new `profiles` columns.
+**Status:** Approved for planning. Decisions below were confirmed via `AskUserQuestion` during brainstorming; this doc turns them into an implementable design.
+
+## What this is
+
+Weekly Content Ideas (shipped, `docs/superpowers/specs/2026-08-13-weekly-content-ideas-design.md`) generates a creator's weekly idea digest only when they visit `/ideas` and click the button. That spec explicitly deferred email delivery as a non-goal: *"No email delivery — `weekly_digests.sent_at` stays `null` in v1... a fast-follow once a real scheduled-job story exists for the app (there is none today)."* This spec is that fast-follow: a creator can opt in, and every Monday morning the app proactively generates (if needed) and emails that week's digest to everyone who has, without them needing to visit the site.
+
+This closes the gap two ways at once: it's the first scheduled job in the app (nothing here runs on a timer today — every existing feature is either an HTTP request or a one-off migration), and the first outbound transactional email the app sends for anything other than Supabase Auth's built-in magic-link email.
+
+## Decisions already made (inputs to this spec, not open questions)
+
+1. **Opt-in is explicit and off by default.** Setting a niche does not enroll anyone in email. A separate toggle on `/ideas`, next to the niche field, does. This is a product/consent decision, made deliberately conservative.
+2. **The cron job generates on behalf of opted-in profiles**, not delivery-only. This is what "weekly digest delivery" means as a product — a proactive push, not a passive mirror of on-demand usage. It reuses the exact generation pipeline `/api/ideas` already built (`lib/integrations/claude-ideas.ts`'s `ContentIdeasClient`), skipping generation for anyone who already has this week's row from visiting the site themselves.
+3. **Resend is the email provider**, called via plain `fetch` against its REST API — no SDK dependency, matching every other external integration in this codebase (`claude.ts`, `claude-ideas.ts`, the YouTube/Apify clients all hand-roll `fetch` calls rather than pulling in a client library).
+4. **Single serial-loop cron job (Approach A)**, not a queue. One Vercel Cron–triggered route processes opted-in profiles one at a time in a single invocation. No new infrastructure (queue service, external scheduler) — the simplest thing that works at this product's actual scale today. Documented explicitly as a fast-follow-able choice below (§7) rather than silently punted.
+5. **One-click, no-login unsubscribe**, via a signed link unique to each recipient. Legally required for any recurring email, not optional polish.
+6. **A hard cap of 200 profiles processed per run**, to bound worst-case cost from a signup surge. Anyone past the cap is not skipped forever — fairness ordering (§3) means they're first in line the following Monday.
+
+## Non-goals
+
+- No day-of-week or time-of-day customization — every opted-in profile gets the same Monday-morning run.
+- No manual "send now" / preview trigger from the UI — delivery is fully automatic once opted in.
+- No retry queue for a failed send — a failure just means no email that week for that one profile, same user-facing outcome as if they'd hit an error generating on the site themselves.
+- No unsubscribe reasons survey or email-preferences center — one link, one action, done.
+- No admin-facing summary of how a run went (sent/skipped/failed counts) — reasonable once this is live and being watched, not needed to ship it.
+- No queue-based fan-out (§7's Approach B) — out of scope until profile counts make Approach A's single-invocation runtime a real constraint.
+
+---
+
+## 1. Data model
+
+### `profiles` — two new columns
+
+```sql
+alter table public.profiles
+  add column digest_email_opt_in boolean not null default false,
+  add column digest_last_sent_at timestamptz;
+```
+
+- `digest_email_opt_in` — whether this creator gets the Monday email. Defaults `false`; only ever set `true` by the creator's own action on `/ideas`.
+- `digest_last_sent_at` — the last time *any* weekly digest was actually emailed to this profile, `null` if never. This exists purely to make the per-run cap fair across weeks (§3) — without it, a fixed processing order would let the same 200 profiles crowd out everyone else, week after week, whenever opt-ins exceed the cap.
+
+### `weekly_digests.sent_at` — finally used
+
+The column has existed since the original scaffold migration and stayed `null` through Weekly Content Ideas' entire v1 (by that spec's explicit non-goal). It now gets a real purpose: it marks whether *this specific week's* digest row has been emailed yet, independent of whether it was generated by the cron job or by the creator visiting the site. This is what lets the cron job tell "already generated, not yet emailed" apart from "already generated and already emailed" — the second case is skipped outright, which is also what makes a duplicate cron trigger a no-op instead of a duplicate email (§5).
+
+No other schema changes. `content_ideas` JSON shape, the `(profile_id, week_start)` uniqueness, and everything else about `weekly_digests` is unchanged from the existing spec.
+
+---
+
+## 2. Opting in
+
+### `POST /api/digest/opt-in`
+
+Auth required (401 if signed out, same shape as every other authenticated route in the app). Body: `{ optIn: boolean }`.
+
+- Turning **on** (`optIn: true`) requires a niche already be set on the profile — 400 otherwise ("Set your niche before turning on weekly emails."). This is defense-in-depth: the UI only shows the toggle once a niche exists (§ below), but the route validates independently, same precedent as every other handler in this codebase (Recap Card's "at least one platform," Weekly Content Ideas' "niche required").
+- Turning **off** (`optIn: false`) always succeeds, regardless of niche state — nothing should ever block someone from stopping emails.
+- On success: `profiles.digest_email_opt_in` is updated, response `{ ok: true }`.
+
+### `/ideas` page
+
+A checkbox-style toggle appears next to the niche field once a niche is set: *"Email me this every Monday morning."* Reflects the current `digest_email_opt_in` value from the page's bootstrap fetch (`GET /api/ideas` gains one more field in its response: `digestEmailOptIn: boolean`). Toggling it fires `POST /api/digest/opt-in` immediately — no separate save step, matching how the niche field and every other single-field setting in this app already behaves. No new state-machine states are needed in `lib/ideas/page-state.ts`; the toggle's own boolean is local UI state updated optimistically, independent of the niche-editing/generation states the reducer already models.
+
+---
+
+## 3. The cron pipeline
+
+### Trigger & authorization
+
+`GET /api/cron/weekly-digest`, scheduled via a `vercel.json` cron entry:
+
+```json
+{
+  "crons": [{ "path": "/api/cron/weekly-digest", "schedule": "0 13 * * 1" }]
+}
+```
+
+Monday 13:00 UTC (mid-morning US Eastern) — an arbitrary but reasonable choice, trivially adjusted later by editing the cron string. The route must verify the request actually came from Vercel's scheduler and not an arbitrary caller, via a shared secret (`CRON_SECRET`). **Implementation note:** per this repo's own `AGENTS.md` caution about stale training data, verify Vercel's current documented cron-authentication mechanism at implementation time rather than assuming a specific header shape from memory — the intent (reject any request that doesn't prove it came from the scheduled trigger) is the fixed requirement; the exact header/param is a Vercel-docs lookup.
+
+### `lib/digest/cron-handler.ts` — `runWeeklyDigestCron(deps, context)`
+
+Same DI shape as every other handler in this codebase (`lib/ideas/handler.ts`, `lib/recap/handler.ts`): a pure(ish) orchestrator taking injected dependencies, easy to unit test without touching Supabase, Claude, or Resend for real.
+
+```ts
+export const WEEKLY_DIGEST_RUN_CAP = 200;
+
+export interface DigestCandidate {
+  profileId: string;
+  email: string;
+  niche: string;
+}
+
+export interface CronHandlerDeps {
+  getOptedInCandidates: (limit: number) => Promise<DigestCandidate[]>;
+  getExistingDigest: (profileId: string, weekStart: string) => Promise<WeeklyDigestRow | null>;
+  saveDigest: (params: { profileId: string; weekStart: string; contentIdeas: ContentIdea[] }) => Promise<WeeklyDigestRow>;
+  markDigestSent: (digestId: string, sentAt: Date) => Promise<void>;
+  markProfileDigestSent: (profileId: string, sentAt: Date) => Promise<void>;
+  contentIdeasClient: ContentIdeasClient;
+  emailClient: EmailClient;
+}
+
+export interface CronRunResult {
+  sent: string[];
+  skipped: string[];
+  failed: string[];
+}
+
+export async function runWeeklyDigestCron(deps: CronHandlerDeps, now: Date): Promise<CronRunResult>
+```
+
+### Candidate selection & fairness ordering
+
+`getOptedInCandidates(limit)` is implemented (in the real `route.ts`, not the pure handler) as a query against `profiles` filtered to `digest_email_opt_in = true`, **ordered by `digest_last_sent_at` ascending with nulls first**, limited to `WEEKLY_DIGEST_RUN_CAP`. Nulls-first means anyone who has never been sent a digest goes to the front of the line; among everyone else, longest-since-last-send goes first. This is the entire fairness mechanism — no separate cursor or carry-over bookkeeping is needed, because "oldest last-sent wins" self-corrects every week: anyone left over from a capped run this Monday has the oldest (or null) `digest_last_sent_at` of everyone, so they're first up next Monday.
+
+### Per-candidate pipeline
+
+For each candidate, in order, wrapped in its own `try`/`catch` so one failure never aborts the run:
+
+1. Look up this week's `weekly_digests` row for `(profileId, weekStart)`.
+2. If it exists **and** `sentAt` is already set → skip (already fully handled; guards against a duplicate cron trigger re-emailing everyone — see §5).
+3. If it exists **and** `sentAt` is null → this profile already generated it themselves via the site this week; skip straight to step 5, no generation call.
+4. If it doesn't exist → call `contentIdeasClient.generateContentIdeas(niche, now)`, same as the on-demand path. If it comes back empty (the model genuinely found nothing honest for this niche this week — a valid, non-error outcome per the existing spec's §4), skip this candidate with no row written, same as the on-demand handler's 422 case. Otherwise `saveDigest(...)`.
+5. Render the email (§4) and call `emailClient.sendEmail(...)`.
+6. On successful send: `markDigestSent(digest.id, now)` and `markProfileDigestSent(profileId, now)`.
+7. Record the outcome (`sent`/`skipped`/`failed`) for the run's return value, which the route logs — no persisted run-history table in v1 (see Non-goals).
+
+This pipeline deliberately does **not** go through `checkAndRecordRateLimit`/`RateLimitStore` — that machinery exists to throttle a single IP or profile hammering an HTTP endpoint, and neither concept applies to a system-triggered batch job with no request IP. The natural throttle here is the weekly cadence itself plus the per-run cap.
+
+---
+
+## 4. Email delivery
+
+### `lib/integrations/resend.ts`
+
+```ts
+export interface EmailClient {
+  sendEmail(params: { to: string; subject: string; html: string }): Promise<void>;
+}
+
+export function createResendEmailClient(apiKey: string, from: string): EmailClient
+```
+
+A single `fetch` call to `POST https://api.resend.com/emails` with `Authorization: Bearer ${apiKey}` and `{ from, to, subject, html }`. Throws on a non-2xx response, same failure-surfaces-as-thrown-error convention as `claude-ideas.ts`.
+
+### `lib/email/weekly-digest-template.ts`
+
+```ts
+export function renderWeeklyDigestEmail(params: {
+  niche: string;
+  weekStart: string;
+  ideas: ContentIdea[];
+  unsubscribeUrl: string;
+}): { subject: string; html: string }
+```
+
+Plain, inline-styled HTML (no external stylesheet — required for email client compatibility, and consistent with this app not pulling in a templating dependency for anything else). Subject: `"Your content ideas for the week of {weekStart}"`. Body: each `ContentIdea` rendered as a simple block — working title, pitch, and "why it's hot now" — mirroring the on-page card content from the existing spec's §3, without the fuller medium/format/KPI detail (an email is a glance-and-click surface, not the full planning view; anyone who wants the complete card detail clicks through to `/ideas`). A footer line with the unsubscribe link closes every email.
+
+### Unsubscribe
+
+`lib/digest/unsubscribe-token.ts`:
+
+```ts
+export function generateUnsubscribeToken(profileId: string, secret: string): string
+export function verifyUnsubscribeToken(profileId: string, token: string, secret: string): boolean
+```
+
+An HMAC-SHA256 of the `profileId` keyed by a new `DIGEST_UNSUBSCRIBE_SECRET` env var, hex-encoded — stateless (nothing stored, nothing to look up), verified with a timing-safe comparison. Same shape of primitive `lib/oauth/state.ts` already uses `node:crypto` for, just HMAC instead of a random nonce since this token must be independently *verifiable* later, not merely unguessable at issue time.
+
+`GET /api/digest/unsubscribe?profile={profileId}&token={token}` — no auth required (it's reached from an email, not a signed-in session). Verifies the token; on success, sets `digest_email_opt_in = false` and redirects to `/digest/unsubscribed`; on failure (bad or tampered token), redirects to the same page with an error state rather than exposing a raw error. `app/digest/unsubscribed/page.tsx` is a small static confirmation page reading that state from the query string.
+
+Every email's unsubscribe link is built as `buildUnsubscribeUrl(profileId) = "${APP_URL}/api/digest/unsubscribe?profile=${profileId}&token=${generateUnsubscribeToken(profileId, secret)}"`.
+
+---
+
+## 5. Error handling & edge cases
+
+- **Generation fails for one candidate** (network error, malformed response from `claude-ideas.ts`): caught per-candidate, logged, recorded in `failed`, loop continues. No row written, so a later run (next Monday, or a manual re-trigger) can retry cleanly.
+- **Email send fails after generation succeeded**: the `weekly_digests` row is already saved (visible on the site if the creator checks), but `sentAt` stays null and `digest_last_sent_at` is not updated — so next Monday's ordering correctly still treats them as overdue, and the per-candidate pipeline's step 3 will pick up the existing row and just retry the send without regenerating (no wasted cost on the retry).
+- **The job runs twice** (platform re-trigger, manual re-invocation): fully idempotent. Every candidate whose digest already has `sentAt` set is skipped outright at step 2 — nobody gets double-emailed.
+- **A race with the on-demand path**: if a creator clicks "generate" on `/ideas` at the exact moment the cron job is processing them, both could attempt to insert the same `(profileId, weekStart)` row. The existing unique constraint rejects the second insert; the cron pipeline's `try`/`catch` catches that as a normal per-candidate failure, logs it, and moves on — it will pick up the (now-existing) row cleanly next run. Not worth more machinery than that for how rarely it can occur.
+- **A candidate's niche was cleared after opting in** (edge case, not reachable through the UI since niche and opt-in aren't independently editable to that combination — but the route doesn't assume the UI is the only caller): `generateContentIdeas` would run against an empty niche and likely return a poor or empty result; treated the same as any zero-ideas outcome — skipped, not a hard failure.
+
+---
+
+## 6. Testing
+
+Same conventions as the rest of the app — pure DI logic tested with fakes, no real network calls in the suite:
+
+- `lib/digest/cron-handler.test.ts`: cap enforcement, fairness-ordering is delegated to the (mocked) candidate fetcher so this test only asserts the handler asks for the right limit; skip-if-already-sent, skip-generate-if-existing-unsent-row, per-candidate failure isolation (one throwing candidate doesn't stop the rest), zero-ideas treated as skip not failure.
+- `lib/digest/unsubscribe-token.test.ts`: valid token round-trips, tampered token rejected, wrong profile ID rejected.
+- `lib/integrations/resend.test.ts`: request shape, non-2xx throws — same pattern as `claude-ideas.test.ts`'s fetch-mocking.
+- `lib/email/weekly-digest-template.test.ts`: renders all provided ideas, includes the unsubscribe URL, handles an empty-looking edge case gracefully (shouldn't be reachable given §5, but cheap to cover).
+- `lib/digest/opt-in.test.ts` (mirroring `lib/ideas/niche.test.ts`): rejects turning on without a niche, always allows turning off.
+- One extended Playwright case on the existing `tests/e2e/ideas-smoke.spec.ts`: toggle the opt-in checkbox (mocked network), assert it persists.
+- No E2E for the cron route itself or the unsubscribe redirect — both are thin, fully covered by the unit tests above plus a manual smoke check post-deploy, same as this app treats other backend-only routes.
+
+---
+
+## 7. Fast-follow: queue-based fan-out
+
+Flagged explicitly rather than silently deferred, since it's the natural next step if this outgrows Approach A: each fresh generation is a Claude call using the `web_search` tool, realistically 30-90 seconds per candidate, against a practical Vercel ceiling of 300 seconds (`maxDuration`) — so a single invocation can realistically complete only around 3-8 fresh generations before running out of time, nowhere near the 200-candidate run cap. Once the number of candidates needing a fresh generation in a given week regularly exceeds that handful, replace the serial loop with a fan-out — the cron job enqueues one job per candidate (e.g., via Vercel Queues or an external queue like QStash), each processed in its own short-lived, independently-retried invocation. Nothing in this design blocks that migration later: the per-candidate pipeline (§3) is already a self-contained unit of work that doesn't depend on being called from inside a loop.
+
+---
+
+## New environment variables
+
+```
+RESEND_API_KEY=            # https://resend.com/api-keys
+DIGEST_FROM_EMAIL=         # e.g. "Creator Dashboard <digest@yourdomain.com>" — must be a Resend-verified sending domain
+DIGEST_UNSUBSCRIBE_SECRET= # generate with `openssl rand -hex 32`
+CRON_SECRET=               # generate with `openssl rand -hex 32`; verifies /api/cron/weekly-digest requests actually came from the scheduler
+```

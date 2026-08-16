@@ -50,3 +50,18 @@ environment to the number of reverse-proxy hops in front of the app that
 you trust (see `.env.example`), or the app will deliberately not trust
 the header at all and every request will share one "unknown IP" bucket —
 safe, but it means the per-IP cap won't do anything until configured.
+
+## Weekly digest email delivery
+
+The `/ideas` opt-in toggle emails a creator's weekly content ideas every
+Monday morning via a Vercel Cron job (`vercel.json`) hitting
+`/api/cron/weekly-digest`. To enable it on a real deployment:
+
+1. Create a [Resend](https://resend.com) account, verify a sending domain,
+   and set `RESEND_API_KEY` and `DIGEST_FROM_EMAIL` (an address on that
+   verified domain).
+2. Generate `DIGEST_UNSUBSCRIBE_SECRET` and `CRON_SECRET` with
+   `openssl rand -hex 32` each and set them in the Vercel dashboard.
+3. Vercel Cron is enabled automatically once `vercel.json` is deployed —
+   no separate dashboard step needed on a paid plan. Confirm your plan
+   supports the schedule in `vercel.json` before relying on it.
