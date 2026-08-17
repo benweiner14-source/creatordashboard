@@ -30,4 +30,14 @@ describe('GET /api/session', () => {
     expect(response.status).toBe(401);
     expect(body).toEqual({ error: 'You must be signed in.' });
   });
+
+  it('returns 401 rather than an empty email when the user has no email address', async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: 'user-1', email: null } } });
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ error: 'You must be signed in.' });
+  });
 });

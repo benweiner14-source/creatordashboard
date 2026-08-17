@@ -32,7 +32,11 @@ export function AppNav() {
   }, []);
 
   async function handleSignOut() {
-    await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => null);
+    const response = await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => null);
+    // If sign-out failed the session cookie is still valid, so navigating to '/'
+    // would just bounce straight back to /home with the user still signed in.
+    // Staying put is the honest outcome.
+    if (!response || !response.ok) return;
     router.push('/');
   }
 
@@ -67,8 +71,13 @@ export function AppNav() {
         })}
       </ul>
       <div className="flex items-center gap-3">
-        <div className="hidden flex-col text-right leading-tight sm:flex">
-          <span className="text-sm font-semibold text-gray-900">{email}</span>
+        {/* The identity chip is never gated behind a responsive `hidden` wrapper:
+            below `sm` the nav link row collapses (a stated spec non-goal), which
+            would otherwise leave a signed-in mobile user with no way to sign out
+            at all — and `/` now redirects them straight back to /home. Only the
+            email text is hidden at narrow widths; the button always renders. */}
+        <div className="flex flex-col text-right leading-tight">
+          <span className="hidden text-sm font-semibold text-gray-900 sm:block">{email}</span>
           <button type="button" onClick={handleSignOut} className="text-xs text-gray-400 hover:text-gray-600">
             Sign out
           </button>
