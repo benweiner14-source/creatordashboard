@@ -3,9 +3,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 
 const pushMock = vi.fn();
+const replaceMock = vi.fn();
 vi.mock('next/navigation', () => ({
   usePathname: () => '/home',
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, replace: replaceMock }),
 }));
 
 // Per the ruling in Task 10: <AppNav>'s independent fetch('/api/session')
@@ -35,6 +36,7 @@ describe('HomePage', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     pushMock.mockClear();
+    replaceMock.mockClear();
   });
 
   it('shows a prompt-to-act card for every section with no data', async () => {
@@ -43,7 +45,7 @@ describe('HomePage', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Run your first diagnostic' })).toBeInTheDocument());
     expect(screen.getByRole('heading', { name: "Generate this month's recap" })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Set your niche to get this week&apos;s ideas'.replace('&apos;', "'") })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: "Set your niche to get this week's ideas" })).toBeInTheDocument();
   });
 
   it('shows the latest diagnostic score when one exists', async () => {
@@ -92,6 +94,9 @@ describe('HomePage', () => {
     render(<HomePage />);
     await waitFor(() => expect(screen.getByText('142K')).toBeInTheDocument());
     expect(screen.getByText(/3 Editing Tricks I Wish I Knew Sooner/)).toBeInTheDocument();
+    // Spec §7.2: the heading names the month the card covers, derived from
+    // recap.month ('2026-08-01'), rather than a bare "Recap".
+    expect(screen.getByRole('heading', { name: 'August recap' })).toBeInTheDocument();
   });
 
   it('shows a "set your niche" prompt when no niche is set', async () => {
@@ -133,9 +138,19 @@ describe('HomePage', () => {
     await waitFor(() => expect(screen.getByText('Welcome back, Jordan.')).toBeInTheDocument());
   });
 
-  it('redirects to / when the bootstrap fetch is unauthorized', async () => {
+  it('replaces the history entry with / when the bootstrap fetch is unauthorized', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: 'unauthorized' }) }));
     render(<HomePage />);
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'));
+    // replace(), not push() — otherwise Back from '/' returns to /home, which
+    // 401s and redirects again, trapping the user.
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/'));
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('offers a way out when the bootstrap fetch fails outright', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    render(<HomePage />);
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: /run a diagnostic instead/i })).toHaveAttribute('href', '/diagnostic');
   });
 });

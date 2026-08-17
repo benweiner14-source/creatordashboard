@@ -27,7 +27,9 @@ export default function HomePage() {
       .then(async (res) => {
         if (cancelled) return;
         if (res.status === 401) {
-          router.push('/');
+          // replace(), not push(): Back from '/' would otherwise return to
+          // /home, which 401s and redirects again — a back-button trap.
+          router.replace('/');
           return;
         }
         const json = await res.json();
@@ -47,7 +49,17 @@ export default function HomePage() {
   }, [router]);
 
   if (loadFailed) {
-    return <p role="alert">We couldn&apos;t load your dashboard. Please refresh and try again.</p>;
+    // Keep the nav mounted so a failed bootstrap isn't a dead end — the user
+    // can still reach the other tools or sign out from here.
+    return (
+      <>
+        <AppNav />
+        <p role="alert">We couldn&apos;t load your dashboard. Please refresh and try again.</p>
+        <p>
+          <Link href="/diagnostic">Run a diagnostic instead</Link>
+        </p>
+      </>
+    );
   }
 
   if (!data) {
@@ -57,15 +69,15 @@ export default function HomePage() {
   const displayName = deriveDisplayNameFromEmail(data.email);
 
   return (
-    <div className="mx-auto max-w-6xl rounded-[28px] bg-[#fdfcff] shadow-[0_30px_70px_-28px_rgba(58,46,143,0.28)]">
+    <div className="mx-auto my-6 max-w-6xl rounded-[28px] bg-[#fdfcff] shadow-shell">
       <AppNav />
 
-      <header className="mx-4 mt-1 rounded-[22px] bg-[linear-gradient(120deg,#4338ca_0%,#6229c9_46%,#9333ea_100%)] px-8 py-10 text-[#f4f2ff] sm:mx-6">
+      <header className="mx-4 mt-1 rounded-[22px] bg-[linear-gradient(120deg,#4338ca_0%,#6229c9_46%,#9333ea_100%)] px-8 py-10 text-[#f4f2ff] motion-safe:animate-rise sm:mx-6">
         <h1 className="font-serif text-3xl font-normal">Welcome back, {displayName}.</h1>
         <p className="mt-2 max-w-md text-[#e4defc]">Here&apos;s how your tools are looking this week.</p>
       </header>
 
-      <main className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-3">
+      <main className="grid grid-cols-1 gap-4 p-6 [&>article]:motion-safe:animate-rise md:grid-cols-3">
         <DiagnosticCard diagnostic={data.diagnostic} />
         <RecapCard recap={data.recap} />
         <IdeasCard ideas={data.ideas} />
@@ -157,6 +169,12 @@ function RecapCard({ recap }: { recap: HomeData['recap'] }) {
   }
 
   const platformEntries = RECAP_PLATFORM_ORDER.filter((p) => recap.platformData[p]);
+  // recap.month is an ISO date ('2026-08-01'), which Date parses as UTC
+  // midnight — format in UTC too so it doesn't slip to the previous month
+  // for viewers west of Greenwich.
+  const monthName = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(
+    new Date(recap.month)
+  );
 
   return (
     <HomeCard ariaLabelledBy="recap-heading">
@@ -167,7 +185,7 @@ function RecapCard({ recap }: { recap: HomeData['recap'] }) {
           </span>
         ))}
         <h3 id="recap-heading" className="ml-2 font-bold text-gray-900">
-          Recap
+          {monthName} recap
         </h3>
       </div>
 
