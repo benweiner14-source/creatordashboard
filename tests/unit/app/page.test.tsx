@@ -1,5 +1,9 @@
 // tests/unit/app/page.test.tsx
 // @vitest-environment node
+//
+// Redirect behavior only. The rendered marketing content is asserted in
+// page-content.test.tsx, which needs the jsdom environment — Vitest sets the
+// environment per file, so the two concerns live in two files.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // vi.mock factories run before this file's top-level const declarations
@@ -23,9 +27,9 @@ vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }));
 
-import HomePage from '@/app/page';
+import MarketingPage from '@/app/page';
 
-describe('/ (marketing landing page)', () => {
+describe('MarketingPage redirect behavior', () => {
   afterEach(() => {
     getUserMock.mockClear();
     redirectMock.mockClear();
@@ -37,14 +41,14 @@ describe('/ (marketing landing page)', () => {
       throw new Error('NEXT_REDIRECT');
     });
 
-    await expect(HomePage()).rejects.toThrow('NEXT_REDIRECT');
+    await expect(MarketingPage()).rejects.toThrow('NEXT_REDIRECT');
     expect(redirectMock).toHaveBeenCalledWith('/home');
   });
 
-  it('renders the marketing content when signed out', async () => {
+  it('does not redirect when the visitor is signed out', async () => {
     getUserMock.mockResolvedValue({ data: { user: null } });
 
-    const element = await HomePage();
+    const element = await MarketingPage();
 
     expect(redirectMock).not.toHaveBeenCalled();
     expect(element).toBeTruthy();

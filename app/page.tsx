@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export default async function HomePage() {
+// Named MarketingPage, not HomePage, to keep it distinct from app/home/page.tsx's
+// HomePage export — the two are entirely different pages.
+export default async function MarketingPage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
