@@ -33,9 +33,17 @@ describe('MarketingPage redirect behavior', () => {
   afterEach(() => {
     getUserMock.mockClear();
     redirectMock.mockClear();
+    vi.unstubAllEnvs();
   });
 
+  // Both of these model a configured deployment (Vercel always sets these
+  // in production) — stubbed explicitly rather than relying on whatever
+  // happens to be in the ambient environment, since CI sets neither var
+  // at all and a test that only passed by accident of a local .env.local
+  // would silently fail there.
   it('redirects to /home when the visitor is signed in', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon-key');
     getUserMock.mockResolvedValue({ data: { user: { id: 'profile-1' } } });
     redirectMock.mockImplementation(() => {
       throw new Error('NEXT_REDIRECT');
@@ -46,10 +54,28 @@ describe('MarketingPage redirect behavior', () => {
   });
 
   it('does not redirect when the visitor is signed out', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon-key');
     getUserMock.mockResolvedValue({ data: { user: null } });
 
     const element = await MarketingPage();
 
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(element).toBeTruthy();
+  });
+
+  // The regression this guards against: before this test existed, /
+  // called createSupabaseServerClient() unconditionally, which throws
+  // when these vars are unset (the actual state of CI, and of any
+  // deployment before a real Supabase project is connected) — crashing
+  // the one page in the app that's supposed to always be browsable.
+  it('renders without touching Supabase when the env vars are not configured', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', undefined);
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', undefined);
+
+    const element = await MarketingPage();
+
+    expect(getUserMock).not.toHaveBeenCalled();
     expect(redirectMock).not.toHaveBeenCalled();
     expect(element).toBeTruthy();
   });
