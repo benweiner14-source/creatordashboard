@@ -84,9 +84,7 @@ STRIPE_PRICE_ID=
 STRIPE_WEBHOOK_SECRET=
 ```
 
-New dependency: `stripe` (the official Node SDK) added to `package.json` — this app has no Stripe integration today.
-
-A new `lib/integrations/stripe.ts` wraps the SDK the same way `lib/integrations/resend.ts` wraps Resend: a thin `createStripeClient(secretKey)` returning the typed client, so route code and tests both depend on a small interface rather than the SDK directly.
+No new npm dependency. A new `lib/integrations/stripe.ts` wraps Stripe's REST API via plain `fetch`, matching `lib/integrations/resend.ts`'s explicit "no SDK dependency" convention (and every other integration in this codebase — YouTube, Apify, Claude, TikTok/Instagram OAuth): a thin `createStripeClient(secretKey)` returning a small typed interface (`createCustomer`, `createCheckoutSession`, `createPortalSession`), so route code and tests both depend on that interface rather than a third-party SDK.
 
 ---
 
@@ -112,13 +110,13 @@ New route. Auth required. Looks up the caller's `subscriptions.stripe_customer_i
 
 ## 5. `POST /api/webhooks/stripe` — the sync point
 
-New route, unauthenticated in the normal sense (no signed-in user — Stripe is the caller) but verified via signature, the same shape as the cron route's `CRON_SECRET` check (§ precedent: `app/api/cron/weekly-digest/route.ts`) except using Stripe's own SDK helper rather than a hand-rolled header comparison:
+New route, unauthenticated in the normal sense (no signed-in user — Stripe is the caller) but verified via signature, the same shape as the cron route's `CRON_SECRET` check (§ precedent: `app/api/cron/weekly-digest/route.ts`) — using real HMAC-SHA256 verification of Stripe's signature scheme, hand-rolled in `lib/billing/stripe-webhook.ts` rather than via the Stripe SDK, matching this codebase's existing hand-rolled signed-token precedent (`lib/digest/unsubscribe-token.ts`, `lib/oauth/state.ts`) and the "no SDK" decision in §2:
 
 ```ts
 const signature = request.headers.get('stripe-signature');
 const rawBody = await request.text(); // signature verification needs the raw, unparsed body
-const event = stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET!);
-// throws on an invalid/missing signature — caught and returns 400
+const event = verifyStripeWebhookSignature(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET!);
+// throws on an invalid/missing/expired signature — caught and returns 400
 ```
 
 Uses `createSupabaseServiceRoleClient()` (bypasses RLS, same as the cron route and the diagnostic/recap/ideas generation handlers) since there's no signed-in user to scope the write to.
@@ -187,15 +185,17 @@ Page states:
 
 Matching this app's established conventions — pure logic gets real unit tests, external calls get fakes, one Playwright smoke test per new user-facing flow:
 
-- `tests/fakes/stripe.fake.ts` — a fake Stripe client covering `customers.create`, `checkout.sessions.create`, `billingPortal.sessions.create`, `webhooks.constructEvent` (parameterized to return canned event payloads), following the same shape as `tests/fakes/claude.fake.ts`/`tests/fakes/scraper.fake.ts`.
+- `tests/fakes/stripe.fake.ts` — a fake Stripe client covering `createCustomer`, `createCheckoutSession`, `createPortalSession`, following the same shape as `tests/fakes/claude.fake.ts`/`tests/fakes/scraper.fake.ts`.
+- `lib/billing/stripe-webhook.test.ts` — real HMAC verification: a validly signed payload parses, a tampered payload/signature/wrong-secret throws, a missing header throws, a stale timestamp throws.
+- `lib/billing/webhook-handler.test.ts` — the meaningful webhook test: `customer.subscription.created`/`updated`/`deleted` each call the right dep with the right mapped fields; an unrecognized event type is a no-op; processing the same event twice produces identical writes (idempotency, asserted directly).
 - `lib/billing/entitlements.test.ts` — `hasActiveSubscription`: true for `active`/`past_due`, false for `canceled`/`incomplete`/no row.
-- `app/api/billing/checkout/route.test.ts` — creates a new customer+row on first call; reuses the existing `stripe_customer_id` on a second call; 401 when signed out.
-- `app/api/billing/portal/route.test.ts` — 400 when no subscription row exists; happy path returns a URL.
-- `app/api/webhooks/stripe/route.test.ts` — the meaningful one: `customer.subscription.created`/`updated`/`deleted` each upsert the row correctly; an invalid signature returns 400; redelivering the same event twice leaves the row in the same final state (idempotency, asserted directly).
-- `app/api/recap/route.test.ts` / `app/api/ideas/route.test.ts` — gain one new case each: signed in, no active subscription → 402 with the upgrade payload. Existing rate-limit/generation test cases are unaffected (they already run with the entitlement check mocked as active).
-- `lib/recap/page-state.test.ts` / `lib/ideas/page-state.test.ts` — new `requiresUpgrade` transition on a 402 bootstrap response.
-- `app/billing/page.test.tsx` — renders each of the four states from `GET /api/billing/status`'s possible shapes; the `?checkout=success` polling path (mocked fetch resolving to `active` on the 2nd call, asserting the "Finishing up…" state renders first).
-- `tests/e2e/billing-smoke.spec.ts` — mocked network: free visitor hits `/recap`, sees the upgrade screen, clicks through to a mocked checkout URL; separately, a mocked-active visitor loads `/billing` and sees the "Manage plan" state.
+- `lib/billing/checkout-handler.test.ts` — creates a new customer+row on first call; reuses the existing `stripe_customer_id` on a second call; 401 when signed out.
+- `lib/billing/portal-handler.test.ts` — 400 when no subscription row exists; happy path returns a URL.
+- `lib/recap/handler.test.ts` / `lib/ideas/handler.test.ts` — gain one new case each: signed in, no active subscription → 402 with the upgrade payload. Existing rate-limit/generation test cases are unaffected (they already run with the entitlement check mocked as active). **No dedicated `route.test.ts` files** for `checkout`/`portal`/`webhooks/stripe`/`recap`/`ideas` — checking this codebase's actual test suite, no `app/api/**/route.test.ts` exists anywhere today (`GET /api/recap`, `GET /api/ideas`, etc. are all untested at the route level); every route in this app is thin wiring around a tested handler function or, for trivial GETs, covered only by the build + E2E suite. This spec follows that same shape rather than introducing route-level testing that has no precedent here.
+- `lib/recap/page-state.test.ts` / `lib/ideas/page-state.test.ts` — new `requiresUpgrade` transition on a `BOOTSTRAP_PAYMENT_REQUIRED` event (dispatched when bootstrap gets a 402).
+- `lib/billing/page-state.test.ts` — the four+ reducer transitions (loading → polling/free/subscribed, poll-exhausted → free with a flag, bootstrap-failed).
+- `components/UpgradePrompt.test.tsx` — renders given copy; starts checkout and redirects on click; shows an error on failure.
+- `tests/e2e/billing-smoke.spec.ts` — mocked network: free visitor hits `/recap`, sees the upgrade screen, clicks through to a mocked checkout URL; separately, a subscribed visitor loads `/billing`, sees their renewal date, and opens the portal.
 
 No live Stripe test-mode calls in CI (this app's existing convention — every integration test runs against a fake, matching how YouTube/Apify/Claude/Resend/OAuth are all tested today without real credentials).
 
