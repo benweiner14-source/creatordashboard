@@ -14,6 +14,7 @@ export interface RecapHandlerDeps {
   youtubeClient: YouTubeClient;
   scraperClient: ScraperClient;
   ipSalt: string;
+  hasActiveSubscription: (profileId: string) => Promise<boolean>;
   getProfileHandles: (profileId: string) => Promise<RecapHandles>;
   getExistingRecapCard: (profileId: string, month: string) => Promise<RecapCardRow | null>;
   saveRecapCard: (params: {
@@ -65,6 +66,13 @@ function monthKey(date: Date): { label: string; year: number; month: number } {
 export async function handleRecapRequest(deps: RecapHandlerDeps, context: RecapRequestContext): Promise<RecapHandlerResult> {
   if (!context.profileId) {
     return { status: 401, body: { error: 'You must be signed in to generate a recap card.' } };
+  }
+
+  if (!(await deps.hasActiveSubscription(context.profileId))) {
+    return {
+      status: 402,
+      body: { error: 'Recap Card requires an active subscription.', upgradeUrl: '/billing' },
+    };
   }
 
   const handles = await deps.getProfileHandles(context.profileId);
