@@ -1,12 +1,12 @@
 export type BillingStatusData =
   | { status: 'free' }
-  | { status: 'active' | 'past_due'; currentPeriodEnd: string; cancelAtPeriodEnd: boolean };
+  | { status: 'active' | 'past_due'; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean };
 
 export type BillingPageState =
   | { status: 'loading' }
   | { status: 'polling' }
   | { status: 'free'; justCheckedOut?: boolean }
-  | { status: 'subscribed'; currentPeriodEnd: string; cancelAtPeriodEnd: boolean; pastDue: boolean }
+  | { status: 'subscribed'; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; pastDue: boolean }
   | { status: 'bootstrapFailed' };
 
 export type BillingPageEvent =

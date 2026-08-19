@@ -30,7 +30,7 @@ export interface WebhookHandlerDeps {
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;
   }) => Promise<void>;
-  markSubscriptionCanceled: (stripeCustomerId: string) => Promise<void>;
+  markSubscriptionCanceled: (stripeCustomerId: string, stripeSubscriptionId: string) => Promise<void>;
 }
 
 export async function handleStripeWebhookEvent(deps: WebhookHandlerDeps, event: StripeWebhookEvent): Promise<void> {
@@ -49,7 +49,7 @@ export async function handleStripeWebhookEvent(deps: WebhookHandlerDeps, event: 
     }
     case 'customer.subscription.deleted': {
       const sub = event.data.object as unknown as StripeSubscriptionEventObject;
-      await deps.markSubscriptionCanceled(sub.customer);
+      await deps.markSubscriptionCanceled(sub.customer, sub.id);
       return;
     }
     default:

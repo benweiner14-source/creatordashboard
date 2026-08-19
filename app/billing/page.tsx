@@ -49,6 +49,10 @@ export default function BillingPage() {
           }
           if (data.status !== 'free') {
             dispatch({ type: 'BOOTSTRAPPED', data });
+            // Strip ?checkout=success so a refresh doesn't re-run polling.
+            // Deliberately not done on the exhausted path — keeping the
+            // param there means a manual refresh retries the poll.
+            router.replace('/billing');
             return;
           }
           if (attempt < POLL_ATTEMPTS - 1) await sleep(POLL_DELAY_MS);
@@ -70,7 +74,9 @@ export default function BillingPage() {
       dispatch({ type: 'BOOTSTRAPPED', data });
     }
 
-    bootstrap();
+    bootstrap().catch(() => {
+      if (!cancelled) dispatch({ type: 'BOOTSTRAP_FAILED' });
+    });
     return () => {
       cancelled = true;
     };
@@ -145,11 +151,21 @@ export default function BillingPage() {
                 We couldn&apos;t process your last payment — please update your card.
               </p>
             )}
-            <p className="text-gray-700">
-              {state.cancelAtPeriodEnd
-                ? `Your plan ends ${new Date(state.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
-                : `You're subscribed — renews ${new Date(state.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`}
-            </p>
+            {/* When a payment has failed and the plan isn't already ending,
+                the stored period end is the period whose renewal just
+                failed — showing it alongside the payment warning would
+                contradict it, so suppress the line entirely. */}
+            {!(state.pastDue && !state.cancelAtPeriodEnd) && (
+              <p className="text-gray-700">
+                {state.cancelAtPeriodEnd
+                  ? state.currentPeriodEnd
+                    ? `Your plan ends ${new Date(state.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+                    : 'Your plan is ending soon.'
+                  : state.currentPeriodEnd
+                    ? `You're subscribed — renews ${new Date(state.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+                    : "You're subscribed."}
+              </p>
+            )}
             <button
               type="button"
               onClick={managePlan}

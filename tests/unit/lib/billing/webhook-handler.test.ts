@@ -60,7 +60,7 @@ describe('handleStripeWebhookEvent', () => {
         data: { object: { id: 'sub_1', customer: 'cus_1', status: 'canceled', current_period_end: null, cancel_at_period_end: false } },
       }
     );
-    expect(markSubscriptionCanceled).toHaveBeenCalledWith('cus_1');
+    expect(markSubscriptionCanceled).toHaveBeenCalledWith('cus_1', 'sub_1');
   });
 
   it('is a no-op for an unrecognized event type', async () => {

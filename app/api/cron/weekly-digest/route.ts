@@ -3,6 +3,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase/server';
 import { createClaudeContentIdeasClient } from '@/lib/integrations/claude-ideas';
 import { createResendEmailClient } from '@/lib/integrations/resend';
 import { runWeeklyDigestCron } from '@/lib/digest/cron-handler';
+import { hasActiveSubscription } from '@/lib/billing/entitlements';
 import type { DigestRow } from '@/lib/digest/cron-handler';
 import type { ContentIdea } from '@/lib/integrations/claude-ideas';
 
@@ -69,6 +70,13 @@ export async function GET(request: Request) {
         // skip anyone whose lookup fails rather than failing the whole run.
         const candidates: { profileId: string; email: string; niche: string }[] = [];
         for (const row of data ?? []) {
+          // Weekly email delivery is a paid feature. Checking entitlement
+          // here (rather than only at opt-in time) means the cron
+          // self-corrects the moment a subscription lapses — no separate
+          // cleanup job needs to flip digest_email_opt_in back off.
+          if (!(await hasActiveSubscription(serviceClient, row.id))) {
+            continue;
+          }
           const { data: userData, error: userError } = await serviceClient.auth.admin.getUserById(row.id);
           if (userError || !userData?.user?.email) {
             continue;

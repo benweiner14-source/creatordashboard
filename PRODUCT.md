@@ -47,11 +47,13 @@ generated on-demand.
   strength, retention risk, timing, format fit); YouTube, TikTok, and
   Instagram supported.
 - Recap Card: a monthly, shareable summary card of a creator's platform
-  stats; publicly viewable at a share URL once generated.
+  stats; publicly viewable at a share URL once generated. Requires a
+  subscription.
 - Weekly Content Ideas: niche-based, AI-researched (web search) concept
   list, regenerable weekly; optional automated Monday email delivery with
-  one-click unsubscribe.
-- No billing or paid tier exists yet — everything is currently free.
+  one-click unsubscribe. Requires a subscription.
+- Diagnostic is free; Recap Card and Weekly Content Ideas require a $10/mo
+  subscription (Stripe Checkout + Customer Portal).
 - Web only — no native apps.
 
 ## Brand Commitments
