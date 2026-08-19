@@ -21,6 +21,7 @@ export type IdeasPageState =
       cached?: boolean;
     }
   | { status: 'generationFailed'; niche: string; error: string; digestEmailOptIn: boolean; digestOptInError: string | null }
+  | { status: 'requiresUpgrade' }
   // Sign-in sub-flow, mirroring lib/recap/page-state.ts so the same
   // <SignInPrompt> component drives it.
   | { status: 'needsSignIn'; email: string; notice: string | null }
@@ -32,6 +33,7 @@ export type IdeasPageEvent =
   | { type: 'BOOTSTRAPPED'; niche: string; ideas: ContentIdea[] | null; digestEmailOptIn: boolean }
   | { type: 'BOOTSTRAP_FAILED' }
   | { type: 'BOOTSTRAP_UNAUTHORIZED' }
+  | { type: 'BOOTSTRAP_PAYMENT_REQUIRED' }
   | { type: 'NICHE_CHANGED'; value: string }
   | { type: 'NICHE_SAVED' }
   | { type: 'NICHE_SAVE_FAILED'; error: string }
@@ -95,6 +97,9 @@ export function ideasPageReducer(state: IdeasPageState, event: IdeasPageEvent): 
 
     case 'BOOTSTRAP_UNAUTHORIZED':
       return { status: 'needsSignIn', email: '', notice: null };
+
+    case 'BOOTSTRAP_PAYMENT_REQUIRED':
+      return { status: 'requiresUpgrade' };
 
     case 'NICHE_CHANGED':
       return isNicheEditingState(state) ? { ...state, niche: event.value } : state;
