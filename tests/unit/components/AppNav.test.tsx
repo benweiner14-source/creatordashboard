@@ -36,6 +36,13 @@ describe('AppNav', () => {
     expect(screen.getByRole('link', { name: 'Diagnostic' })).not.toHaveAttribute('aria-current');
   });
 
+  it('includes a Billing link', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+    render(<AppNav />);
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Billing' })).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'Billing' })).toHaveAttribute('href', '/billing');
+  });
+
   it('calls sign-out then navigates home when Sign out is clicked', async () => {
     const fetchMock = vi.fn((url: string) => {
       if (url === '/api/session') return Promise.resolve({ ok: true, json: async () => ({ email: 'jordan@example.com' }) });
