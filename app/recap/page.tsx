@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useReducer, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
 import {
@@ -217,100 +218,103 @@ function RecapPageInner() {
   }
 
   return (
-    <main className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
-      <h1 className="text-2xl font-bold text-gray-900">Monthly recap card</h1>
-      <p className="text-gray-600">Connect your platforms once, then generate a shareable card of this month&apos;s stats.</p>
+    <>
+      <AppNav />
+      <main className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
+        <h1 className="text-2xl font-bold text-gray-900">Monthly recap card</h1>
+        <p className="text-gray-600">Connect your platforms once, then generate a shareable card of this month&apos;s stats.</p>
 
-      {toast && (
-        <p role="alert" className={toast.kind === 'success' ? 'text-sm text-green-700' : 'text-sm text-red-600'}>
-          {toast.message}
-        </p>
-      )}
+        {toast && (
+          <p role="alert" className={toast.kind === 'success' ? 'text-sm text-green-700' : 'text-sm text-red-600'}>
+            {toast.message}
+          </p>
+        )}
 
-      <div className="flex flex-col gap-3">
-        {(['youtube', 'tiktok', 'instagram'] as const).map((platform) => {
-          const connected = isOAuthPlatform(platform) && state.connections[platform];
+        <div className="flex flex-col gap-3">
+          {(['youtube', 'tiktok', 'instagram'] as const).map((platform) => {
+            const connected = isOAuthPlatform(platform) && state.connections[platform];
 
-          if (connected && isOAuthPlatform(platform)) {
-            return (
-              <div key={platform} className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-                {PLATFORM_LABELS[platform]}
-                <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-300 px-4 py-2 font-normal">
-                  <span>Connected via {OAUTH_PLATFORM_NAMES[platform]} ✓</span>
-                  <button type="button" onClick={() => disconnect(platform)} className="text-indigo-700 underline">
-                    Disconnect
-                  </button>
+            if (connected && isOAuthPlatform(platform)) {
+              return (
+                <div key={platform} className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                  {PLATFORM_LABELS[platform]}
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-300 px-4 py-2 font-normal">
+                    <span>Connected via {OAUTH_PLATFORM_NAMES[platform]} ✓</span>
+                    <button type="button" onClick={() => disconnect(platform)} className="text-indigo-700 underline">
+                      Disconnect
+                    </button>
+                  </div>
                 </div>
-              </div>
+              );
+            }
+
+            return (
+              <label key={platform} className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                {PLATFORM_LABELS[platform]}
+                <input
+                  type="text"
+                  value={state.handles[platform]}
+                  onChange={(e) => dispatch({ type: 'HANDLE_CHANGED', platform, value: e.target.value })}
+                  placeholder="@handle or profile URL"
+                  // Generation is the one state where the form legitimately can't
+                  // accept edits — say so rather than silently swallowing them.
+                  disabled={state.status === 'generating'}
+                  className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
+                />
+                {isOAuthPlatform(platform) && (
+                  <a href={`/api/oauth/${platform}/authorize`} className="self-start text-xs text-indigo-700 underline">
+                    Or connect via {OAUTH_PLATFORM_NAMES[platform]}
+                  </a>
+                )}
+              </label>
             );
-          }
+          })}
+          <button
+            type="button"
+            onClick={saveHandles}
+            disabled={state.status === 'generating'}
+            className="self-start rounded-full border border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50"
+          >
+            Save platforms
+          </button>
+        </div>
 
-          return (
-            <label key={platform} className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-              {PLATFORM_LABELS[platform]}
-              <input
-                type="text"
-                value={state.handles[platform]}
-                onChange={(e) => dispatch({ type: 'HANDLE_CHANGED', platform, value: e.target.value })}
-                placeholder="@handle or profile URL"
-                // Generation is the one state where the form legitimately can't
-                // accept edits — say so rather than silently swallowing them.
-                disabled={state.status === 'generating'}
-                className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
-              />
-              {isOAuthPlatform(platform) && (
-                <a href={`/api/oauth/${platform}/authorize`} className="self-start text-xs text-indigo-700 underline">
-                  Or connect via {OAUTH_PLATFORM_NAMES[platform]}
-                </a>
-              )}
-            </label>
-          );
-        })}
-        <button
-          type="button"
-          onClick={saveHandles}
-          disabled={state.status === 'generating'}
-          className="self-start rounded-full border border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50"
-        >
-          Save platforms
-        </button>
-      </div>
-
-      {state.status === 'noHandlesConnected' && state.error && (
-        <p role="alert" className="text-sm text-red-600">
-          {state.error}
-        </p>
-      )}
-
-      {state.status === 'readyToGenerate' && (
-        <button
-          type="button"
-          onClick={generate}
-          className="rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700"
-        >
-          Generate this month&apos;s recap
-        </button>
-      )}
-
-      {state.status === 'generating' && (
-        <Spinner label={state.stillWorking ? 'Still working — pulling your posts from each platform…' : 'Generating…'} />
-      )}
-
-      {state.status === 'generationFailed' && (
-        <div className="flex flex-col gap-2">
+        {state.status === 'noHandlesConnected' && state.error && (
           <p role="alert" className="text-sm text-red-600">
             {state.error}
           </p>
+        )}
+
+        {state.status === 'readyToGenerate' && (
           <button
             type="button"
             onClick={generate}
-            className="self-start rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700"
+            className="rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700"
           >
-            Try again
+            Generate this month&apos;s recap
           </button>
-        </div>
-      )}
-    </main>
+        )}
+
+        {state.status === 'generating' && (
+          <Spinner label={state.stillWorking ? 'Still working — pulling your posts from each platform…' : 'Generating…'} />
+        )}
+
+        {state.status === 'generationFailed' && (
+          <div className="flex flex-col gap-2">
+            <p role="alert" className="text-sm text-red-600">
+              {state.error}
+            </p>
+            <button
+              type="button"
+              onClick={generate}
+              className="self-start rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+      </main>
+    </>
   );
 }
 

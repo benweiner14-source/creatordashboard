@@ -1,6 +1,26 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export default function HomePage() {
+// Named MarketingPage, not HomePage, to keep it distinct from app/home/page.tsx's
+// HomePage export — the two are entirely different pages.
+export default async function MarketingPage() {
+  // Before a real Supabase project is connected, these env vars are unset.
+  // createSupabaseServerClient() throws immediately in that state (same
+  // failure proxy.ts's own guard exists to prevent for every other page —
+  // see its comment). This page is the one guaranteed-browsable page in
+  // the app; it must not 500 just because sign-in isn't configured yet.
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      redirect('/home');
+    }
+  }
+
   return (
     <main className="mx-auto flex max-w-2xl flex-col items-center gap-6 px-6 py-24 text-center">
       <h1 className="text-4xl font-bold text-gray-900">

@@ -8,6 +8,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
   useSearchParams: () => mockSearchParams,
 }));
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
+}));
 
 import DiagnosticInputPage from '@/app/diagnostic/page';
 

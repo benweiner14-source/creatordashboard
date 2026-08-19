@@ -8,6 +8,10 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParams,
 }));
 
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
+}));
+
 import RecapPage from '@/app/recap/page';
 
 describe('RecapPage', () => {

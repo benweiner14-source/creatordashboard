@@ -5,6 +5,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
+}));
+
 import IdeasPage from '@/app/ideas/page';
 
 describe('IdeasPage', () => {

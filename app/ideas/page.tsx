@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useReducer, useRef } from 'react';
+import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
 import { ideasPageReducer, createInitialIdeasPageState, isNicheEditingState, hasDigestOptInState } from '@/lib/ideas/page-state';
@@ -164,146 +165,149 @@ export default function IdeasPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
-      <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
-      <p className="text-gray-600">Set your niche once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
+    <>
+      <AppNav />
+      <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
+        <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
+        <p className="text-gray-600">Set your niche once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
 
-      <div className="flex flex-col gap-3">
-        <label htmlFor="ideas-niche" className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-          Your niche
-          <input
-            id="ideas-niche"
-            type="text"
-            value={state.niche}
-            onChange={(e) => dispatch({ type: 'NICHE_CHANGED', value: e.target.value })}
-            placeholder="e.g. home baking, personal finance for Gen Z"
-            disabled={state.status === 'generating' || state.status === 'ideasReady'}
-            className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
-          />
-        </label>
-        {isNicheEditingState(state) && (
-          <button
-            type="button"
-            onClick={saveNiche}
-            className="self-start rounded-full border border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50"
-          >
-            Save niche
-          </button>
-        )}
-        {state.status === 'ideasReady' && (
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'EDIT_NICHE' })}
-            className="self-start text-sm text-indigo-700 underline"
-          >
-            Edit niche
-          </button>
-        )}
-      </div>
-
-      {hasDigestOptInState(state) && state.status !== 'needsNiche' && (
-        <div className="flex flex-col gap-1">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+        <div className="flex flex-col gap-3">
+          <label htmlFor="ideas-niche" className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+            Your niche
             <input
-              type="checkbox"
-              checked={state.digestEmailOptIn}
-              onChange={(e) => toggleDigestOptIn(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300"
+              id="ideas-niche"
+              type="text"
+              value={state.niche}
+              onChange={(e) => dispatch({ type: 'NICHE_CHANGED', value: e.target.value })}
+              placeholder="e.g. home baking, personal finance for Gen Z"
+              disabled={state.status === 'generating' || state.status === 'ideasReady'}
+              className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
             />
-            Email me this every Monday morning
           </label>
-          {state.digestOptInError && (
-            <p role="alert" className="text-sm text-red-600">
-              {state.digestOptInError}
-            </p>
+          {isNicheEditingState(state) && (
+            <button
+              type="button"
+              onClick={saveNiche}
+              className="self-start rounded-full border border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50"
+            >
+              Save niche
+            </button>
+          )}
+          {state.status === 'ideasReady' && (
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'EDIT_NICHE' })}
+              className="self-start text-sm text-indigo-700 underline"
+            >
+              Edit niche
+            </button>
           )}
         </div>
-      )}
 
-      {state.status === 'needsNiche' && state.error && (
-        <p role="alert" className="text-sm text-red-600">
-          {state.error}
-        </p>
-      )}
+        {hasDigestOptInState(state) && state.status !== 'needsNiche' && (
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={state.digestEmailOptIn}
+                onChange={(e) => toggleDigestOptIn(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              Email me this every Monday morning
+            </label>
+            {state.digestOptInError && (
+              <p role="alert" className="text-sm text-red-600">
+                {state.digestOptInError}
+              </p>
+            )}
+          </div>
+        )}
 
-      {state.status === 'readyToGenerate' && (
-        <button
-          type="button"
-          onClick={generate}
-          className="self-start rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700"
-        >
-          Get this week&apos;s ideas
-        </button>
-      )}
-
-      {state.status === 'generating' && (
-        <Spinner label={state.stillWorking ? 'Still working — researching your niche…' : 'Generating…'} />
-      )}
-
-      {state.status === 'generationFailed' && (
-        <div className="flex flex-col gap-2">
+        {state.status === 'needsNiche' && state.error && (
           <p role="alert" className="text-sm text-red-600">
             {state.error}
           </p>
+        )}
+
+        {state.status === 'readyToGenerate' && (
           <button
             type="button"
             onClick={generate}
             className="self-start rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700"
           >
-            Try again
+            Get this week&apos;s ideas
           </button>
-        </div>
-      )}
+        )}
 
-      {state.status === 'ideasReady' && (
-        <div className="flex flex-col gap-4">
-          {state.cached && (
-            <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
-              These are this week&apos;s saved ideas — your niche update will apply starting next week.
+        {state.status === 'generating' && (
+          <Spinner label={state.stillWorking ? 'Still working — researching your niche…' : 'Generating…'} />
+        )}
+
+        {state.status === 'generationFailed' && (
+          <div className="flex flex-col gap-2">
+            <p role="alert" className="text-sm text-red-600">
+              {state.error}
             </p>
-          )}
-          {state.ideas.map((idea, index) => {
-            const safeSourceUrl = idea.sourceUrl && /^https?:\/\//i.test(idea.sourceUrl) ? idea.sourceUrl : null;
-            return (
-              <article key={index} className="flex flex-col gap-2 rounded-lg border border-gray-200 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-lg font-semibold text-gray-900">{idea.workingTitle}</h2>
-                  <span className="whitespace-nowrap rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
-                    {MEDIUM_LABELS[idea.medium]} · {idea.format}
-                  </span>
-                </div>
-                <p className="text-gray-700">{idea.pitch}</p>
-                <p className="text-sm text-gray-600">
-                  <strong>Why it&apos;s hot now:</strong> {idea.whyItsHotNow}
-                  {safeSourceUrl && (
-                    <>
-                      {' — '}
-                      <a href={safeSourceUrl} target="_blank" rel="noreferrer" className="text-indigo-700 underline">
-                        source
-                      </a>
-                    </>
+            <button
+              type="button"
+              onClick={generate}
+              className="self-start rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {state.status === 'ideasReady' && (
+          <div className="flex flex-col gap-4">
+            {state.cached && (
+              <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                These are this week&apos;s saved ideas — your niche update will apply starting next week.
+              </p>
+            )}
+            {state.ideas.map((idea, index) => {
+              const safeSourceUrl = idea.sourceUrl && /^https?:\/\//i.test(idea.sourceUrl) ? idea.sourceUrl : null;
+              return (
+                <article key={index} className="flex flex-col gap-2 rounded-lg border border-gray-200 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-lg font-semibold text-gray-900">{idea.workingTitle}</h2>
+                    <span className="whitespace-nowrap rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+                      {MEDIUM_LABELS[idea.medium]} · {idea.format}
+                    </span>
+                  </div>
+                  <p className="text-gray-700">{idea.pitch}</p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Why it&apos;s hot now:</strong> {idea.whyItsHotNow}
+                    {safeSourceUrl && (
+                      <>
+                        {' — '}
+                        <a href={safeSourceUrl} target="_blank" rel="noreferrer" className="text-indigo-700 underline">
+                          source
+                        </a>
+                      </>
+                    )}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Why it ranks here:</strong> {idea.whyItRanksHere} ({idea.kpiSignals.join(', ')})
+                  </p>
+                  {idea.reelDetails && (
+                    <p className="text-sm text-gray-500">
+                      Reel: ~{idea.reelDetails.suggestedLengthSeconds}s,{' '}
+                      {idea.reelDetails.style === 'talking-head' ? 'talking-head' : 'VO over capture'}
+                    </p>
                   )}
-                </p>
-                <p className="text-sm text-gray-600">
-                  <strong>Why it ranks here:</strong> {idea.whyItRanksHere} ({idea.kpiSignals.join(', ')})
-                </p>
-                {idea.reelDetails && (
-                  <p className="text-sm text-gray-500">
-                    Reel: ~{idea.reelDetails.suggestedLengthSeconds}s,{' '}
-                    {idea.reelDetails.style === 'talking-head' ? 'talking-head' : 'VO over capture'}
-                  </p>
-                )}
-                {idea.carouselDetails && (
-                  <p className="text-sm text-gray-500">
-                    Carousel: {idea.carouselDetails.hookFormula} — &ldquo;{idea.carouselDetails.coverLine}&rdquo; (
-                    {idea.carouselDetails.slideCount} slides)
-                  </p>
-                )}
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </main>
+                  {idea.carouselDetails && (
+                    <p className="text-sm text-gray-500">
+                      Carousel: {idea.carouselDetails.hookFormula} — &ldquo;{idea.carouselDetails.coverLine}&rdquo; (
+                      {idea.carouselDetails.slideCount} slides)
+                    </p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    </>
   );
 }
