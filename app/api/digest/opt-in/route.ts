@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server';
 import { saveDigestOptIn } from '@/lib/digest/opt-in';
+import { hasActiveSubscription } from '@/lib/billing/entitlements';
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { optIn?: boolean };
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
           throw new Error(`Failed to save digest opt-in: ${error.message}`);
         }
       },
+      hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
     },
     { profileId: user.id, optIn: body.optIn === true }
   );

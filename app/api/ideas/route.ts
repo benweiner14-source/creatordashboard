@@ -4,6 +4,7 @@ import { createSupabaseRateLimitStore } from '@/lib/supabase/rate-limit-store';
 import { createClaudeContentIdeasClient } from '@/lib/integrations/claude-ideas';
 import { deriveClientIp } from '@/lib/ip';
 import { handleIdeasRequest, weekStartKey } from '@/lib/ideas/handler';
+import { hasActiveSubscription } from '@/lib/billing/entitlements';
 import type { WeeklyDigestRow } from '@/lib/ideas/handler';
 import type { ContentIdea } from '@/lib/integrations/claude-ideas';
 
@@ -21,11 +22,15 @@ export async function GET() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const serviceClient = createSupabaseServiceRoleClient();
   if (!user) {
     return NextResponse.json({ error: 'You must be signed in to view your content ideas.' }, { status: 401 });
   }
 
-  const serviceClient = createSupabaseServiceRoleClient();
+  if (!(await hasActiveSubscription(serviceClient, user.id))) {
+    return NextResponse.json({ error: 'Weekly Content Ideas requires an active subscription.', upgradeUrl: '/billing' }, { status: 402 });
+  }
+
   const { data: profile } = await serviceClient
     .from('profiles')
     .select('niche, digest_email_opt_in')
@@ -64,6 +69,7 @@ export async function POST(request: Request) {
         rateLimitStore: createSupabaseRateLimitStore(serviceClient),
         contentIdeasClient: createClaudeContentIdeasClient(process.env.ANTHROPIC_API_KEY ?? ''),
         ipSalt: process.env.RATE_LIMIT_IP_SALT ?? 'dev-salt',
+        hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
         getProfileNiche: async (profileId) => {
           const { data } = await serviceClient.from('profiles').select('niche').eq('id', profileId).single();
           return data?.niche ?? null;

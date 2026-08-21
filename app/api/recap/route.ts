@@ -10,6 +10,7 @@ import { deriveClientIp } from '@/lib/ip';
 import { handleRecapRequest } from '@/lib/recap/handler';
 import { getPlatformConnection as lookupPlatformConnection } from '@/lib/oauth/connections';
 import { encryptToken } from '@/lib/crypto';
+import { hasActiveSubscription } from '@/lib/billing/entitlements';
 import type { RecapCardRow } from '@/lib/recap/types';
 import type { OAuthPlatform } from '@/lib/oauth/types';
 
@@ -44,11 +45,15 @@ export async function GET() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const serviceClient = createSupabaseServiceRoleClient();
   if (!user) {
     return NextResponse.json({ error: 'You must be signed in to view your recap settings.' }, { status: 401 });
   }
 
-  const serviceClient = createSupabaseServiceRoleClient();
+  if (!(await hasActiveSubscription(serviceClient, user.id))) {
+    return NextResponse.json({ error: 'Recap Card requires an active subscription.', upgradeUrl: '/billing' }, { status: 402 });
+  }
+
   const { data: profile } = await serviceClient
     .from('profiles')
     .select('youtube_channel_handle,tiktok_handle,instagram_handle')
@@ -104,6 +109,7 @@ export async function POST(request: Request) {
         youtubeClient: createYouTubeClient(process.env.YOUTUBE_API_KEY ?? ''),
         scraperClient: createApifyScraperClient(process.env.APIFY_API_TOKEN ?? ''),
         ipSalt: process.env.RATE_LIMIT_IP_SALT ?? 'dev-salt',
+        hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
         getProfileHandles: async (profileId) => {
           const { data } = await serviceClient
             .from('profiles')

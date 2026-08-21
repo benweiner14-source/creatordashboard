@@ -4,6 +4,7 @@ import { useEffect, useReducer, useRef } from 'react';
 import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { ideasPageReducer, createInitialIdeasPageState, isNicheEditingState, hasDigestOptInState } from '@/lib/ideas/page-state';
 import type { ContentIdea } from '@/lib/integrations/claude-ideas';
 
@@ -24,6 +25,10 @@ export default function IdeasPage() {
         if (cancelled) return;
         if (res.status === 401) {
           dispatch({ type: 'BOOTSTRAP_UNAUTHORIZED' });
+          return;
+        }
+        if (res.status === 402) {
+          dispatch({ type: 'BOOTSTRAP_PAYMENT_REQUIRED' });
           return;
         }
         const data = await res.json();
@@ -161,6 +166,21 @@ export default function IdeasPage() {
           onRetryEmail={() => dispatch({ type: 'RETRY_EMAIL' })}
         />
       </main>
+    );
+  }
+
+  if (state.status === 'requiresUpgrade') {
+    return (
+      <>
+        <AppNav />
+        <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
+          <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
+          <UpgradePrompt
+            title="Weekly Content Ideas is part of Creator Dashboard's paid plan"
+            body="Get a ranked shortlist of niche-specific content concepts every week for $10/mo."
+          />
+        </main>
+      </>
     );
   }
 

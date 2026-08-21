@@ -120,4 +120,13 @@ describe('supabase migrations', () => {
     expect(sql).toContain('add column digest_email_opt_in boolean not null default false');
     expect(sql).toContain('add column digest_last_sent_at timestamptz');
   });
+
+  it('includes a subscriptions table migration unique per profile and per Stripe customer', () => {
+    const sql = readMigrationContaining('create_subscriptions');
+    expect(sql).toContain('create table public.subscriptions');
+    expect(sql).toContain('profile_id uuid not null unique references public.profiles(id)');
+    expect(sql).toContain('stripe_customer_id text not null unique');
+    expect(sql).toContain("status text not null check (status in ('active', 'past_due', 'canceled', 'incomplete'))");
+    expect(sql).toContain('"Subscriptions are viewable by owner"');
+  });
 });

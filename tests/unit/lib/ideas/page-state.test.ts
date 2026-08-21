@@ -73,6 +73,11 @@ describe('ideasPageReducer — bootstrap', () => {
     const next = ideasPageReducer({ status: 'loading' }, { type: 'BOOTSTRAP_UNAUTHORIZED' });
     expect(next).toEqual({ status: 'needsSignIn', email: '', notice: null });
   });
+
+  it('moves to requiresUpgrade on BOOTSTRAP_PAYMENT_REQUIRED', () => {
+    const next = ideasPageReducer({ status: 'loading' }, { type: 'BOOTSTRAP_PAYMENT_REQUIRED' });
+    expect(next).toEqual({ status: 'requiresUpgrade' });
+  });
 });
 
 describe('ideasPageReducer — niche editing', () => {

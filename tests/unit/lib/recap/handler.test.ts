@@ -14,6 +14,7 @@ function makeDeps(overrides: Partial<Parameters<typeof handleRecapRequest>[0]> =
     youtubeClient: createFakeYouTubeClient(),
     scraperClient: createFakeScraperClient(),
     ipSalt: 'test-salt',
+    hasActiveSubscription: async () => true,
     getProfileHandles: async (): Promise<RecapHandles> => ({ youtube: 'creator', tiktok: null, instagram: null }),
     getExistingRecapCard: async () => null,
     saveRecapCard: async (params) => {
@@ -36,6 +37,13 @@ describe('handleRecapRequest', () => {
   it('rejects requests without a signed-in profile', async () => {
     const result = await handleRecapRequest(makeDeps(), { profileId: null, ip: '203.0.113.1', now: NOW });
     expect(result.status).toBe(401);
+  });
+
+  it('rejects a signed-in profile with no active subscription', async () => {
+    const deps = makeDeps({ hasActiveSubscription: async () => false });
+    const result = await handleRecapRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(402);
+    expect(result.body.upgradeUrl).toBe('/billing');
   });
 
   it('rejects when no platform handle is connected', async () => {

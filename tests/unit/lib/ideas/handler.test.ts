@@ -24,6 +24,7 @@ function makeDeps(overrides: Partial<Parameters<typeof handleIdeasRequest>[0]> =
     rateLimitStore: createInMemoryRateLimitStore(),
     contentIdeasClient: createFakeContentIdeasClient([IDEA]),
     ipSalt: 'test-salt',
+    hasActiveSubscription: async () => true,
     getProfileNiche: async () => 'home baking',
     getExistingDigest: async () => null,
     saveDigest: async (params: { profileId: string; weekStart: string; contentIdeas: ContentIdea[] }) => {
@@ -43,6 +44,13 @@ describe('handleIdeasRequest', () => {
   it('rejects requests without a signed-in profile', async () => {
     const result = await handleIdeasRequest(makeDeps(), { profileId: null, ip: '203.0.113.1', now: NOW });
     expect(result.status).toBe(401);
+  });
+
+  it('rejects a signed-in profile with no active subscription', async () => {
+    const deps = makeDeps({ hasActiveSubscription: async () => false });
+    const result = await handleIdeasRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
+    expect(result.status).toBe(402);
+    expect(result.body.upgradeUrl).toBe('/billing');
   });
 
   it('rejects when no niche is set', async () => {

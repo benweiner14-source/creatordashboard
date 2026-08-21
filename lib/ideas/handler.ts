@@ -15,6 +15,7 @@ export interface IdeasHandlerDeps {
   rateLimitStore: RateLimitStore;
   contentIdeasClient: ContentIdeasClient;
   ipSalt: string;
+  hasActiveSubscription: (profileId: string) => Promise<boolean>;
   getProfileNiche: (profileId: string) => Promise<string | null>;
   getExistingDigest: (profileId: string, weekStart: string) => Promise<WeeklyDigestRow | null>;
   saveDigest: (params: { profileId: string; weekStart: string; contentIdeas: ContentIdea[] }) => Promise<WeeklyDigestRow>;
@@ -42,6 +43,13 @@ export function weekStartKey(date: Date): string {
 export async function handleIdeasRequest(deps: IdeasHandlerDeps, context: IdeasRequestContext): Promise<IdeasHandlerResult> {
   if (!context.profileId) {
     return { status: 401, body: { error: 'You must be signed in to generate content ideas.' } };
+  }
+
+  if (!(await deps.hasActiveSubscription(context.profileId))) {
+    return {
+      status: 402,
+      body: { error: 'Weekly Content Ideas requires an active subscription.', upgradeUrl: '/billing' },
+    };
   }
 
   const niche = await deps.getProfileNiche(context.profileId);

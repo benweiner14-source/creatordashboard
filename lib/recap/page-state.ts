@@ -19,6 +19,7 @@ export type RecapPageState =
   | { status: 'generating'; handles: RecapHandleInputs; connections: RecapConnectionStatus; stillWorking: boolean }
   | { status: 'redirectingToCard'; recapCardId: string }
   | { status: 'generationFailed'; handles: RecapHandleInputs; connections: RecapConnectionStatus; error: string }
+  | { status: 'requiresUpgrade' }
   // Sign-in sub-flow, mirroring lib/auth/sign-in-flow-state.ts so the same
   // <SignInPrompt> component drives it.
   | { status: 'needsSignIn'; email: string; notice: string | null }
@@ -30,6 +31,7 @@ export type RecapPageEvent =
   | { type: 'BOOTSTRAPPED'; handles: RecapHandleInputs; connections: RecapConnectionStatus; recapCardId: string | null }
   | { type: 'BOOTSTRAP_FAILED' }
   | { type: 'BOOTSTRAP_UNAUTHORIZED' }
+  | { type: 'BOOTSTRAP_PAYMENT_REQUIRED' }
   | { type: 'HANDLE_CHANGED'; platform: RecapPlatform; value: string }
   | { type: 'HANDLES_SAVED' }
   | { type: 'HANDLES_SAVE_FAILED'; error: string }
@@ -97,6 +99,9 @@ export function recapPageReducer(state: RecapPageState, event: RecapPageEvent): 
 
     case 'BOOTSTRAP_UNAUTHORIZED':
       return { status: 'needsSignIn', email: '', notice: null };
+
+    case 'BOOTSTRAP_PAYMENT_REQUIRED':
+      return { status: 'requiresUpgrade' };
 
     case 'HANDLE_CHANGED':
       return isHandleEditingState(state)

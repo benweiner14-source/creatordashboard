@@ -132,6 +132,11 @@ describe('recapPageReducer — handle editing after a failed generation', () => 
 });
 
 describe('recapPageReducer — sign-in sub-flow', () => {
+  it('moves to requiresUpgrade on BOOTSTRAP_PAYMENT_REQUIRED', () => {
+    const next = recapPageReducer({ status: 'loading' }, { type: 'BOOTSTRAP_PAYMENT_REQUIRED' });
+    expect(next).toEqual({ status: 'requiresUpgrade' });
+  });
+
   it('moves to needsSignIn when the bootstrap request comes back unauthorized', () => {
     expect(recapPageReducer({ status: 'loading' }, { type: 'BOOTSTRAP_UNAUTHORIZED' })).toEqual({
       status: 'needsSignIn',

@@ -137,6 +137,32 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['platform_connections']['Insert']>;
         Relationships: [];
       };
+      subscriptions: {
+        Row: {
+          id: string;
+          profile_id: string;
+          stripe_customer_id: string;
+          stripe_subscription_id: string | null;
+          status: 'active' | 'past_due' | 'canceled' | 'incomplete';
+          current_period_end: string | null;
+          cancel_at_period_end: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          stripe_customer_id: string;
+          stripe_subscription_id?: string | null;
+          status: 'active' | 'past_due' | 'canceled' | 'incomplete';
+          current_period_end?: string | null;
+          cancel_at_period_end?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['subscriptions']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

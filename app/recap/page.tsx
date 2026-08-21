@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import {
   recapPageReducer,
   createInitialRecapPageState,
@@ -75,6 +76,10 @@ function RecapPageInner() {
         if (cancelled) return;
         if (res.status === 401) {
           dispatch({ type: 'BOOTSTRAP_UNAUTHORIZED' });
+          return;
+        }
+        if (res.status === 402) {
+          dispatch({ type: 'BOOTSTRAP_PAYMENT_REQUIRED' });
           return;
         }
         const data = await res.json();
@@ -214,6 +219,21 @@ function RecapPageInner() {
           onRetryEmail={() => dispatch({ type: 'RETRY_EMAIL' })}
         />
       </main>
+    );
+  }
+
+  if (state.status === 'requiresUpgrade') {
+    return (
+      <>
+        <AppNav />
+        <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
+          <h1 className="text-2xl font-bold text-gray-900">Recap Card</h1>
+          <UpgradePrompt
+            title="Recap Card is part of Creator Dashboard's paid plan"
+            body="Get a shareable monthly summary of your platform performance for $10/mo."
+          />
+        </main>
+      </>
     );
   }
 
