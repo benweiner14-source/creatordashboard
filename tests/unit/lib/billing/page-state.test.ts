@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { billingPageReducer, createInitialBillingPageState } from '@/lib/billing/page-state';
+import type { BillingPageState } from '@/lib/billing/page-state';
 
 describe('createInitialBillingPageState', () => {
   it('starts loading', () => {
@@ -42,5 +43,55 @@ describe('billingPageReducer', () => {
   it('moves to bootstrapFailed on BOOTSTRAP_FAILED', () => {
     const next = billingPageReducer({ status: 'loading' }, { type: 'BOOTSTRAP_FAILED' });
     expect(next).toEqual({ status: 'bootstrapFailed' });
+  });
+
+  // Sign-in sub-flow, mirroring lib/recap/page-state.ts so the same
+  // <SignInPrompt> component drives it.
+  it('moves to needsSignIn when the bootstrap request comes back unauthorized', () => {
+    expect(billingPageReducer({ status: 'loading' }, { type: 'BOOTSTRAP_UNAUTHORIZED' })).toEqual({
+      status: 'needsSignIn',
+      email: '',
+      notice: null,
+    });
+  });
+
+  it('updates the email and moves to submittingMagicLink on SUBMIT_EMAIL with a valid address', () => {
+    const typed = billingPageReducer(
+      { status: 'needsSignIn', email: '', notice: null },
+      { type: 'EMAIL_CHANGED', email: 'creator@example.com' }
+    );
+    expect(typed).toEqual({ status: 'needsSignIn', email: 'creator@example.com', notice: null });
+    expect(billingPageReducer(typed, { type: 'SUBMIT_EMAIL' })).toEqual({
+      status: 'submittingMagicLink',
+      email: 'creator@example.com',
+    });
+  });
+
+  it('ignores SUBMIT_EMAIL with an invalid address', () => {
+    const state: BillingPageState = { status: 'needsSignIn', email: 'nope', notice: null };
+    expect(billingPageReducer(state, { type: 'SUBMIT_EMAIL' })).toBe(state);
+  });
+
+  it('moves to checkEmail on MAGIC_LINK_SENT and back to submitting on RESEND_EMAIL', () => {
+    const sent = billingPageReducer(
+      { status: 'submittingMagicLink', email: 'creator@example.com' },
+      { type: 'MAGIC_LINK_SENT' }
+    );
+    expect(sent).toEqual({ status: 'checkEmail', email: 'creator@example.com' });
+    expect(billingPageReducer(sent, { type: 'RESEND_EMAIL' })).toEqual({
+      status: 'submittingMagicLink',
+      email: 'creator@example.com',
+    });
+    expect(billingPageReducer(sent, { type: 'RETRY_EMAIL' })).toEqual({
+      status: 'needsSignIn',
+      email: 'creator@example.com',
+      notice: null,
+    });
+  });
+
+  it('keeps the email on MAGIC_LINK_FAILED so it can be retried', () => {
+    expect(
+      billingPageReducer({ status: 'submittingMagicLink', email: 'creator@example.com' }, { type: 'MAGIC_LINK_FAILED', error: 'boom' })
+    ).toEqual({ status: 'magicLinkError', email: 'creator@example.com', error: 'boom' });
   });
 });

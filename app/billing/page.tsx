@@ -3,6 +3,7 @@
 import { useEffect, useReducer, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppNav } from '@/components/AppNav';
+import { SignInPrompt } from '@/components/SignInPrompt';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { billingPageReducer, createInitialBillingPageState } from '@/lib/billing/page-state';
 import type { BillingStatusData } from '@/lib/billing/page-state';
@@ -40,7 +41,7 @@ export default function BillingPage() {
           const data = await fetchStatus();
           if (cancelled) return;
           if (data === 'unauthorized') {
-            router.replace('/');
+            dispatch({ type: 'BOOTSTRAP_UNAUTHORIZED' });
             return;
           }
           if (data === null) {
@@ -64,7 +65,7 @@ export default function BillingPage() {
       const data = await fetchStatus();
       if (cancelled) return;
       if (data === 'unauthorized') {
-        router.replace('/');
+        dispatch({ type: 'BOOTSTRAP_UNAUTHORIZED' });
         return;
       }
       if (data === null) {
@@ -81,6 +82,24 @@ export default function BillingPage() {
       cancelled = true;
     };
   }, [router]);
+
+  async function submitMagicLink(email: string) {
+    try {
+      const response = await fetch('/api/auth/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, redirectPath: '/billing' }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        dispatch({ type: 'MAGIC_LINK_FAILED', error: data.error ?? 'Something went wrong. Please try again.' });
+        return;
+      }
+      dispatch({ type: 'MAGIC_LINK_SENT' });
+    } catch {
+      dispatch({ type: 'MAGIC_LINK_FAILED', error: "We couldn't reach the server. Check your connection and try again." });
+    }
+  }
 
   async function managePlan() {
     setManagingPlan(true);
@@ -109,6 +128,36 @@ export default function BillingPage() {
           <p>{state.status === 'polling' ? 'Finishing up…' : 'Loading…'}</p>
         </main>
       </>
+    );
+  }
+
+  if (
+    state.status === 'needsSignIn' ||
+    state.status === 'submittingMagicLink' ||
+    state.status === 'checkEmail' ||
+    state.status === 'magicLinkError'
+  ) {
+    return (
+      <main className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
+        <h1 className="text-2xl font-bold text-gray-900">Billing</h1>
+        <SignInPrompt
+          state={state}
+          introCopy="Sign in with a one-time email link to manage your plan."
+          returnCopy="Click it to continue and we'll bring you right back here."
+          onEmailChange={(email) => dispatch({ type: 'EMAIL_CHANGED', email })}
+          onSubmitEmail={() => {
+            const { email } = state;
+            dispatch({ type: 'SUBMIT_EMAIL' });
+            void submitMagicLink(email);
+          }}
+          onResend={() => {
+            const { email } = state;
+            dispatch({ type: 'RESEND_EMAIL' });
+            void submitMagicLink(email);
+          }}
+          onRetryEmail={() => dispatch({ type: 'RETRY_EMAIL' })}
+        />
+      </main>
     );
   }
 
