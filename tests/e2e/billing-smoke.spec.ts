@@ -50,3 +50,15 @@ test('a subscribed visitor on /billing sees their renewal date and can open the 
   await page.getByRole('button', { name: /manage plan/i }).click();
   await page.waitForURL('https://billing.stripe.com/session/xyz');
 });
+
+test('a signed-out visitor on /billing sees a sign-in prompt, not a silent redirect', async ({ page }) => {
+  await page.route('**/api/billing/status', (route) =>
+    route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'You must be signed in.' }) })
+  );
+
+  await page.goto('/billing');
+
+  await expect(page).toHaveURL(/\/billing$/);
+  await expect(page.getByLabel(/email/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: /send sign-in link/i })).toBeVisible();
+});
