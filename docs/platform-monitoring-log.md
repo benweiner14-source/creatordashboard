@@ -28,6 +28,24 @@ signal, not a run log.
 
 ## Entries
 
+## 2026-09-01
+
+**What changed:** Instagram Reels up to 3 minutes (180s) are now confirmed eligible for Explore-page / non-follower algorithmic distribution — wider than the shorter cap in effect when this app's Instagram duration ranges were originally calibrated (see the 2026-08-13 entry and the original benchmark doc). Several independent creator-marketing sources describe this consistently: content beyond 3 minutes still doesn't reach non-followers via discovery, but everything up to 3 minutes now competes on equal footing, with completion rate remaining the deciding factor for how far any given Reel actually travels. One source additionally claims Instagram now allows Reels up to 20 minutes for "eligible accounts," with materially reduced distribution beyond the 3-minute mark — treated here as an unconfirmed edge case, not a scoring input.
+
+Also surfaced this cycle but judged not independently actionable: TikTok's US feed is reportedly now served by an Oracle-retrained, US-only ranking model (a data-localization/infrastructure change tied to the TikTok divestiture, not a scoring-relevant behavior change); and conflicting claims about whether YouTube Shorts ranks primarily on swipe-through rate vs. watch-time-per-impression (sources disagree with each other and with the swipe/loop/first-second-engagement framing already logged on 2026-08-13) — too unconfirmed and contradictory to act on this cycle.
+
+**Source(s):**
+- https://www.socialnewsdesk.com/blog/instagram-now-recommends-longer-reels-in-explore-what-creators-need-to-know/
+- https://www.tryordinal.com/blog/how-long-can-an-instagram-reel-be
+- https://www.socialcal.app/blog/instagram-video-length-limits-2026
+- https://www.highstyle.ai/insights/instagram-reels-algorithm-2026
+
+Caveat: none of these are Instagram-official sources — no About/Instagram-blog corroboration turned up this cycle, unlike the "sends-per-reach" claim logged on 2026-08-13, which did have one. Third-party creator-marketing blogs only; treat as directional, not confirmed.
+
+**Affects scoring?** Yes — `lib/diagnostic/format-fit.ts`'s Instagram ideal range (`{ minSeconds: 15, maxSeconds: 90 }`) caps out well below the ~180s Explore-eligibility ceiling described above. A Reel in the 90–180s range would currently be scored as "too long" by this app even though it's reportedly now fully eligible for algorithmic distribution to non-followers. `lib/diagnostic/retention-risk.ts`'s Instagram ideal duration (20s) is unaffected — that number is about per-video completion-rate optimization, not distribution eligibility, and nothing found this cycle contradicts "shorter completes better."
+
+**Recommendation:** Worth a small, scoped fix rather than a full brainstorming session — a single-file range change with a clear source basis, similar in shape to the 2026-08-13 YouTube Shorts fix. Widen `format-fit.ts`'s Instagram `maxSeconds` from 90 to somewhere in the 150–180s range (leave `minSeconds` at 15), citing this entry in a code comment. Given the "completion rate still decides" caveat above, keep this to a range widening only — don't touch `retention-risk.ts`'s 20s ideal, which answers a different question (retention optimality, not eligibility). Not urgent/blocking.
+
 ## 2026-08-13
 
 **What changed:** Three related shifts turned up across all three platforms this cycle:
