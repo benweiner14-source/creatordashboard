@@ -83,9 +83,6 @@ describe('strategyPageReducer', () => {
 
     state = strategyPageReducer(state, { type: 'MAGIC_LINK_FAILED', error: 'nope' });
     expect(state).toEqual({ status: 'magicLinkError', email: 'a@b.com', error: 'nope' });
-
-    state = strategyPageReducer(state, { type: 'RETRY_EMAIL' });
-    expect(state).toEqual({ status: 'needsSignIn', email: 'a@b.com', notice: null });
   });
 
   it('ignores an invalid email on SUBMIT_EMAIL', () => {

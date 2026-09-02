@@ -84,9 +84,7 @@ export function strategyPageReducer(state: StrategyPageState, event: StrategyPag
       return state.status === 'checkEmail' ? { status: 'submittingMagicLink', email: state.email } : state;
 
     case 'RETRY_EMAIL':
-      return state.status === 'checkEmail' || state.status === 'magicLinkError'
-        ? { status: 'needsSignIn', email: state.email, notice: null }
-        : state;
+      return state.status === 'checkEmail' ? { status: 'needsSignIn', email: state.email, notice: null } : state;
 
     default:
       return state;
