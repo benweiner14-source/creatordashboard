@@ -1,3 +1,5 @@
+import { requestClaudeJson } from './claude-shared';
+
 export interface ReportScoreSummary {
   value: number;
   label: string;
@@ -39,37 +41,13 @@ Respond with a short headline (max 12 words) and a 3-5 sentence explanation.`;
 export function createClaudeReportClient(apiKey: string, model = 'claude-sonnet-4-5'): ClaudeReportClient {
   return {
     async generateDiagnosticReport(input: ReportGenerationInput): Promise<GeneratedReport> {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 512,
-          system: DIAGNOSTIC_SYSTEM_PROMPT,
-          messages: [
-            {
-              role: 'user',
-              content: `Platform: ${input.platform}\nPost summary: ${input.postSummary}\nHook strength: ${input.scores.hookStrength.value} (${input.scores.hookStrength.label})\nRetention risk: ${input.scores.retentionRisk.value} (${input.scores.retentionRisk.label})\nTiming: ${input.scores.timing.value} (${input.scores.timing.label})\nFormat fit: ${input.scores.formatFit.value} (${input.scores.formatFit.label})\n\nRespond as JSON: {"headline": string, "explanation": string}`,
-            },
-          ],
-        }),
+      const parsed = await requestClaudeJson<{ headline?: string; explanation?: string }>({
+        apiKey,
+        model,
+        maxTokens: 512,
+        system: DIAGNOSTIC_SYSTEM_PROMPT,
+        userContent: `Platform: ${input.platform}\nPost summary: ${input.postSummary}\nHook strength: ${input.scores.hookStrength.value} (${input.scores.hookStrength.label})\nRetention risk: ${input.scores.retentionRisk.value} (${input.scores.retentionRisk.label})\nTiming: ${input.scores.timing.value} (${input.scores.timing.label})\nFormat fit: ${input.scores.formatFit.value} (${input.scores.formatFit.label})\n\nRespond as JSON: {"headline": string, "explanation": string}`,
       });
-      if (!response.ok) {
-        throw new Error(`Claude API request failed with status ${response.status}`);
-      }
-      const data = await response.json();
-      const text = data.content?.[0]?.text ?? '{}';
-      let parsed: { headline?: string; explanation?: string };
-      try {
-        const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
-        parsed = JSON.parse(cleaned);
-      } catch {
-        throw new Error('Claude API returned a response that could not be parsed as JSON.');
-      }
       return {
         headline: parsed.headline ?? 'Your diagnostic report',
         explanation: parsed.explanation ?? '',
