@@ -12,7 +12,10 @@ export function computeCadence(posts: ChannelPost[]): CadenceSummary {
   const timestamps = posts.map((p) => new Date(p.publishedAt).getTime()).filter((t) => !Number.isNaN(t));
   const spanMs = timestamps.length > 0 ? Math.max(...timestamps) - Math.min(...timestamps) : 0;
   const spanDays = spanMs / MS_PER_DAY;
-  const postsPerWeek = spanDays >= 1 ? (posts.length / spanDays) * 7 : posts.length;
+  // Numerator and denominator must describe the same posts: a post whose
+  // publishedAt didn't parse contributes nothing to the span, so counting it
+  // in the rate would overstate cadence on dirty scraper data.
+  const postsPerWeek = spanDays >= 1 ? (timestamps.length / spanDays) * 7 : timestamps.length;
 
   const dayCounts = new Map<number, number>();
   for (const post of posts) {
@@ -45,12 +48,44 @@ export function computeCadence(posts: ChannelPost[]): CadenceSummary {
   };
 }
 
+/**
+ * Rounds counts to whole percentages that always sum to 100, handing the
+ * leftover point(s) to the buckets with the largest fractional remainder.
+ * Rounding each bucket independently can produce 99 or 101, which reads as a
+ * bug on a page that presents them as a mix of the whole.
+ */
+function percentagesSummingTo100(counts: number[], total: number): number[] {
+  const exact = counts.map((count) => (count / total) * 100);
+  const percentages = exact.map((value) => Math.floor(value));
+  let leftover = 100 - percentages.reduce((sum, value) => sum + value, 0);
+  const byRemainder = exact
+    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+    .sort((a, b) => b.remainder - a.remainder);
+  for (const { index } of byRemainder) {
+    if (leftover <= 0) break;
+    percentages[index] += 1;
+    leftover -= 1;
+  }
+  return percentages;
+}
+
 export function computeFormatMix(posts: ChannelPost[]): FormatMixSummary {
-  if (posts.length === 0) {
-    return { averageDurationSeconds: 0, shortPct: 0, mediumPct: 0, longPct: 0 };
+  // Posts with no duration are excluded from the buckets and the average
+  // rather than treated as 0-second shorts: Apify's Instagram scraper only
+  // reports duration for videos, so counting photos/carousels as 0s would
+  // fabricate short-form videos and skew every number here -- numbers Claude
+  // then narrates to the creator as fact. The percentages describe only the
+  // posts we could actually measure; postsWithUnknownDuration says how many
+  // were left out.
+  const durations = posts
+    .map((post) => post.durationSeconds)
+    .filter((duration): duration is number => typeof duration === 'number' && !Number.isNaN(duration));
+  const postsWithUnknownDuration = posts.length - durations.length;
+
+  if (durations.length === 0) {
+    return { averageDurationSeconds: 0, shortPct: 0, mediumPct: 0, longPct: 0, postsWithUnknownDuration };
   }
 
-  const durations = posts.map((p) => p.durationSeconds);
   const averageDurationSeconds = Math.round(durations.reduce((sum, d) => sum + d, 0) / durations.length);
 
   let shortCount = 0;
@@ -62,12 +97,12 @@ export function computeFormatMix(posts: ChannelPost[]): FormatMixSummary {
     else longCount++;
   }
 
-  return {
-    averageDurationSeconds,
-    shortPct: Math.round((shortCount / posts.length) * 100),
-    mediumPct: Math.round((mediumCount / posts.length) * 100),
-    longPct: Math.round((longCount / posts.length) * 100),
-  };
+  const [shortPct, mediumPct, longPct] = percentagesSummingTo100(
+    [shortCount, mediumCount, longCount],
+    durations.length
+  );
+
+  return { averageDurationSeconds, shortPct, mediumPct, longPct, postsWithUnknownDuration };
 }
 
 export function computeAverageEngagementRate(

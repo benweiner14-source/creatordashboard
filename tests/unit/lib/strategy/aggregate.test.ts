@@ -54,11 +54,38 @@ describe('computeCadence', () => {
     const posts = [makePost({ publishedAt: '2026-08-12T10:00:00Z' }), makePost({ publishedAt: '2026-08-11T10:00:00Z' })];
     expect(computeCadence(posts).mostCommonDayOfWeek).toBe('Wednesday');
   });
+
+  it('excludes posts with an unparseable publishedAt from postsPerWeek', () => {
+    // 3 parseable posts spanning 14 days -> 1.5/week. The two junk timestamps
+    // contribute nothing to the span, so they must not inflate the numerator.
+    const posts = [
+      makePost({ publishedAt: '2026-08-15T00:00:00Z' }),
+      makePost({ publishedAt: 'not a date' }),
+      makePost({ publishedAt: '2026-08-08T00:00:00Z' }),
+      makePost({ publishedAt: '' }),
+      makePost({ publishedAt: '2026-08-01T00:00:00Z' }),
+    ];
+    const result = computeCadence(posts);
+    expect(result.spanDays).toBe(14);
+    expect(result.postsPerWeek).toBe(1.5);
+    expect(result.postCount).toBe(5);
+  });
+
+  it('excludes unparseable timestamps from the under-a-day postsPerWeek fallback too', () => {
+    const posts = [makePost({ publishedAt: '2026-08-11T10:00:00Z' }), makePost({ publishedAt: 'not a date' })];
+    expect(computeCadence(posts).postsPerWeek).toBe(1);
+  });
 });
 
 describe('computeFormatMix', () => {
   it('returns all zeros for an empty post list', () => {
-    expect(computeFormatMix([])).toEqual({ averageDurationSeconds: 0, shortPct: 0, mediumPct: 0, longPct: 0 });
+    expect(computeFormatMix([])).toEqual({
+      averageDurationSeconds: 0,
+      shortPct: 0,
+      mediumPct: 0,
+      longPct: 0,
+      postsWithUnknownDuration: 0,
+    });
   });
 
   it('buckets posts into short/medium/long and computes the average duration', () => {
@@ -68,6 +95,7 @@ describe('computeFormatMix', () => {
     expect(result.shortPct).toBe(40);
     expect(result.mediumPct).toBe(20);
     expect(result.longPct).toBe(40);
+    expect(result.postsWithUnknownDuration).toBe(0);
   });
 
   it('treats exactly 60s as short and exactly 240s as medium (inclusive boundaries)', () => {
@@ -76,6 +104,52 @@ describe('computeFormatMix', () => {
     expect(result.shortPct).toBe(50);
     expect(result.mediumPct).toBe(50);
     expect(result.longPct).toBe(0);
+  });
+
+  it('excludes posts with an unknown duration from the buckets and the average', () => {
+    // Instagram photos/carousels come back from the scraper with no duration.
+    const posts = [
+      makePost({ durationSeconds: 30 }),
+      makePost({ durationSeconds: undefined }),
+      makePost({ durationSeconds: undefined }),
+      makePost({ durationSeconds: 300 }),
+    ];
+    const result = computeFormatMix(posts);
+    // Average and percentages are computed against the 2 known durations only.
+    expect(result.averageDurationSeconds).toBe(165);
+    expect(result.shortPct).toBe(50);
+    expect(result.mediumPct).toBe(0);
+    expect(result.longPct).toBe(50);
+    expect(result.postsWithUnknownDuration).toBe(2);
+  });
+
+  it('returns zero percentages when no post has a known duration', () => {
+    const posts = [makePost({ durationSeconds: undefined }), makePost({ durationSeconds: undefined })];
+    expect(computeFormatMix(posts)).toEqual({
+      averageDurationSeconds: 0,
+      shortPct: 0,
+      mediumPct: 0,
+      longPct: 0,
+      postsWithUnknownDuration: 2,
+    });
+  });
+
+  it('adjusts the largest rounding remainder so the three percentages sum to 100', () => {
+    // 1 short / 1 medium / 1 long -> 33.33% each; naive rounding gives 99.
+    const thirds = computeFormatMix([
+      makePost({ durationSeconds: 30 }),
+      makePost({ durationSeconds: 120 }),
+      makePost({ durationSeconds: 600 }),
+    ]);
+    expect(thirds.shortPct + thirds.mediumPct + thirds.longPct).toBe(100);
+
+    // 2 short / 2 medium / 2 long out of 7 (plus 1 more short) -> 42.9/28.6/28.6.
+    const sevenths = computeFormatMix([
+      ...[30, 30, 30].map((durationSeconds) => makePost({ durationSeconds })),
+      ...[120, 120].map((durationSeconds) => makePost({ durationSeconds })),
+      ...[600, 600].map((durationSeconds) => makePost({ durationSeconds })),
+    ]);
+    expect(sevenths.shortPct + sevenths.mediumPct + sevenths.longPct).toBe(100);
   });
 });
 

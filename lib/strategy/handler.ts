@@ -1,5 +1,5 @@
 import { checkAndRecordRateLimit, releaseRateLimitEventIfNeeded, hashIp, type RateLimitStore } from '@/lib/rate-limit';
-import type { YouTubeClient } from '@/lib/integrations/youtube';
+import { ChannelNotFoundError, type YouTubeClient } from '@/lib/integrations/youtube';
 import type { ScraperClient } from '@/lib/integrations/scraper';
 import type { StrategyBreakdownClient } from '@/lib/integrations/claude-strategy';
 import { detectHandlePlatform, normalizeHandle } from '@/lib/recap/handles';
@@ -103,7 +103,10 @@ export async function handleStrategyBreakdownRequest(
       channelPosts = posts.map((p) => ({
         captionOrTitle: p.caption,
         publishedAt: p.publishedAt,
-        durationSeconds: p.durationSeconds ?? 0,
+        // Left undefined when the scraper reported none (Instagram photos and
+        // carousels) -- see ChannelPost.durationSeconds; a 0 here would be
+        // bucketed as a short-form video that doesn't exist.
+        durationSeconds: p.durationSeconds,
         viewCount: p.viewCount,
         likeCount: p.likeCount,
         commentCount: p.commentCount,
@@ -150,6 +153,14 @@ export async function handleStrategyBreakdownRequest(
 
     return { status: 200, body: { id: saved.id } };
   } catch (err) {
+    if (err instanceof ChannelNotFoundError) {
+      // The handle is well-formed but no such channel exists. That's a real
+      // attempt that cost us a live API call and legitimately found nothing --
+      // same non-releasing treatment as the zero-posts 422 above. Releasing
+      // here would let a subscriber loop nonexistent channel URLs against the
+      // YouTube API at zero rate-limit cost.
+      return { status: 404, body: { error: "We couldn't find that channel — check the link and try again." } };
+    }
     await releaseRateLimitEventIfNeeded({ store: deps.rateLimitStore, eventId: rateLimitResult.eventId });
     throw err;
   }

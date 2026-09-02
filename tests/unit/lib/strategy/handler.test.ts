@@ -4,8 +4,18 @@ import { createInMemoryRateLimitStore } from '../../../fakes/rate-limit-store.fa
 import { createFakeYouTubeClient } from '../../../fakes/youtube.fake';
 import { createFakeScraperClient } from '../../../fakes/scraper.fake';
 import { createFakeStrategyClient } from '../../../fakes/claude-strategy.fake';
-import type { VideoMetadata } from '@/lib/integrations/youtube';
+import { ChannelNotFoundError, type VideoMetadata, type YouTubeClient } from '@/lib/integrations/youtube';
 import type { ProfilePost } from '@/lib/integrations/scraper';
+import type { FormatMixSummary } from '@/lib/strategy/types';
+
+function createNotFoundYouTubeClient(): YouTubeClient {
+  return {
+    ...createFakeYouTubeClient(),
+    getChannelUploads: async (handle: string) => {
+      throw new ChannelNotFoundError(handle);
+    },
+  };
+}
 
 function makeDeps(overrides: Partial<Parameters<typeof handleStrategyBreakdownRequest>[0]> = {}) {
   return {
@@ -97,24 +107,114 @@ describe('handleStrategyBreakdownRequest', () => {
     expect(result.status).toBe(200);
   });
 
-  it('defaults a TikTok/Instagram post missing durationSeconds to 0 rather than failing', async () => {
+  it('keeps a TikTok/Instagram post missing durationSeconds unknown instead of counting it as a 0-second short', async () => {
     const posts: ProfilePost[] = [
       {
         platform: 'instagram',
         id: 'ig1',
-        caption: 'Post',
+        caption: 'Photo post',
         publishedAt: '2026-08-11T10:00:00Z',
         viewCount: 1000,
         likeCount: 100,
         commentCount: 10,
         permalink: 'https://instagram.com/p/ig1',
       },
+      {
+        platform: 'instagram',
+        id: 'ig2',
+        caption: 'Reel',
+        publishedAt: '2026-08-10T10:00:00Z',
+        durationSeconds: 30,
+        viewCount: 2000,
+        likeCount: 200,
+        commentCount: 20,
+        permalink: 'https://instagram.com/p/ig2',
+      },
     ];
-    const deps = makeDeps({ scraperClient: createFakeScraperClient({}, posts) });
+    let savedFormatMix: FormatMixSummary | undefined;
+    const deps = makeDeps({
+      scraperClient: createFakeScraperClient({}, posts),
+      saveStrategyBreakdown: async (params) => {
+        savedFormatMix = params.formatMix;
+        return { id: 'strategy-1' };
+      },
+    });
     const result = await handleStrategyBreakdownRequest(deps, {
       profileId: 'p1',
       ip: '203.0.113.1',
       url: 'https://www.instagram.com/creator/',
+    });
+    expect(result.status).toBe(200);
+    // Only the one post with a known duration is bucketed; the photo post is
+    // excluded rather than fabricated as a 0-second short-form video.
+    expect(savedFormatMix).toEqual({
+      averageDurationSeconds: 30,
+      shortPct: 100,
+      mediumPct: 0,
+      longPct: 0,
+      postsWithUnknownDuration: 1,
+    });
+  });
+
+  it('returns a friendly 404 without releasing the rate-limit slot when the YouTube channel does not exist', async () => {
+    const deps = makeDeps({ youtubeClient: createNotFoundYouTubeClient() });
+    let result;
+    for (let i = 0; i < STRATEGY_GENERATION_PROFILE_LIMIT; i++) {
+      result = await handleStrategyBreakdownRequest(deps, {
+        profileId: 'p1',
+        ip: '203.0.113.1',
+        url: 'https://www.youtube.com/@nobody',
+      });
+      expect(result.status).toBe(404);
+      expect(result.body.error).toContain("couldn't find that channel");
+    }
+    // The slot was never refunded, so the sixth attempt is rate-limited --
+    // a nonexistent-channel loop can't hammer the YouTube API for free.
+    result = await handleStrategyBreakdownRequest(deps, {
+      profileId: 'p1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/@nobody',
+    });
+    expect(result.status).toBe(429);
+  });
+
+  it('releases the rate-limit slot when a genuine internal failure occurs', async () => {
+    let failing = true;
+    const deps = makeDeps({
+      youtubeClient: createFakeYouTubeClient({}, [
+        {
+          id: 'v1',
+          title: 'Video 1',
+          description: '',
+          publishedAt: '2026-08-11T10:00:00Z',
+          durationSeconds: 500,
+          viewCount: 1000,
+          likeCount: 100,
+          commentCount: 10,
+          tags: [],
+        },
+      ]),
+      saveStrategyBreakdown: async () => {
+        if (failing) throw new Error('database is down');
+        return { id: 'strategy-1' };
+      },
+    });
+
+    for (let i = 0; i < STRATEGY_GENERATION_PROFILE_LIMIT; i++) {
+      await expect(
+        handleStrategyBreakdownRequest(deps, {
+          profileId: 'p1',
+          ip: '203.0.113.1',
+          url: 'https://www.youtube.com/@creator',
+        })
+      ).rejects.toThrow('database is down');
+    }
+
+    failing = false;
+    const result = await handleStrategyBreakdownRequest(deps, {
+      profileId: 'p1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/@creator',
     });
     expect(result.status).toBe(200);
   });
