@@ -34,6 +34,22 @@ describe('scoreFormatFit', () => {
     expect(result.score).toBe(80);
   });
 
+  it('scores a 150-second Instagram Reel as strong, reflecting the wider Explore-eligibility ceiling', () => {
+    const result = scoreFormatFit({ platform: 'instagram', durationSeconds: 150 });
+    // Under the pre-fix 15-90s range, 150s is 60s over the ceiling and
+    // would score well below 100. Per docs/platform-monitoring-log.md's
+    // 2026-09-01 entry, Reels up to 3 minutes (180s) are now eligible for
+    // Explore/non-follower distribution, so 150s should fit squarely.
+    expect(result.score).toBe(100);
+    expect(result.label).toBe('strong');
+  });
+
+  it('scores a 240-second Instagram Reel as worse than 150s, since 3 minutes is still the eligibility ceiling', () => {
+    const at150 = scoreFormatFit({ platform: 'instagram', durationSeconds: 150 });
+    const at240 = scoreFormatFit({ platform: 'instagram', durationSeconds: 240 });
+    expect(at240.score).toBeLessThan(at150.score);
+  });
+
   it('uses Shorts-specific reasoning at 180s and long-form reasoning at 181s (boundary)', () => {
     const atBoundary = scoreFormatFit({ platform: 'youtube', durationSeconds: 180 });
     const justOverBoundary = scoreFormatFit({ platform: 'youtube', durationSeconds: 181 });

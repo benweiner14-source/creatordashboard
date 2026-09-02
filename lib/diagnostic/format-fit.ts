@@ -16,9 +16,16 @@ interface DurationRange {
 // floor is sourced) and a 90s ceiling giving headroom past the 30-60s
 // core before the falloff kicks in. See
 // docs/superpowers/specs/2026-08-13-diagnostic-benchmark-sources.md.
+//
+// Instagram's ceiling was widened from 90s to 180s on 2026-09-01: Reels up
+// to 3 minutes are now reportedly eligible for Explore/non-follower
+// algorithmic distribution, not just the shorter window this range was
+// originally set against. See docs/platform-monitoring-log.md's 2026-09-01
+// entry — third-party-sourced, not platform-official, so treat as
+// directional. The 15s floor is unchanged.
 const IDEAL_RANGES: Record<FormatFitInput['platform'], DurationRange> = {
   tiktok: { minSeconds: 15, maxSeconds: 60 },
-  instagram: { minSeconds: 15, maxSeconds: 90 },
+  instagram: { minSeconds: 15, maxSeconds: 180 },
   youtube: { minSeconds: 240, maxSeconds: 900 },
 };
 const YOUTUBE_SHORTS_IDEAL_RANGE: DurationRange = { minSeconds: 15, maxSeconds: 90 };
