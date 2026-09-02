@@ -10,7 +10,14 @@ interface StrategyBreakdownData {
   channel_handle: string;
   post_count: number;
   cadence: { postCount: number; spanDays: number; postsPerWeek: number; mostCommonDayOfWeek: string | null };
-  format_mix: { averageDurationSeconds: number; shortPct: number; mediumPct: number; longPct: number };
+  format_mix: {
+    averageDurationSeconds: number;
+    shortPct: number;
+    mediumPct: number;
+    longPct: number;
+    // Optional: breakdowns saved before this field existed don't carry it.
+    postsWithUnknownDuration?: number;
+  };
   top_posts: Array<{ captionOrTitle: string; viewCount: number }>;
   headline: string;
   explanation: string;
@@ -23,7 +30,7 @@ export default function StrategyBreakdownPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/strategy/${params.id}`)
+    fetch(`/api/strategy/${encodeURIComponent(params.id)}`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
@@ -72,7 +79,7 @@ export default function StrategyBreakdownPage() {
           {breakdown.platform} · @{breakdown.channel_handle} · {breakdown.post_count} posts analyzed
         </p>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
           <div className="rounded-lg border border-gray-200 p-3">
             <p className="text-xs text-gray-500">Posts per week</p>
             <p className="text-lg font-semibold text-gray-900">{breakdown.cadence.postsPerWeek}</p>
@@ -86,10 +93,24 @@ export default function StrategyBreakdownPage() {
             <p className="text-lg font-semibold text-gray-900">{breakdown.format_mix.shortPct}%</p>
           </div>
           <div className="rounded-lg border border-gray-200 p-3">
+            <p className="text-xs text-gray-500">Medium-form (60-240s)</p>
+            <p className="text-lg font-semibold text-gray-900">{breakdown.format_mix.mediumPct}%</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 p-3">
             <p className="text-xs text-gray-500">Long-form (&gt;240s)</p>
             <p className="text-lg font-semibold text-gray-900">{breakdown.format_mix.longPct}%</p>
           </div>
         </div>
+
+        {/* The length mix can only cover posts that actually have a duration
+            (photos and carousels don't), so say so rather than letting the
+            percentages read as the whole channel. */}
+        {(breakdown.format_mix.postsWithUnknownDuration ?? 0) > 0 && (
+          <p className="text-xs text-gray-500">
+            Length mix covers the {breakdown.post_count - (breakdown.format_mix.postsWithUnknownDuration ?? 0)} of{' '}
+            {breakdown.post_count} posts with a video length — photos and carousels don&apos;t have one.
+          </p>
+        )}
 
         <div className="text-base leading-relaxed text-gray-800">
           <GlossaryText text={breakdown.explanation} />

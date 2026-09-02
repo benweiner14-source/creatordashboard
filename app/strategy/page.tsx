@@ -190,6 +190,15 @@ export default function StrategyPage() {
             )}
           </form>
         )}
+
+        {/* The router push is in flight; without this the page would sit on a
+            bare heading with no sign anything is happening. Plain text rather
+            than <Spinner>, whose ring is white-on-white outside a button. */}
+        {state.status === 'redirecting' && (
+          <p role="status" className="text-gray-600">
+            Taking you to your breakdown…
+          </p>
+        )}
       </main>
     </>
   );
