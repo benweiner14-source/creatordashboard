@@ -129,4 +129,14 @@ describe('supabase migrations', () => {
     expect(sql).toContain("status text not null check (status in ('active', 'past_due', 'canceled', 'incomplete'))");
     expect(sql).toContain('"Subscriptions are viewable by owner"');
   });
+
+  it('includes a strategy_breakdowns table migration owned by profile', () => {
+    const sql = readMigrationContaining('create_strategy_breakdowns');
+    expect(sql).toContain('create table public.strategy_breakdowns');
+    expect(sql).toContain('platform public.diagnostic_platform not null');
+    expect(sql).toContain('references public.profiles(id)');
+    expect(sql).toContain('top_posts jsonb not null');
+    expect(sql).toContain('"Strategy breakdowns are viewable by owner"');
+    expect(sql).toContain('"Strategy breakdowns are insertable by owner"');
+  });
 });

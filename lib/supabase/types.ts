@@ -163,6 +163,38 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['subscriptions']['Insert']>;
         Relationships: [];
       };
+      strategy_breakdowns: {
+        Row: {
+          id: string;
+          profile_id: string;
+          platform: 'youtube' | 'tiktok' | 'instagram';
+          channel_handle: string;
+          channel_url: string;
+          post_count: number;
+          cadence: unknown;
+          format_mix: unknown;
+          top_posts: unknown;
+          headline: string;
+          explanation: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          platform: 'youtube' | 'tiktok' | 'instagram';
+          channel_handle: string;
+          channel_url: string;
+          post_count: number;
+          cadence: unknown;
+          format_mix: unknown;
+          top_posts: unknown;
+          headline: string;
+          explanation: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['strategy_breakdowns']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
