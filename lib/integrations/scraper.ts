@@ -23,6 +23,7 @@ export interface ProfilePost {
   viewCount: number;
   likeCount: number;
   commentCount: number;
+  durationSeconds?: number;
   permalink: string;
 }
 
@@ -85,6 +86,9 @@ function normalizeProfilePost(platform: 'tiktok' | 'instagram', item: Record<str
     viewCount: Number(item.playCount ?? item.videoViewCount ?? item.viewCount ?? 0),
     likeCount: Number(item.diggCount ?? item.likesCount ?? item.likeCount ?? 0),
     commentCount: Number(item.commentCount ?? 0),
+    durationSeconds: item.videoDuration !== undefined || item.duration !== undefined
+      ? Number(item.videoDuration ?? item.duration ?? 0)
+      : undefined,
     permalink: String(item.webVideoUrl ?? item.url ?? item.permalink ?? ''),
   };
 }

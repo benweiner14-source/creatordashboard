@@ -132,6 +132,7 @@ describe('createApifyScraperClient', () => {
           viewCount: 1000,
           likeCount: 50,
           commentCount: 5,
+          durationSeconds: undefined,
           permalink: 'https://www.tiktok.com/@creator/video/111',
         },
       ]);
@@ -139,6 +140,35 @@ describe('createApifyScraperClient', () => {
       expect(String(fetchMock.mock.calls[0][0])).toContain('/acts/clockworks~tiktok-scraper/runs');
       expect(String(fetchMock.mock.calls[1][0])).toContain('/actor-runs/run-1');
       expect(String(fetchMock.mock.calls[3][0])).toContain('/datasets/dataset-1/items');
+    });
+
+    it('includes durationSeconds when the Apify item has a videoDuration field', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { id: 'run-1', defaultDatasetId: 'dataset-1' } }) })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { status: 'SUCCEEDED' } }) })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              id: '222',
+              text: 'Post two',
+              createTimeISO: '2026-08-03T10:00:00Z',
+              videoDuration: 45,
+              playCount: 2000,
+              diggCount: 90,
+              commentCount: 8,
+              webVideoUrl: 'https://www.tiktok.com/@creator/video/222',
+            },
+          ],
+        });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createApifyScraperClient('test-token', { sleep: async () => {} });
+      const posts = await client.fetchProfilePosts('tiktok', 'creator');
+
+      expect(posts[0].durationSeconds).toBe(45);
     });
 
     it('retries once after a failed run and succeeds on the second attempt', async () => {
