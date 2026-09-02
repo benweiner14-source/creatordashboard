@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { normalizeHandle, saveRecapHandles } from '@/lib/recap/handles';
+import { normalizeHandle, saveRecapHandles, detectHandlePlatform } from '@/lib/recap/handles';
 
 describe('normalizeHandle', () => {
   it('accepts a bare handle with or without a leading @', () => {
@@ -81,5 +81,31 @@ describe('saveRecapHandles', () => {
     );
     expect(result.status).toBe(400);
     expect(updateProfileHandles).not.toHaveBeenCalled();
+  });
+});
+
+describe('detectHandlePlatform', () => {
+  it('detects the platform from a YouTube URL', () => {
+    expect(detectHandlePlatform('https://www.youtube.com/@creator')).toBe('youtube');
+  });
+
+  it('detects the platform from a TikTok URL', () => {
+    expect(detectHandlePlatform('https://www.tiktok.com/@creator')).toBe('tiktok');
+  });
+
+  it('detects the platform from an Instagram URL', () => {
+    expect(detectHandlePlatform('https://www.instagram.com/creator/')).toBe('instagram');
+  });
+
+  it('returns null for an unrelated URL', () => {
+    expect(detectHandlePlatform('https://example.com/creator')).toBeNull();
+  });
+
+  it('returns null for a lookalike host', () => {
+    expect(detectHandlePlatform('https://tiktok.com.evil.com/@creator')).toBeNull();
+  });
+
+  it('returns null for a bare handle with no host to detect', () => {
+    expect(detectHandlePlatform('creator')).toBeNull();
   });
 });

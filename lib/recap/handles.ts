@@ -56,6 +56,16 @@ export function normalizeHandle(platform: RecapPlatform, rawInput: string): stri
   }
 }
 
+export function detectHandlePlatform(url: string): RecapPlatform | null {
+  try {
+    const parsed = new URL(url);
+    const platforms = Object.keys(HANDLE_HOSTS) as RecapPlatform[];
+    return platforms.find((platform) => HANDLE_HOSTS[platform].some((host) => hostMatches(parsed.hostname, host))) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface SaveHandlesDeps {
   updateProfileHandles: (profileId: string, handles: Partial<RecapHandles>) => Promise<void>;
 }
