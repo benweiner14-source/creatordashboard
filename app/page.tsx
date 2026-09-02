@@ -43,6 +43,9 @@ export default async function MarketingPage() {
       <Link href="/ideas" className="text-indigo-700 underline">
         Get weekly content ideas
       </Link>
+      <Link href="/strategy" className="text-indigo-700 underline">
+        Break down a channel you admire
+      </Link>
     </main>
   );
 }
