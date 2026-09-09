@@ -41,6 +41,33 @@ describe('StrategyPage', () => {
     await waitFor(() => expect(screen.getByLabelText(/channel or profile link/i)).toBeInTheDocument());
   });
 
+  it('shows past breakdowns when bootstrap returns history', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        json: async () => ({
+          ok: true,
+          history: [
+            { id: 'strategy-1', platform: 'youtube', channelHandle: 'creator', headline: 'Great channel', createdAt: '2026-09-01T00:00:00Z' },
+          ],
+        }),
+      })
+    );
+    render(<StrategyPage />);
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /great channel/i })).toHaveAttribute('href', '/strategy/strategy-1')
+    );
+  });
+
+  it('does not show a past-breakdowns section when there is no history', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => ({ ok: true, history: [] }) }));
+    render(<StrategyPage />);
+    await waitFor(() => expect(screen.getByLabelText(/channel or profile link/i)).toBeInTheDocument());
+    expect(screen.queryByText(/past breakdowns/i)).not.toBeInTheDocument();
+  });
+
   it('submits the URL and redirects to the report page on success', async () => {
     const fetchMock = vi.fn((url: string, options?: RequestInit) => {
       if (!options) return Promise.resolve({ status: 200, ok: true, json: async () => ({ ok: true }) });

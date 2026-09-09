@@ -16,7 +16,16 @@ test('a signed-out visitor on /strategy sees a sign-in prompt, not a silent redi
 test('a subscribed visitor pastes a channel URL and sees a rendered breakdown', async ({ page }) => {
   await page.route('**/api/strategy', async (route) => {
     if (route.request().method() === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          history: [
+            { id: 'past-1', platform: 'youtube', channelHandle: 'oldchannel', headline: 'An older breakdown', createdAt: '2026-08-01T00:00:00Z' },
+          ],
+        }),
+      });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'e2e-strategy-1' }) });
@@ -42,6 +51,8 @@ test('a subscribed visitor pastes a channel URL and sees a rendered breakdown', 
   });
 
   await page.goto('/strategy');
+  await expect(page.getByRole('link', { name: /an older breakdown/i })).toBeVisible();
+
   await page.getByLabel(/channel or profile link/i).fill('https://www.tiktok.com/@creator');
   await page.getByRole('button', { name: /break down this channel/i }).click();
 
