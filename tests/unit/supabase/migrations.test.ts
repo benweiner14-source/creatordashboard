@@ -139,4 +139,28 @@ describe('supabase migrations', () => {
     expect(sql).toContain('"Strategy breakdowns are viewable by owner"');
     expect(sql).toContain('"Strategy breakdowns are insertable by owner"');
   });
+
+  it('includes a linkedin_strategies table migration owned by profile', () => {
+    const sql = readMigrationContaining('create_linkedin_tables');
+    expect(sql).toContain('create table public.linkedin_strategies');
+    expect(sql).toContain('content_pillars jsonb not null');
+    expect(sql).toContain('references public.profiles(id)');
+    expect(sql).toContain('"LinkedIn strategies are viewable by owner"');
+    expect(sql).toContain('"LinkedIn strategies are insertable by owner"');
+  });
+
+  it('includes a linkedin_post_ideas table migration unique per profile per week, referencing a strategy', () => {
+    const sql = readMigrationContaining('create_linkedin_tables');
+    expect(sql).toContain('create table public.linkedin_post_ideas');
+    expect(sql).toContain('strategy_id uuid not null references public.linkedin_strategies(id)');
+    expect(sql).toContain('unique (profile_id, week_start)');
+  });
+
+  it('includes a linkedin_profile_audits table migration with no PDF-storing column', () => {
+    const sql = readMigrationContaining('create_linkedin_tables');
+    expect(sql).toContain('create table public.linkedin_profile_audits');
+    expect(sql).toContain('working_well jsonb not null');
+    expect(sql).toContain('needs_work jsonb not null');
+    expect(sql).not.toMatch(/\b(pdf|file)\b/i);
+  });
 });
