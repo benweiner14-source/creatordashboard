@@ -1,19 +1,38 @@
 const CLAUDE_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 
+export type ClaudeContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } };
+
+/**
+ * The <niche>/<target_goal> containment tags the LinkedIn clients wrap free
+ * text in are a real security measure, not decoration — a niche value
+ * containing a literal "</niche>" must not be able to close the tag early and
+ * inject text at the top level of the prompt. Neutralize angle brackets in the
+ * interpolated values (never the literal tags themselves) before they go into
+ * the template.
+ */
+export function escapeForContainmentTag(value: string): string {
+  return value.replace(/</g, '‹').replace(/>/g, '›');
+}
+
 export interface ClaudeJsonRequest {
   apiKey: string;
   model: string;
   maxTokens: number;
   system: string;
-  userContent: string;
+  userContent: string | ClaudeContentBlock[];
 }
 
 /**
  * Shared fetch + code-fence strip + JSON parse for the single-turn Claude
  * clients that ask for a small JSON object back (lib/integrations/claude.ts,
- * lib/integrations/claude-strategy.ts). Deliberately not used by
- * claude-ideas.ts, whose response comes back through web-search tool use as a
- * fenced array spread over several text blocks.
+ * lib/integrations/claude-strategy.ts, and the lib/integrations/claude-linkedin-*.ts
+ * clients). `userContent` accepts either a plain string or a content-block
+ * array (a text block plus a PDF `document` block, used by
+ * claude-linkedin-audit.ts) — deliberately not used by claude-ideas.ts, whose
+ * response comes back through web-search tool use as a fenced array spread
+ * over several text blocks.
  */
 export async function requestClaudeJson<T>(request: ClaudeJsonRequest): Promise<T> {
   const response = await fetch(CLAUDE_MESSAGES_URL, {

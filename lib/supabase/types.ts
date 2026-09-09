@@ -195,6 +195,72 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['strategy_breakdowns']['Insert']>;
         Relationships: [];
       };
+      linkedin_strategies: {
+        Row: {
+          id: string;
+          profile_id: string;
+          niche: string;
+          target_goal: string;
+          content_pillars: unknown;
+          posting_cadence_recommendation: string;
+          positioning_notes: string;
+          headline: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          niche: string;
+          target_goal: string;
+          content_pillars: unknown;
+          posting_cadence_recommendation: string;
+          positioning_notes: string;
+          headline: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['linkedin_strategies']['Insert']>;
+        Relationships: [];
+      };
+      linkedin_post_ideas: {
+        Row: {
+          id: string;
+          profile_id: string;
+          strategy_id: string;
+          week_start: string;
+          post_ideas: unknown;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          strategy_id: string;
+          week_start: string;
+          post_ideas: unknown;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['linkedin_post_ideas']['Insert']>;
+        Relationships: [];
+      };
+      linkedin_profile_audits: {
+        Row: {
+          id: string;
+          profile_id: string;
+          headline: string;
+          working_well: unknown;
+          needs_work: unknown;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          headline: string;
+          working_well: unknown;
+          needs_work: unknown;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['linkedin_profile_audits']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
