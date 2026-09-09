@@ -5,7 +5,7 @@ import { getGlossaryTerms, findGlossaryTermBySlug, linkGlossaryTerms } from '@/l
 describe('getGlossaryTerms', () => {
   it('returns the seeded set of glossary terms', () => {
     const terms = getGlossaryTerms();
-    expect(terms.length).toBeGreaterThanOrEqual(6);
+    expect(terms.length).toBeGreaterThanOrEqual(9);
     expect(terms.map((t) => t.slug)).toContain('hook-rate');
   });
 });
@@ -17,6 +17,12 @@ describe('findGlossaryTermBySlug', () => {
 
   it('returns undefined for an unknown slug', () => {
     expect(findGlossaryTermBySlug('not-a-real-term')).toBeUndefined();
+  });
+
+  it('finds the LinkedIn strategy terms added for the LinkedIn Content Strategy feature', () => {
+    expect(findGlossaryTermBySlug('content-pillars')?.term).toBe('Content Pillars');
+    expect(findGlossaryTermBySlug('posting-cadence')?.term).toBe('Posting Cadence');
+    expect(findGlossaryTermBySlug('positioning')?.term).toBe('Positioning');
   });
 });
 
