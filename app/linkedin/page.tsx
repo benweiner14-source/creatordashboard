@@ -189,12 +189,14 @@ export default function LinkedInPage() {
       <AppNav />
       <main className="mx-auto flex max-w-2xl flex-col gap-10 px-6 py-16">
         <section className="flex flex-col gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">{strategy.headline}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            <GlossaryText text={strategy.headline} />
+          </h1>
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Content pillars</h2>
             <ul className="mt-2 flex flex-col gap-1">
-              {strategy.contentPillars.map((pillar) => (
-                <li key={pillar} className="text-gray-800">
+              {strategy.contentPillars.map((pillar, index) => (
+                <li key={index} className="text-gray-800">
                   <GlossaryText text={pillar} />
                 </li>
               ))}

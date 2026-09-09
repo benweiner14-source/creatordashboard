@@ -44,7 +44,15 @@ test('a subscribed visitor picks a niche and goal, builds a strategy, sees ideas
     });
   });
 
+  let ideasGenerated = false;
+
   await page.route('**/api/linkedin/ideas', async (route) => {
+    // GET is read-only: nothing has been generated for this week yet.
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ideas: null }) });
+      return;
+    }
+    ideasGenerated = true;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -75,7 +83,9 @@ test('a subscribed visitor picks a niche and goal, builds a strategy, sees ideas
           id: 'e2e-audit-1',
           headline: 'Solid start, a couple of easy fixes',
           workingWell: ['Your headline is specific and clear.'],
-          needsWork: ['Your About section is thin — add a few more sentences about what you actually do.'],
+          // "Positioning" is a glossary term, and audit feedback is rendered
+          // through GlossaryText — the literal word makes the chip render.
+          needsWork: ['Your About section is thin — a few more sentences would sharpen your positioning.'],
           createdAt: '2026-09-09T00:00:00Z',
         },
       }),
@@ -92,7 +102,13 @@ test('a subscribed visitor picks a niche and goal, builds a strategy, sees ideas
   await expect(page.getByRole('heading', { name: 'Lead with gaming industry insight' })).toBeVisible();
   await expect(page.getByText(/aim for 2 posts a week/i)).toBeVisible();
 
+  // Ideas are no longer generated on page load — generating costs a paid
+  // Claude call and one of the creator's daily attempts, so it takes a click.
+  expect(ideasGenerated).toBe(false);
+  await page.getByRole('button', { name: /get this week's post ideas/i }).click();
+
   await expect(page.getByText('What I learned scrimming with a pro team')).toBeVisible();
+  expect(ideasGenerated).toBe(true);
 
   await page.setInputFiles('#linkedin-audit-upload', {
     name: 'profile.pdf',
@@ -102,4 +118,6 @@ test('a subscribed visitor picks a niche and goal, builds a strategy, sees ideas
 
   await expect(page.getByText('Solid start, a couple of easy fixes').first()).toBeVisible();
   await expect(page.getByText(/your headline is specific and clear/i)).toBeVisible();
+  // Jargon in generated audit feedback is tappable, same as in the strategy.
+  await expect(page.getByRole('button', { name: /^positioning$/i })).toBeVisible();
 });

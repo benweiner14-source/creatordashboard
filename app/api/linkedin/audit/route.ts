@@ -7,7 +7,11 @@ import { handleLinkedInAuditRequest } from '@/lib/linkedin/audit-handler';
 import { hasActiveSubscription } from '@/lib/billing/entitlements';
 import type { SavedLinkedInAudit } from '@/lib/linkedin/audit-handler';
 
-const MAX_PDF_BYTES = 10 * 1024 * 1024;
+// Vercel Serverless Functions cap a request body at ~4.5MB and reject anything
+// larger with a non-JSON 413 before this route ever runs — so a ceiling above
+// that would only ever surface as an unexplained platform error. Stay under it
+// and give the creator a real message instead.
+const MAX_PDF_BYTES = 4 * 1024 * 1024;
 
 interface AuditRow {
   id: string;
@@ -56,7 +60,33 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
+    // Auth and subscription first: `request.formData()` buffers and parses the
+    // whole multipart body, so doing it before these checks lets anyone who
+    // isn't even signed in force that allocation.
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'You must be signed in to run a profile audit.' }, { status: 401 });
+    }
+
+    const serviceClient = createSupabaseServiceRoleClient();
+    if (!(await hasActiveSubscription(serviceClient, user.id))) {
+      return NextResponse.json(
+        { error: 'LinkedIn Content Strategy requires an active subscription.', upgradeUrl: '/billing' },
+        { status: 402 }
+      );
+    }
+
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      // A malformed or non-multipart body is the caller's mistake, not ours.
+      return NextResponse.json({ error: "We couldn't read that upload. Try selecting your PDF again." }, { status: 400 });
+    }
+
     const file = formData.get('pdf');
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'Upload a PDF of your LinkedIn profile first.' }, { status: 400 });
@@ -65,17 +95,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "That file isn't a PDF. Export your profile as a PDF and try again." }, { status: 400 });
     }
     if (file.size > MAX_PDF_BYTES) {
-      return NextResponse.json({ error: 'That PDF is too large (10MB max). Try exporting just your profile page.' }, { status: 400 });
+      return NextResponse.json({ error: 'That PDF is too large (4MB max). Try exporting just your profile page.' }, { status: 400 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const pdfBase64 = buffer.toString('base64');
 
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const serviceClient = createSupabaseServiceRoleClient();
     const ip = deriveClientIp({
       headers: request.headers,
       isTrustedPlatform: process.env.VERCEL === '1',
@@ -100,7 +125,7 @@ export async function POST(request: Request) {
           return mapAuditRow(data as AuditRow);
         },
       },
-      { profileId: user?.id ?? null, ip, pdfBase64 }
+      { profileId: user.id, ip, pdfBase64 }
     );
 
     return NextResponse.json(result.body, { status: result.status });

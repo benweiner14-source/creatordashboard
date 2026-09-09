@@ -70,7 +70,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { niche, targetGoal } = (await request.json()) as { niche?: string; targetGoal?: string };
+    let body: { niche?: string; targetGoal?: string };
+    try {
+      body = (await request.json()) as { niche?: string; targetGoal?: string };
+    } catch {
+      // A body that isn't valid JSON is the caller's mistake — a 400, not the
+      // catch-all 500 below that reads as "something broke on our end".
+      return NextResponse.json({ error: "We couldn't read that request. A niche and a goal are required." }, { status: 400 });
+    }
+
+    const { niche, targetGoal } = body;
     if (!niche || !targetGoal) {
       return NextResponse.json({ error: 'A niche and a goal are required.' }, { status: 400 });
     }

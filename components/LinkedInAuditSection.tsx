@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { GlossaryText } from '@/components/GlossaryChip';
 
 interface LinkedInAuditHistoryItem {
   id: string;
@@ -26,6 +27,13 @@ export function LinkedInAuditSection() {
       .then(async (res) => {
         if (cancelled) return;
         const data = await res.json();
+        if (!res.ok) {
+          // Without this, a 401/402/500 silently renders as "no past audits",
+          // which reads as "you've never run one" rather than "we couldn't
+          // check".
+          setState({ status: 'error', error: data.error ?? "We couldn't load your past audits.", history: [] });
+          return;
+        }
         setState({ status: 'idle', history: data.history ?? [] });
       })
       .catch(() => {
@@ -38,6 +46,9 @@ export function LinkedInAuditSection() {
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+    // Clear the input so re-picking the identical file still fires onChange —
+    // otherwise a retry after a failed audit silently does nothing.
+    event.target.value = '';
     if (!file) return;
     const history = state.status === 'loading' ? [] : state.history;
     setState({ status: 'submitting', history });
@@ -47,8 +58,23 @@ export function LinkedInAuditSection() {
 
     try {
       const response = await fetch('/api/linkedin/audit', { method: 'POST', body: formData });
-      const data = await response.json();
-      if (!response.ok) {
+      // The hosting platform rejects an oversized body with a non-JSON 413
+      // before this route runs, so `response.json()` can throw on a response
+      // we did in fact receive.
+      let data: { audit?: LinkedInAuditHistoryItem; error?: string };
+      try {
+        data = await response.json();
+      } catch {
+        setState({
+          status: 'error',
+          error: response.ok
+            ? 'Something went wrong running your audit. Please try again.'
+            : "We couldn't run your audit — the file may be too large (4MB max). Try exporting just your profile page.",
+          history,
+        });
+        return;
+      }
+      if (!response.ok || !data.audit) {
         setState({ status: 'error', error: data.error ?? 'Something went wrong running your audit.', history });
         return;
       }
@@ -60,6 +86,11 @@ export function LinkedInAuditSection() {
   }
 
   const history = state.status === 'loading' ? [] : state.history;
+  // A just-submitted audit is prepended to `history` AND rendered in full as
+  // `latestResult`, so drop the head to stop it appearing twice — same rule as
+  // the strategy section's `history.slice(1)`. On first load there is no
+  // `latestResult` covering history[0], so the whole list stands.
+  const pastAudits = latestResult ? history.slice(1) : history;
 
   return (
     <section className="flex flex-col gap-4">
@@ -92,31 +123,37 @@ export function LinkedInAuditSection() {
 
       {latestResult && (
         <div className="rounded-lg border border-gray-200 p-4">
-          <p className="font-semibold text-gray-900">{latestResult.headline}</p>
+          <p className="font-semibold text-gray-900">
+            <GlossaryText text={latestResult.headline} />
+          </p>
           <div className="mt-2">
             <h3 className="text-sm font-semibold text-gray-700">Working well</h3>
             <ul className="list-disc pl-5 text-sm text-gray-800">
-              {latestResult.workingWell.map((item) => (
-                <li key={item}>{item}</li>
+              {latestResult.workingWell.map((item, index) => (
+                <li key={index}>
+                  <GlossaryText text={item} />
+                </li>
               ))}
             </ul>
           </div>
           <div className="mt-2">
             <h3 className="text-sm font-semibold text-gray-700">Needs work</h3>
             <ul className="list-disc pl-5 text-sm text-gray-800">
-              {latestResult.needsWork.map((item) => (
-                <li key={item}>{item}</li>
+              {latestResult.needsWork.map((item, index) => (
+                <li key={index}>
+                  <GlossaryText text={item} />
+                </li>
               ))}
             </ul>
           </div>
         </div>
       )}
 
-      {history.length > 0 && (
+      {pastAudits.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Past audits</h3>
           <ul className="mt-2 flex flex-col gap-1 text-sm text-gray-600">
-            {history.map((item) => (
+            {pastAudits.map((item) => (
               <li key={item.id}>{item.headline}</li>
             ))}
           </ul>

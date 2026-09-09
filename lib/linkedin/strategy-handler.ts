@@ -4,6 +4,11 @@ import type { LinkedInStrategyClient, GeneratedLinkedInStrategy } from '@/lib/in
 export const LINKEDIN_STRATEGY_PROFILE_LIMIT = 5;
 export const LINKEDIN_STRATEGY_IP_LIMIT = 10;
 
+// The "Something else" option makes niche and goal free text, so without a cap
+// an arbitrarily long value goes straight into a Claude prompt and an unbounded
+// `text` column. Matches `lib/ideas/niche.ts`'s MAX_NICHE_LENGTH.
+export const LINKEDIN_INPUT_MAX_LENGTH = 200;
+
 export interface SavedLinkedInStrategy extends GeneratedLinkedInStrategy {
   id: string;
   niche: string;
@@ -52,6 +57,13 @@ export async function handleLinkedInStrategyRequest(
   const targetGoal = context.targetGoal.trim();
   if (!niche || !targetGoal) {
     return { status: 400, body: { error: 'Choose a niche and a goal before building your strategy.' } };
+  }
+
+  if (niche.length > LINKEDIN_INPUT_MAX_LENGTH || targetGoal.length > LINKEDIN_INPUT_MAX_LENGTH) {
+    return {
+      status: 400,
+      body: { error: `Keep your niche and goal under ${LINKEDIN_INPUT_MAX_LENGTH} characters.` },
+    };
   }
 
   const ipHash = hashIp(context.ip, deps.ipSalt);
