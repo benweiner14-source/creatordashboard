@@ -64,18 +64,26 @@ describe('handleLinkedInStrategyRequest', () => {
         },
       },
     });
-    await expect(
-      handleLinkedInStrategyRequest(deps, { profileId: 'p1', ip: '203.0.113.1', niche: 'Gaming', targetGoal: 'Partnerships' })
-    ).rejects.toThrow('Claude API request failed');
 
-    // The failed attempt didn't consume the daily limit — a fresh attempt still succeeds.
+    // Exhaust the profile limit with failing attempts. Each one only stays
+    // exhausted if the release call is broken — proving the release happens
+    // requires driving the count all the way up and showing it didn't stick.
+    for (let i = 0; i < LINKEDIN_STRATEGY_PROFILE_LIMIT; i++) {
+      await expect(
+        handleLinkedInStrategyRequest(deps, { profileId: 'p1', ip: '203.0.113.1', niche: 'Gaming', targetGoal: 'Partnerships' })
+      ).rejects.toThrow('Claude API request failed');
+    }
+
+    // If releaseRateLimitEventIfNeeded were never called, the profile count
+    // would now sit at LINKEDIN_STRATEGY_PROFILE_LIMIT and this call would be
+    // rejected with 429 instead of succeeding.
     failing = false;
-    const retry = await handleLinkedInStrategyRequest(deps, {
+    const result = await handleLinkedInStrategyRequest(deps, {
       profileId: 'p1',
       ip: '203.0.113.1',
       niche: 'Gaming',
       targetGoal: 'Partnerships',
     });
-    expect(retry.status).toBe(200);
+    expect(result.status).toBe(200);
   });
 });
