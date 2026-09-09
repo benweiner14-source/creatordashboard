@@ -25,7 +25,25 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ ok: true });
+  // Most-recent-first, capped at 10 — a read-only "revisit an old breakdown"
+  // list, not a paginated archive. See docs/superpowers/specs for the
+  // deferred-then-added history-list follow-up.
+  const { data: rows } = await serviceClient
+    .from('strategy_breakdowns')
+    .select('id, platform, channel_handle, headline, created_at')
+    .eq('profile_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  const history = (rows ?? []).map((row) => ({
+    id: row.id,
+    platform: row.platform,
+    channelHandle: row.channel_handle,
+    headline: row.headline,
+    createdAt: row.created_at,
+  }));
+
+  return NextResponse.json({ ok: true, history });
 }
 
 export async function POST(request: Request) {

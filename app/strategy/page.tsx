@@ -2,6 +2,7 @@
 
 import { useEffect, useReducer, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
@@ -16,7 +17,7 @@ export default function StrategyPage() {
   useEffect(() => {
     let cancelled = false;
     fetch('/api/strategy')
-      .then((res) => {
+      .then(async (res) => {
         if (cancelled) return;
         if (res.status === 401) {
           dispatch({ type: 'BOOTSTRAP_UNAUTHORIZED' });
@@ -26,7 +27,8 @@ export default function StrategyPage() {
           dispatch({ type: 'BOOTSTRAP_PAYMENT_REQUIRED' });
           return;
         }
-        dispatch({ type: 'BOOTSTRAPPED' });
+        const data = await res.json();
+        dispatch({ type: 'BOOTSTRAPPED', history: data.history ?? [] });
       })
       .catch(() => {
         if (!cancelled) dispatch({ type: 'BOOTSTRAP_FAILED' });
@@ -190,6 +192,28 @@ export default function StrategyPage() {
             )}
           </form>
         )}
+
+        {(state.status === 'idle' || state.status === 'submitting' || state.status === 'submitFailed') &&
+          state.history.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold text-gray-900">Past breakdowns</h2>
+              <ul className="flex flex-col gap-2">
+                {state.history.map((item) => (
+                  <li key={item.id}>
+                    <Link
+                      href={`/strategy/${item.id}`}
+                      className="flex flex-col gap-1 rounded-lg border border-gray-200 p-3 hover:border-indigo-300"
+                    >
+                      <span className="text-sm font-medium text-gray-900">{item.headline}</span>
+                      <span className="text-xs text-gray-500">
+                        {item.platform} · @{item.channelHandle}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
         {/* The router push is in flight; without this the page would sit on a
             bare heading with no sign anything is happening. Plain text rather

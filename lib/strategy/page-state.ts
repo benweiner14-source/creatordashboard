@@ -1,10 +1,18 @@
 import { isValidEmailFormat } from '@/lib/auth/sign-in-flow-state';
 
+export interface StrategyHistoryItem {
+  id: string;
+  platform: 'youtube' | 'tiktok' | 'instagram';
+  channelHandle: string;
+  headline: string;
+  createdAt: string;
+}
+
 export type StrategyPageState =
   | { status: 'loading' }
-  | { status: 'idle'; url: string }
-  | { status: 'submitting'; url: string; stillWorking: boolean }
-  | { status: 'submitFailed'; url: string; error: string }
+  | { status: 'idle'; url: string; history: StrategyHistoryItem[] }
+  | { status: 'submitting'; url: string; stillWorking: boolean; history: StrategyHistoryItem[] }
+  | { status: 'submitFailed'; url: string; error: string; history: StrategyHistoryItem[] }
   | { status: 'redirecting'; id: string }
   | { status: 'requiresUpgrade' }
   | { status: 'needsSignIn'; email: string; notice: string | null }
@@ -13,7 +21,7 @@ export type StrategyPageState =
   | { status: 'magicLinkError'; email: string; error: string };
 
 export type StrategyPageEvent =
-  | { type: 'BOOTSTRAPPED' }
+  | { type: 'BOOTSTRAPPED'; history: StrategyHistoryItem[] }
   | { type: 'BOOTSTRAP_FAILED' }
   | { type: 'BOOTSTRAP_UNAUTHORIZED' }
   | { type: 'BOOTSTRAP_PAYMENT_REQUIRED' }
@@ -36,10 +44,10 @@ export function createInitialStrategyPageState(): StrategyPageState {
 export function strategyPageReducer(state: StrategyPageState, event: StrategyPageEvent): StrategyPageState {
   switch (event.type) {
     case 'BOOTSTRAPPED':
-      return { status: 'idle', url: '' };
+      return { status: 'idle', url: '', history: event.history };
 
     case 'BOOTSTRAP_FAILED':
-      return { status: 'idle', url: '' };
+      return { status: 'idle', url: '', history: [] };
 
     case 'BOOTSTRAP_UNAUTHORIZED':
       return { status: 'needsSignIn', email: '', notice: null };
@@ -48,11 +56,13 @@ export function strategyPageReducer(state: StrategyPageState, event: StrategyPag
       return { status: 'requiresUpgrade' };
 
     case 'URL_CHANGED':
-      return state.status === 'idle' || state.status === 'submitFailed' ? { status: 'idle', url: event.value } : state;
+      return state.status === 'idle' || state.status === 'submitFailed'
+        ? { status: 'idle', url: event.value, history: state.history }
+        : state;
 
     case 'SUBMIT':
       return state.status === 'idle' || state.status === 'submitFailed'
-        ? { status: 'submitting', url: state.url, stillWorking: false }
+        ? { status: 'submitting', url: state.url, stillWorking: false, history: state.history }
         : state;
 
     case 'SUBMIT_STILL_WORKING':
@@ -62,7 +72,9 @@ export function strategyPageReducer(state: StrategyPageState, event: StrategyPag
       return state.status === 'submitting' ? { status: 'redirecting', id: event.id } : state;
 
     case 'SUBMIT_FAILED':
-      return state.status === 'submitting' ? { status: 'submitFailed', url: state.url, error: event.error } : state;
+      return state.status === 'submitting'
+        ? { status: 'submitFailed', url: state.url, error: event.error, history: state.history }
+        : state;
 
     case 'EMAIL_CHANGED':
       return state.status === 'needsSignIn' || state.status === 'magicLinkError' ? { ...state, email: event.email } : state;
