@@ -2359,7 +2359,7 @@ describe('LinkedInPage', () => {
               targetGoal: 'Land brand or product partnerships',
               contentPillars: ['Industry commentary'],
               postingCadenceRecommendation: 'Aim for 2 posts a week.',
-              positioningNotes: 'Position yourself as a rising voice in gaming.',
+              positioningNotes: 'Strong positioning as a rising voice in gaming will help you stand out.',
               headline: 'Lead with gaming industry insight',
               createdAt: '2026-09-09T00:00:00Z',
             },
@@ -2385,8 +2385,10 @@ describe('LinkedInPage', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Lead with gaming industry insight' })).toBeInTheDocument());
     expect(screen.getByText(/aim for 2 posts a week/i)).toBeInTheDocument();
-    // "Content Pillars" is a glossary term rendered by GlossaryText — tappable.
-    expect(screen.getByRole('button', { name: /industry commentary/i })).toBeInTheDocument();
+    // "Positioning" is a glossary term (Task 3) and positioningNotes is rendered through
+    // GlossaryText — the word must appear literally in the notes text for the chip to render,
+    // so the fixture text above says "positioning" rather than paraphrasing around it.
+    expect(screen.getByRole('button', { name: /^positioning$/i })).toBeInTheDocument();
   });
 });
 ```
