@@ -1160,14 +1160,30 @@ describe('handleLinkedInStrategyRequest', () => {
   });
 
   it('releases the rate-limit slot when generation throws', async () => {
+    // A stub that always throws until told to stop. Looping this to the
+    // profile limit before flipping it is load-bearing: it's the only way
+    // the final call's 200 can prove the release actually happened, rather
+    // than merely landing below a limit it was nowhere near reaching.
+    let failing = true;
     const deps = makeDeps({
-      linkedInStrategyClient: { generateStrategy: async () => { throw new Error('Claude API request failed with status 500'); } },
+      linkedInStrategyClient: {
+        generateStrategy: async (input) => {
+          if (failing) throw new Error('Claude API request failed with status 500');
+          return createFakeLinkedInStrategyClient().generateStrategy(input);
+        },
+      },
     });
-    await expect(
-      handleLinkedInStrategyRequest(deps, { profileId: 'p1', ip: '203.0.113.1', niche: 'Gaming', targetGoal: 'Partnerships' })
-    ).rejects.toThrow('Claude API request failed');
 
-    // The failed attempt didn't consume the daily limit — a fresh attempt still succeeds.
+    for (let i = 0; i < LINKEDIN_STRATEGY_PROFILE_LIMIT; i++) {
+      await expect(
+        handleLinkedInStrategyRequest(deps, { profileId: 'p1', ip: '203.0.113.1', niche: 'Gaming', targetGoal: 'Partnerships' })
+      ).rejects.toThrow('Claude API request failed');
+    }
+
+    // Every one of the LINKEDIN_STRATEGY_PROFILE_LIMIT throws above released
+    // its slot — if it hadn't, the profile limit would already be exhausted
+    // and this call would 429, not 200.
+    failing = false;
     const retry = await handleLinkedInStrategyRequest(deps, {
       profileId: 'p1',
       ip: '203.0.113.1',
@@ -1513,12 +1529,30 @@ describe('handleLinkedInIdeasRequest', () => {
   });
 
   it('releases the rate-limit slot when generation throws', async () => {
+    // Looping to the profile limit before flipping the stub is load-bearing:
+    // it's the only way the final call's 200 can prove the release actually
+    // happened, rather than merely landing below a limit it was nowhere
+    // near reaching.
+    let failing = true;
     const deps = makeDeps({
-      linkedInIdeasClient: { generateWeeklyIdeas: async () => { throw new Error('Claude API request failed with status 500'); } },
+      linkedInIdeasClient: {
+        generateWeeklyIdeas: async (niche, targetGoal, currentDate) => {
+          if (failing) throw new Error('Claude API request failed with status 500');
+          return createFakeLinkedInIdeasClient().generateWeeklyIdeas(niche, targetGoal, currentDate);
+        },
+      },
     });
-    await expect(handleLinkedInIdeasRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW })).rejects.toThrow(
-      'Claude API request failed'
-    );
+
+    for (let i = 0; i < LINKEDIN_IDEAS_PROFILE_LIMIT; i++) {
+      await expect(handleLinkedInIdeasRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW })).rejects.toThrow(
+        'Claude API request failed'
+      );
+    }
+
+    // Every one of the LINKEDIN_IDEAS_PROFILE_LIMIT throws above released its
+    // slot — if it hadn't, the profile limit would already be exhausted and
+    // this call would 429, not 200.
+    failing = false;
     const retry = await handleLinkedInIdeasRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
     expect(retry.status).toBe(200);
   });
@@ -1812,12 +1846,30 @@ describe('handleLinkedInAuditRequest', () => {
   });
 
   it('releases the rate-limit slot when generation throws', async () => {
+    // Looping to the profile limit before flipping the stub is load-bearing:
+    // it's the only way the final call's 200 can prove the release actually
+    // happened, rather than merely landing below a limit it was nowhere
+    // near reaching.
+    let failing = true;
     const deps = makeDeps({
-      linkedInAuditClient: { generateAudit: async () => { throw new Error('Claude API request failed with status 500'); } },
+      linkedInAuditClient: {
+        generateAudit: async (input) => {
+          if (failing) throw new Error('Claude API request failed with status 500');
+          return createFakeLinkedInAuditClient().generateAudit(input);
+        },
+      },
     });
-    await expect(
-      handleLinkedInAuditRequest(deps, { profileId: 'p1', ip: '203.0.113.1', pdfBase64: 'ZmFrZQ==' })
-    ).rejects.toThrow('Claude API request failed');
+
+    for (let i = 0; i < LINKEDIN_AUDIT_PROFILE_LIMIT; i++) {
+      await expect(
+        handleLinkedInAuditRequest(deps, { profileId: 'p1', ip: '203.0.113.1', pdfBase64: 'ZmFrZQ==' })
+      ).rejects.toThrow('Claude API request failed');
+    }
+
+    // Every one of the LINKEDIN_AUDIT_PROFILE_LIMIT throws above released its
+    // slot — if it hadn't, the profile limit would already be exhausted and
+    // this call would 429, not 200.
+    failing = false;
     const retry = await handleLinkedInAuditRequest(deps, { profileId: 'p1', ip: '203.0.113.1', pdfBase64: 'ZmFrZQ==' });
     expect(retry.status).toBe(200);
   });
