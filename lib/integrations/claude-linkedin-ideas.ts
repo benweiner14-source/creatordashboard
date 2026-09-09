@@ -29,7 +29,7 @@ export function createLinkedInIdeasClient(apiKey: string, model = 'claude-sonnet
       const parsed = await requestClaudeJson<{ ideas?: unknown }>({
         apiKey,
         model,
-        maxTokens: 1024,
+        maxTokens: 8192,
         system: LINKEDIN_IDEAS_SYSTEM_PROMPT,
         userContent: `Today's date: ${currentDate.toISOString().slice(0, 10)}\nNiche: <niche>${safeNiche}</niche>\nGoal: <target_goal>${safeTargetGoal}</target_goal>\n\nRespond as JSON: {"ideas": [{"workingTitle": string, "angle": string, "whyItFitsYourGoal": string}]}`,
       });
