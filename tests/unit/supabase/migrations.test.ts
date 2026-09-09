@@ -161,6 +161,6 @@ describe('supabase migrations', () => {
     expect(sql).toContain('create table public.linkedin_profile_audits');
     expect(sql).toContain('working_well jsonb not null');
     expect(sql).toContain('needs_work jsonb not null');
-    expect(sql).not.toMatch(/\b(pdf|file)\b/i);
+    expect(sql).not.toMatch(/(^|[^a-z0-9])(pdf|file)([^a-z0-9]|$)/i);
   });
 });
