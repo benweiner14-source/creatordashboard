@@ -51,6 +51,11 @@ describe('MarketingPage content (signed out)', () => {
     expect(screen.getByRole('link', { name: /get weekly content ideas/i })).toHaveAttribute('href', '/ideas');
   });
 
+  it('links to the strategy breakdown tool', async () => {
+    await renderSignedOut();
+    expect(screen.getByRole('link', { name: /break down a channel you admire/i })).toHaveAttribute('href', '/strategy');
+  });
+
   it('shows the value-proposition headline', async () => {
     await renderSignedOut();
     expect(

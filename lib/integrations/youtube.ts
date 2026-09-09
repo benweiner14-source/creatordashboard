@@ -10,6 +10,20 @@ export interface VideoMetadata {
   tags: string[];
 }
 
+/**
+ * A well-formed handle that simply doesn't resolve to a real channel —
+ * distinct from a YouTube API/network failure, because it's the caller's
+ * input that's wrong, not our infrastructure. Callers (see
+ * lib/strategy/handler.ts) surface this as a friendly "we couldn't find that
+ * channel" rather than a generic 500.
+ */
+export class ChannelNotFoundError extends Error {
+  constructor(handle: string) {
+    super(`No YouTube channel found for handle ${handle}`);
+    this.name = 'ChannelNotFoundError';
+  }
+}
+
 export interface YouTubeClient {
   extractVideoId(url: string): string | null;
   getVideoMetadata(videoId: string): Promise<VideoMetadata>;
@@ -103,7 +117,7 @@ export function createYouTubeClient(apiKey: string): YouTubeClient {
       const channelsData = await fetchYouTubeJson(channelsUrl);
       const channel = channelsData.items?.[0];
       if (!channel) {
-        throw new Error(`No YouTube channel found for handle ${handle}`);
+        throw new ChannelNotFoundError(handle);
       }
       const uploadsPlaylistId = channel.contentDetails.relatedPlaylists.uploads;
 

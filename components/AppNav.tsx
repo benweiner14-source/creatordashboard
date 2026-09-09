@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: '/diagnostic', label: 'Diagnostic' },
   { href: '/recap', label: 'Recap' },
   { href: '/ideas', label: 'Ideas' },
+  { href: '/strategy', label: 'Strategy' },
   { href: '/billing', label: 'Billing' },
 ] as const;
 
