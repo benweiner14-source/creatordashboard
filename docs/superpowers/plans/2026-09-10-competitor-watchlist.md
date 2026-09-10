@@ -1213,15 +1213,27 @@ describe('handleListWatchlist', () => {
   });
 
   it('stops refreshing once the daily refresh budget is exhausted, but still returns 200 with cached data', async () => {
+    // WATCHLIST_ENTRY_LIMIT (20) is smaller than WATCHLIST_REFRESH_PROFILE_LIMIT
+    // (40), so a single profile can never hold enough entries to exhaust the
+    // refresh budget through adds alone. Simulate a profile that has already
+    // used most of today's shared budget via earlier visits by pre-seeding
+    // the rate-limit store directly, leaving room for exactly 5 more refreshes.
     const deps = makeDeps({ youtubeClient: createFakeYouTubeClient({}, [], { subscriberCount: 1000, totalViewCount: 1000, videoCount: 1 }) });
-    for (let i = 0; i < WATCHLIST_REFRESH_PROFILE_LIMIT + 1; i++) {
+    for (let i = 0; i < WATCHLIST_ENTRY_LIMIT; i++) {
       await handleAddWatchlistEntry(deps, { profileId: 'p1', url: `https://www.youtube.com/@creator${i}` });
     }
 
-    const result = await handleListWatchlist(deps, { profileId: 'p1', ip: '203.0.113.1', now: new Date('2026-09-10T12:00:00Z') });
+    const now = new Date('2026-09-10T12:00:00Z');
+    const ipHash = hashIp('203.0.113.1', deps.ipSalt);
+    const remainingBudget = 5;
+    for (let i = 0; i < WATCHLIST_REFRESH_PROFILE_LIMIT - remainingBudget; i++) {
+      await deps.rateLimitStore.recordEvent({ profileId: 'p1', ipHash, eventType: 'watchlist_refresh', createdAt: now });
+    }
+
+    const result = await handleListWatchlist(deps, { profileId: 'p1', ip: '203.0.113.1', now });
 
     expect(result.status).toBe(200);
-    expect((deps as any).__snapshots).toHaveLength(WATCHLIST_REFRESH_PROFILE_LIMIT);
+    expect((deps as any).__snapshots).toHaveLength(remainingBudget);
     const entries = result.body.entries as Array<{ hasSnapshot: boolean }>;
     expect(entries.some((e) => !e.hasSnapshot)).toBe(true); // at least one never got refreshed
   });
