@@ -1,3 +1,5 @@
+import { escapeForContainmentTag } from './claude-shared';
+
 export interface ContentIdea {
   workingTitle: string;
   pitch: string;
@@ -80,6 +82,7 @@ function extractJsonBlock(text: string): string {
 export function createClaudeContentIdeasClient(apiKey: string, model = 'claude-sonnet-5'): ContentIdeasClient {
   return {
     async generateContentIdeas(niche: string, currentDate: Date): Promise<ContentIdea[]> {
+      const safeNiche = escapeForContainmentTag(niche);
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -95,7 +98,7 @@ export function createClaudeContentIdeasClient(apiKey: string, model = 'claude-s
           messages: [
             {
               role: 'user',
-              content: `Niche: <niche>${niche}</niche>\nToday's date: ${currentDate.toISOString().slice(0, 10)}\n\nGenerate this week's content ideas.`,
+              content: `Niche: <niche>${safeNiche}</niche>\nToday's date: ${currentDate.toISOString().slice(0, 10)}\n\nGenerate this week's content ideas.`,
             },
           ],
         }),

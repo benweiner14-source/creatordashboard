@@ -40,6 +40,10 @@ describe('createLinkedInIdeasClient', () => {
     const [, options] = fetchMock.mock.calls[0];
     const body = JSON.parse(options.body as string);
     expect(body.messages[0].content).toContain('<niche>Gaming & esports</niche>');
+    // Adaptive thinking on claude-sonnet-5 consumes the same token budget as
+    // the response, and asking for 4-6 multi-field ideas risks truncation at
+    // a low ceiling (see claude-linkedin-audit.ts's identical fix).
+    expect(body.max_tokens).toBe(8192);
   });
 
   it('drops malformed idea entries and returns an empty array if none are usable', async () => {
