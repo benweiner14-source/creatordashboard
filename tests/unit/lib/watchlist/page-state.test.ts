@@ -110,6 +110,20 @@ describe('watchlistPageReducer', () => {
       expect((removed as any).entries.map((e: WatchlistEntryView) => e.id)).toEqual(['entry-2']);
     });
 
+    it('ignores a second REMOVE_REQUESTED while a removal is already in flight', () => {
+      const withEntries = watchlistPageReducer(createInitialWatchlistPageState(), {
+        type: 'BOOTSTRAPPED',
+        entries: [makeEntry({ id: 'entry-1' }), makeEntry({ id: 'entry-2' })],
+        subscriptionRequired: false,
+      });
+      const removingFirst = watchlistPageReducer(withEntries, { type: 'REMOVE_REQUESTED', entryId: 'entry-1' });
+      expect((removingFirst as any).removingEntryId).toBe('entry-1');
+
+      const afterSecondRequest = watchlistPageReducer(removingFirst, { type: 'REMOVE_REQUESTED', entryId: 'entry-2' });
+      expect((afterSecondRequest as any).removingEntryId).toBe('entry-1');
+      expect(afterSecondRequest).toBe(removingFirst);
+    });
+
     it('sets removeError and clears removingEntryId on REMOVE_FAILED', () => {
       const removing = watchlistPageReducer(loaded, { type: 'REMOVE_REQUESTED', entryId: 'entry-1' });
       const failed = watchlistPageReducer(removing, { type: 'REMOVE_FAILED', error: 'Could not remove' });
