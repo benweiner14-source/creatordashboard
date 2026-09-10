@@ -133,6 +133,7 @@ describe('createApifyScraperClient', () => {
           likeCount: 50,
           commentCount: 5,
           durationSeconds: undefined,
+          followerCount: undefined,
           permalink: 'https://www.tiktok.com/@creator/video/111',
         },
       ]);
@@ -169,6 +170,84 @@ describe('createApifyScraperClient', () => {
       const posts = await client.fetchProfilePosts('tiktok', 'creator');
 
       expect(posts[0].durationSeconds).toBe(45);
+    });
+
+    describe('fetchProfilePosts follower count', () => {
+      it('extracts followerCount from authorMeta.fans for TikTok', async () => {
+        const fetchMock = vi
+          .fn()
+          .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { id: 'run-1', defaultDatasetId: 'dataset-1' } }) })
+          .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { status: 'SUCCEEDED' } }) })
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => [
+              {
+                id: '1',
+                text: 'Post',
+                createTimeISO: '2026-08-01T00:00:00Z',
+                playCount: 100,
+                diggCount: 5,
+                commentCount: 1,
+                authorMeta: { fans: 42000 },
+                webVideoUrl: 'https://www.tiktok.com/@creator/video/1',
+              },
+            ],
+          });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const client = createApifyScraperClient('test-token', { sleep: async () => {} });
+        const posts = await client.fetchProfilePosts('tiktok', 'creator');
+
+        expect(posts[0].followerCount).toBe(42000);
+      });
+
+      it('extracts followerCount from followersCount for Instagram', async () => {
+        const fetchMock = vi
+          .fn()
+          .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { id: 'run-1', defaultDatasetId: 'dataset-1' } }) })
+          .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { status: 'SUCCEEDED' } }) })
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => [
+              {
+                id: '1',
+                caption: 'Post',
+                timestamp: '2026-08-01T00:00:00Z',
+                viewCount: 100,
+                likesCount: 5,
+                commentCount: 1,
+                followersCount: 8000,
+                url: 'https://www.instagram.com/p/1/',
+              },
+            ],
+          });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const client = createApifyScraperClient('test-token', { sleep: async () => {} });
+        const posts = await client.fetchProfilePosts('instagram', 'creator');
+
+        expect(posts[0].followerCount).toBe(8000);
+      });
+
+      it('leaves followerCount undefined when the actor run did not include one', async () => {
+        const fetchMock = vi
+          .fn()
+          .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { id: 'run-1', defaultDatasetId: 'dataset-1' } }) })
+          .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { status: 'SUCCEEDED' } }) })
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => [{ id: '1', text: 'Post', createTimeISO: '2026-08-01T00:00:00Z', playCount: 100, diggCount: 5, commentCount: 1 }],
+          });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const client = createApifyScraperClient('test-token', { sleep: async () => {} });
+        const posts = await client.fetchProfilePosts('tiktok', 'creator');
+
+        expect(posts[0].followerCount).toBeUndefined();
+      });
     });
 
     it('retries once after a failed run and succeeds on the second attempt', async () => {
