@@ -12,6 +12,7 @@ function makeEntry(overrides: Partial<WatchlistEntryView> = {}): WatchlistEntryV
     label: null,
     lastError: null,
     hasSnapshot: true,
+    isStale: false,
     subscriberCount: 1000,
     totalViewCount: 50000,
     videoCount: 20,
@@ -37,6 +38,7 @@ describe('watchlistPageReducer', () => {
       status: 'loaded',
       entries: [makeEntry()],
       subscriptionRequired: false,
+      bootstrapError: null,
       addUrl: '',
       addLabel: '',
       adding: false,
@@ -52,10 +54,18 @@ describe('watchlistPageReducer', () => {
     expect(state).toEqual({ status: 'needsSignIn', email: '', notice: null });
   });
 
-  it('degrades to an empty loaded state on BOOTSTRAP_FAILED', () => {
+  it('attaches an explicit error on BOOTSTRAP_FAILED so it is not mistaken for an empty watchlist', () => {
     const state = watchlistPageReducer(createInitialWatchlistPageState(), { type: 'BOOTSTRAP_FAILED' });
     expect(state.status).toBe('loaded');
     expect((state as any).entries).toEqual([]);
+    expect((state as any).bootstrapError).toMatch(/couldn't load your watchlist/i);
+  });
+
+  it('clears the bootstrap error once a later ADD_SUCCESS re-fetches the list', () => {
+    const failed = watchlistPageReducer(createInitialWatchlistPageState(), { type: 'BOOTSTRAP_FAILED' });
+    const adding = watchlistPageReducer(failed, { type: 'ADD_SUBMIT' });
+    const next = watchlistPageReducer(adding, { type: 'ADD_SUCCESS', entries: [makeEntry()], subscriptionRequired: false });
+    expect((next as any).bootstrapError).toBeNull();
   });
 
   describe('from a loaded state', () => {
@@ -95,6 +105,41 @@ describe('watchlistPageReducer', () => {
       const next = watchlistPageReducer(adding, { type: 'ADD_FAILED', error: 'Nope' });
       expect((next as any).adding).toBe(false);
       expect((next as any).addError).toBe('Nope');
+    });
+
+    it('merges one refreshed entry into the list by id on REFRESH_ENTRY_SUCCESS, leaving the others alone', () => {
+      const withEntries = watchlistPageReducer(createInitialWatchlistPageState(), {
+        type: 'BOOTSTRAPPED',
+        entries: [
+          makeEntry({ id: 'entry-1', isStale: true, hasSnapshot: false, subscriberCount: null }),
+          makeEntry({ id: 'entry-2', isStale: true, hasSnapshot: false, subscriberCount: null }),
+        ],
+        subscriptionRequired: false,
+      });
+
+      const refreshed = watchlistPageReducer(withEntries, {
+        type: 'REFRESH_ENTRY_SUCCESS',
+        entry: makeEntry({ id: 'entry-2', isStale: false, hasSnapshot: true, subscriberCount: 8800 }),
+      });
+
+      const entries = (refreshed as any).entries as WatchlistEntryView[];
+      expect(entries.map((e) => e.id)).toEqual(['entry-1', 'entry-2']);
+      expect(entries[0].subscriberCount).toBeNull();
+      expect(entries[1].subscriberCount).toBe(8800);
+      expect(entries[1].isStale).toBe(false);
+    });
+
+    it('ignores REFRESH_ENTRY_SUCCESS for an entry that is no longer in the list', () => {
+      const withEntry = watchlistPageReducer(createInitialWatchlistPageState(), {
+        type: 'BOOTSTRAPPED',
+        entries: [makeEntry({ id: 'entry-1' })],
+        subscriptionRequired: false,
+      });
+      const removed = watchlistPageReducer(withEntry, { type: 'REMOVE_SUCCESS', entryId: 'entry-1' });
+
+      const next = watchlistPageReducer(removed, { type: 'REFRESH_ENTRY_SUCCESS', entry: makeEntry({ id: 'entry-1' }) });
+
+      expect((next as any).entries).toEqual([]);
     });
 
     it('sets removingEntryId on REMOVE_REQUESTED and clears it on REMOVE_SUCCESS, filtering the entry out', () => {

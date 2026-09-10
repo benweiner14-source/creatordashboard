@@ -13,6 +13,14 @@ export type WatchlistPageState =
       status: 'loaded';
       entries: WatchlistEntryView[];
       subscriptionRequired: boolean;
+      /**
+       * Set when the bootstrap GET failed outright. Without it an empty
+       * `entries` array is indistinguishable from a genuinely empty watchlist,
+       * which is exactly the confusion every sibling reducer in this codebase
+       * (`lib/ideas/page-state.ts`, `lib/recap/page-state.ts`) avoids by
+       * attaching a message on their equivalent bootstrap-failure transition.
+       */
+      bootstrapError: string | null;
       addUrl: string;
       addLabel: string;
       adding: boolean;
@@ -32,6 +40,13 @@ export type WatchlistPageEvent =
   | { type: 'ADD_STILL_WORKING' }
   | { type: 'ADD_SUCCESS'; entries: WatchlistEntryView[]; subscriptionRequired: boolean }
   | { type: 'ADD_FAILED'; error: string }
+  /**
+   * One background refresh (POST /api/watchlist/refresh) came back. Merged
+   * into `entries` by id rather than replacing the list, so a refresh landing
+   * after a removal (or alongside another entry's refresh) can't resurrect or
+   * clobber anything.
+   */
+  | { type: 'REFRESH_ENTRY_SUCCESS'; entry: WatchlistEntryView }
   | { type: 'REMOVE_REQUESTED'; entryId: string }
   | { type: 'REMOVE_SUCCESS'; entryId: string }
   | { type: 'REMOVE_FAILED'; error: string }
@@ -53,6 +68,7 @@ export function watchlistPageReducer(state: WatchlistPageState, event: Watchlist
         status: 'loaded',
         entries: event.entries,
         subscriptionRequired: event.subscriptionRequired,
+        bootstrapError: null,
         addUrl: '',
         addLabel: '',
         adding: false,
@@ -67,6 +83,7 @@ export function watchlistPageReducer(state: WatchlistPageState, event: Watchlist
         status: 'loaded',
         entries: [],
         subscriptionRequired: false,
+        bootstrapError: "We couldn't load your watchlist. Please refresh and try again.",
         addUrl: '',
         addLabel: '',
         adding: false,
@@ -99,12 +116,20 @@ export function watchlistPageReducer(state: WatchlistPageState, event: Watchlist
             ...state,
             entries: event.entries,
             subscriptionRequired: event.subscriptionRequired,
+            // The list was just re-fetched successfully, so any earlier
+            // bootstrap failure no longer describes what's on screen.
+            bootstrapError: null,
             addUrl: '',
             addLabel: '',
             adding: false,
             addStillWorking: false,
             addError: null,
           }
+        : state;
+
+    case 'REFRESH_ENTRY_SUCCESS':
+      return state.status === 'loaded'
+        ? { ...state, entries: state.entries.map((e) => (e.id === event.entry.id ? event.entry : e)) }
         : state;
 
     case 'ADD_FAILED':
