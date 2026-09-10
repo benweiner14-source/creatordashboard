@@ -1,8 +1,9 @@
-import type { YouTubeClient, VideoMetadata } from '@/lib/integrations/youtube';
+import type { YouTubeClient, VideoMetadata, ChannelStats } from '@/lib/integrations/youtube';
 
 export function createFakeYouTubeClient(
   overrides: Partial<VideoMetadata> = {},
-  channelUploads: VideoMetadata[] = []
+  channelUploads: VideoMetadata[] = [],
+  channelStats: ChannelStats = { subscriberCount: 1000, totalViewCount: 50000, videoCount: 20 }
 ): YouTubeClient {
   const metadata: VideoMetadata = {
     id: 'fake-video-id',
@@ -20,5 +21,6 @@ export function createFakeYouTubeClient(
     extractVideoId: (url: string) => (url.includes('youtube') ? 'fake-video-id' : null),
     getVideoMetadata: async () => metadata,
     getChannelUploads: async () => channelUploads,
+    getChannelStats: async () => channelStats,
   };
 }

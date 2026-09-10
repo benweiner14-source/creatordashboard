@@ -24,6 +24,12 @@ export class ChannelNotFoundError extends Error {
   }
 }
 
+export interface ChannelStats {
+  subscriberCount: number | null;
+  totalViewCount: number;
+  videoCount: number;
+}
+
 export interface YouTubeClient {
   extractVideoId(url: string): string | null;
   getVideoMetadata(videoId: string): Promise<VideoMetadata>;
@@ -33,6 +39,12 @@ export interface YouTubeClient {
    * callers filter further to a target month. See spec §2.2.
    */
   getChannelUploads(handle: string, maxResults?: number): Promise<VideoMetadata[]>;
+  /**
+   * Channel-level totals (subscribers, lifetime views, video count) — a
+   * separate API call from getChannelUploads, which only ever requests
+   * contentDetails. See lib/watchlist/handler.ts for the caller.
+   */
+  getChannelStats(handle: string): Promise<ChannelStats>;
 }
 
 export function extractYouTubeVideoId(url: string): string | null {
@@ -138,6 +150,24 @@ export function createYouTubeClient(apiKey: string): YouTubeClient {
       return (videosData.items ?? []).map((item: any, index: number) =>
         mapVideoItem({ ...item, id: item.id ?? videoIds[index] })
       );
+    },
+    async getChannelStats(handle: string): Promise<ChannelStats> {
+      const cleanHandle = handle.startsWith('@') ? handle : `@${handle}`;
+      const channelsUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+      channelsUrl.searchParams.set('part', 'statistics');
+      channelsUrl.searchParams.set('forHandle', cleanHandle);
+      channelsUrl.searchParams.set('key', apiKey);
+      const data = await fetchYouTubeJson(channelsUrl);
+      const channel = data.items?.[0];
+      if (!channel) {
+        throw new ChannelNotFoundError(handle);
+      }
+      const stats = channel.statistics ?? {};
+      return {
+        subscriberCount: stats.hiddenSubscriberCount ? null : Number(stats.subscriberCount ?? 0),
+        totalViewCount: Number(stats.viewCount ?? 0),
+        videoCount: Number(stats.videoCount ?? 0),
+      };
     },
   };
 }

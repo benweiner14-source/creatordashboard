@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { extractYouTubeVideoId, createYouTubeClient } from '@/lib/integrations/youtube';
+import { extractYouTubeVideoId, createYouTubeClient, ChannelNotFoundError } from '@/lib/integrations/youtube';
 
 describe('extractYouTubeVideoId', () => {
   it('extracts the video id from a standard watch URL', () => {
@@ -136,6 +136,46 @@ describe('createYouTubeClient', () => {
       const videos = await client.getChannelUploads('@creator');
       expect(videos).toEqual([]);
       expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('getChannelStats', () => {
+    it('fetches subscriber, view, and video counts by handle', async () => {
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [{ statistics: { subscriberCount: '4200', viewCount: '900000', videoCount: '150', hiddenSubscriberCount: false } }],
+        }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createYouTubeClient('test-api-key');
+      const stats = await client.getChannelStats('creator');
+
+      expect(stats).toEqual({ subscriberCount: 4200, totalViewCount: 900000, videoCount: 150 });
+      expect(String(fetchMock.mock.calls[0][0])).toContain('forHandle=%40creator');
+      expect(String(fetchMock.mock.calls[0][0])).toContain('part=statistics');
+    });
+
+    it('returns a null subscriberCount when the channel has hidden it', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ items: [{ statistics: { hiddenSubscriberCount: true, viewCount: '900000', videoCount: '150' } }] }),
+        })
+      );
+      const client = createYouTubeClient('test-api-key');
+      const stats = await client.getChannelStats('creator');
+      expect(stats.subscriberCount).toBeNull();
+    });
+
+    it('throws ChannelNotFoundError when the handle does not resolve', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ items: [] }) }));
+      const client = createYouTubeClient('test-api-key');
+      await expect(client.getChannelStats('nope')).rejects.toThrow(ChannelNotFoundError);
     });
   });
 });
