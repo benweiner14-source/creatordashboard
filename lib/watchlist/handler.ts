@@ -7,7 +7,6 @@ import {
   DuplicateWatchlistEntryError,
   WATCHLIST_ENTRY_LIMIT,
   type ChannelSnapshotInputPost,
-  type RankedPost,
   type SnapshotDeltas,
   type WatchlistEntry,
   type WatchlistEntryView,
@@ -19,9 +18,22 @@ export interface WatchlistHandlerResult {
   body: Record<string, unknown>;
 }
 
+export const WATCHLIST_SNAPSHOT_TTL_HOURS = 12;
+export const WATCHLIST_REFRESH_PROFILE_LIMIT = 40;
+export const WATCHLIST_REFRESH_IP_LIMIT = 80;
+const MS_PER_HOUR = 60 * 60 * 1000;
+const SEVEN_DAYS_MS = 7 * 24 * MS_PER_HOUR;
+const THIRTY_DAYS_MS = 30 * 24 * MS_PER_HOUR;
+
+export function isSnapshotStale(snapshot: WatchlistSnapshot | null, now: Date): boolean {
+  if (!snapshot) return true;
+  return now.getTime() - new Date(snapshot.capturedAt).getTime() > WATCHLIST_SNAPSHOT_TTL_HOURS * MS_PER_HOUR;
+}
+
 function toEntryView(
   entry: WatchlistEntry,
   snapshot: WatchlistSnapshot | null,
+  isStale: boolean,
   sevenDayDelta: SnapshotDeltas | null = null,
   thirtyDayDelta: SnapshotDeltas | null = null
 ): WatchlistEntryView {
@@ -33,12 +45,37 @@ function toEntryView(
     label: entry.label,
     lastError: entry.lastError,
     hasSnapshot: snapshot !== null,
+    isStale,
     subscriberCount: snapshot?.subscriberCount ?? null,
     totalViewCount: snapshot?.totalViewCount ?? null,
     videoCount: snapshot?.videoCount ?? null,
     topPosts: snapshot?.topPosts ?? [],
     sevenDayDelta,
     thirtyDayDelta,
+  };
+}
+
+/** Read-side deps shared by the list and refresh entry points. */
+interface DeltaLookupDeps {
+  getSnapshotAtOrBefore: (entryId: string, cutoff: Date) => Promise<WatchlistSnapshot | null>;
+}
+
+async function computeEntryDeltas(
+  deps: DeltaLookupDeps,
+  entryId: string,
+  snapshot: WatchlistSnapshot | null,
+  now: Date
+): Promise<{ sevenDayDelta: SnapshotDeltas | null; thirtyDayDelta: SnapshotDeltas | null }> {
+  if (!snapshot) {
+    return { sevenDayDelta: null, thirtyDayDelta: null };
+  }
+  const [sevenDayBaseline, thirtyDayBaseline] = await Promise.all([
+    deps.getSnapshotAtOrBefore(entryId, new Date(now.getTime() - SEVEN_DAYS_MS)),
+    deps.getSnapshotAtOrBefore(entryId, new Date(now.getTime() - THIRTY_DAYS_MS)),
+  ]);
+  return {
+    sevenDayDelta: computeDeltas(snapshot, sevenDayBaseline),
+    thirtyDayDelta: computeDeltas(snapshot, thirtyDayBaseline),
   };
 }
 
@@ -93,7 +130,9 @@ export async function handleAddWatchlistEntry(
       url: context.url,
       label: context.label?.trim() || null,
     });
-    return { status: 200, body: { entry: toEntryView(entry, null) } };
+    // A brand-new entry has no snapshot yet, so it is stale by definition —
+    // the client refreshes it in the background right after adding.
+    return { status: 200, body: { entry: toEntryView(entry, null, true) } };
   } catch (err) {
     if (err instanceof DuplicateWatchlistEntryError) {
       return { status: 409, body: { error: "You're already tracking this channel." } };
@@ -102,18 +141,54 @@ export async function handleAddWatchlistEntry(
   }
 }
 
-// ---- List (refresh-on-visit) ----
+// ---- List (read-only) ----
 
-export const WATCHLIST_SNAPSHOT_TTL_HOURS = 12;
-export const WATCHLIST_REFRESH_PROFILE_LIMIT = 40;
-export const WATCHLIST_REFRESH_IP_LIMIT = 80;
-const MS_PER_HOUR_LIST = 60 * 60 * 1000;
-const SEVEN_DAYS_MS = 7 * 24 * MS_PER_HOUR_LIST;
-const THIRTY_DAYS_MS = 30 * 24 * MS_PER_HOUR_LIST;
-
+/**
+ * Deliberately read-only: no fetch clients, no rate-limit store, no writes.
+ * Refreshing a stale entry costs an external API call and a rate-limit slot,
+ * so it lives behind POST /api/watchlist/refresh (see
+ * handleRefreshWatchlistEntry) rather than riding along on a GET — matching
+ * the same reasoning documented on `app/api/linkedin/ideas/route.ts`'s GET,
+ * and giving this handler a bounded, predictable per-request cost.
+ */
 export interface ListWatchlistDeps {
   hasActiveSubscription: (profileId: string) => Promise<boolean>;
   listEntries: (profileId: string) => Promise<WatchlistEntry[]>;
+  getLatestSnapshot: (entryId: string) => Promise<WatchlistSnapshot | null>;
+  getSnapshotAtOrBefore: (entryId: string, cutoff: Date) => Promise<WatchlistSnapshot | null>;
+}
+
+export interface ListWatchlistContext {
+  profileId: string | null;
+  now?: Date;
+}
+
+export async function handleListWatchlist(deps: ListWatchlistDeps, context: ListWatchlistContext): Promise<WatchlistHandlerResult> {
+  if (!context.profileId) {
+    return { status: 401, body: { error: 'You must be signed in to view your watchlist.' } };
+  }
+
+  const now = context.now ?? new Date();
+  const [entries, subscribed] = await Promise.all([
+    deps.listEntries(context.profileId),
+    deps.hasActiveSubscription(context.profileId),
+  ]);
+
+  const views: WatchlistEntryView[] = [];
+  for (const entry of entries) {
+    const snapshot = await deps.getLatestSnapshot(entry.id);
+    const { sevenDayDelta, thirtyDayDelta } = await computeEntryDeltas(deps, entry.id, snapshot, now);
+    views.push(toEntryView(entry, snapshot, isSnapshotStale(snapshot, now), sevenDayDelta, thirtyDayDelta));
+  }
+
+  return { status: 200, body: { entries: views, subscriptionRequired: !subscribed } };
+}
+
+// ---- Refresh a single entry ----
+
+export interface RefreshWatchlistEntryDeps {
+  hasActiveSubscription: (profileId: string) => Promise<boolean>;
+  getEntry: (profileId: string, entryId: string) => Promise<WatchlistEntry | null>;
   getLatestSnapshot: (entryId: string) => Promise<WatchlistSnapshot | null>;
   getSnapshotAtOrBefore: (entryId: string, cutoff: Date) => Promise<WatchlistSnapshot | null>;
   insertSnapshot: (snapshot: WatchlistSnapshot) => Promise<void>;
@@ -125,14 +200,15 @@ export interface ListWatchlistDeps {
   ipSalt: string;
 }
 
-export interface ListWatchlistContext {
+export interface RefreshWatchlistEntryContext {
   profileId: string | null;
   ip: string;
+  entryId: string;
   now?: Date;
 }
 
 async function fetchChannelSnapshotInput(
-  deps: Pick<ListWatchlistDeps, 'youtubeClient' | 'scraperClient'>,
+  deps: Pick<RefreshWatchlistEntryDeps, 'youtubeClient' | 'scraperClient'>,
   entry: WatchlistEntry
 ): Promise<{ subscriberCount: number | null; totalViewCount: number; videoCount: number; posts: ChannelSnapshotInputPost[] }> {
   if (entry.platform === 'youtube') {
@@ -157,7 +233,9 @@ async function fetchChannelSnapshotInput(
   // Apify doesn't reliably expose a channel-level lifetime view total for
   // TikTok/Instagram the way YouTube's channels.list statistics does, so
   // totalViewCount/videoCount here are a sum over the fetched pool (up to 50
-  // most recent posts) -- an honest proxy, not a true lifetime total.
+  // most recent posts) -- an honest proxy, not a true lifetime total. The UI
+  // suppresses the "since <date>" delta badge on these two figures for
+  // non-YouTube entries, since a rolling window's delta isn't growth.
   return {
     subscriberCount: scraped[0]?.followerCount ?? null,
     totalViewCount: scraped.reduce((sum, post) => sum + post.viewCount, 0),
@@ -171,78 +249,114 @@ async function fetchChannelSnapshotInput(
   };
 }
 
-export async function handleListWatchlist(deps: ListWatchlistDeps, context: ListWatchlistContext): Promise<WatchlistHandlerResult> {
+/**
+ * Refreshes exactly one entry. The paid, rate-limited, externally-fetching
+ * half of the watchlist — everything GET used to do inline, scoped to a single
+ * entry so each request has a bounded cost.
+ *
+ * A refresh that is skipped (still fresh, or out of daily budget) or that
+ * fails to fetch is never a request-level failure: the caller gets 200 with
+ * the entry's current cached view and `refreshed: false`.
+ */
+export async function handleRefreshWatchlistEntry(
+  deps: RefreshWatchlistEntryDeps,
+  context: RefreshWatchlistEntryContext
+): Promise<WatchlistHandlerResult> {
   if (!context.profileId) {
-    return { status: 401, body: { error: 'You must be signed in to view your watchlist.' } };
+    return { status: 401, body: { error: 'You must be signed in to refresh a competitor.' } };
+  }
+
+  if (!(await deps.hasActiveSubscription(context.profileId))) {
+    return { status: 402, body: { error: 'Refreshing a competitor requires an active subscription.', upgradeUrl: '/billing' } };
+  }
+
+  // Ownership is checked explicitly in the lookup, not left to RLS — the same
+  // convention DELETE /api/watchlist/[id] follows. Without it, any signed-in
+  // profile could burn another profile's refresh budget and API quota.
+  const entry = await deps.getEntry(context.profileId, context.entryId);
+  if (!entry) {
+    return { status: 404, body: { error: 'Watchlist entry not found.' } };
   }
 
   const now = context.now ?? new Date();
-  const [entries, subscribed] = await Promise.all([
-    deps.listEntries(context.profileId),
-    deps.hasActiveSubscription(context.profileId),
-  ]);
-  const ipHash = hashIp(context.ip, deps.ipSalt);
+  let currentSnapshot = await deps.getLatestSnapshot(entry.id);
+  let lastError = entry.lastError;
+  let refreshed = false;
 
-  let budgetExhausted = false;
-  const views: WatchlistEntryView[] = [];
+  const respond = async () => {
+    const { sevenDayDelta, thirtyDayDelta } = await computeEntryDeltas(deps, entry.id, currentSnapshot, now);
+    return {
+      status: 200,
+      body: {
+        entry: toEntryView(
+          { ...entry, lastError },
+          currentSnapshot,
+          isSnapshotStale(currentSnapshot, now),
+          sevenDayDelta,
+          thirtyDayDelta
+        ),
+        refreshed,
+      },
+    };
+  };
 
-  for (const entry of entries) {
-    let currentSnapshot = await deps.getLatestSnapshot(entry.id);
-    let lastError = entry.lastError;
-    const isStale =
-      !currentSnapshot ||
-      now.getTime() - new Date(currentSnapshot.capturedAt).getTime() > WATCHLIST_SNAPSHOT_TTL_HOURS * MS_PER_HOUR_LIST;
-
-    if (subscribed && isStale && !budgetExhausted) {
-      const rateLimitResult = await checkAndRecordRateLimit({
-        store: deps.rateLimitStore,
-        profileId: context.profileId,
-        ipHash,
-        eventType: 'watchlist_refresh',
-        profileLimit: WATCHLIST_REFRESH_PROFILE_LIMIT,
-        ipLimit: WATCHLIST_REFRESH_IP_LIMIT,
-        windowDays: 1,
-        now,
-      });
-
-      if (!rateLimitResult.allowed) {
-        budgetExhausted = true;
-      } else {
-        try {
-          const fetched = await fetchChannelSnapshotInput(deps, entry);
-          const summary = buildSnapshotSummary(fetched, now);
-          const snapshot: WatchlistSnapshot = { entryId: entry.id, capturedAt: now.toISOString(), ...summary };
-          await deps.insertSnapshot(snapshot);
-          await deps.clearEntryError(entry.id);
-          currentSnapshot = snapshot;
-          lastError = null;
-        } catch (err) {
-          await releaseRateLimitEventIfNeeded({ store: deps.rateLimitStore, eventId: rateLimitResult.eventId });
-          const message =
-            err instanceof ChannelNotFoundError
-              ? "We couldn't find this channel anymore — it may have been renamed or removed."
-              : "Couldn't refresh this competitor's stats. Will retry next visit.";
-          await deps.setEntryError(entry.id, message);
-          lastError = message;
-        }
-      }
-    }
-
-    let sevenDayDelta: SnapshotDeltas | null = null;
-    let thirtyDayDelta: SnapshotDeltas | null = null;
-    if (currentSnapshot) {
-      const [sevenDayBaseline, thirtyDayBaseline] = await Promise.all([
-        deps.getSnapshotAtOrBefore(entry.id, new Date(now.getTime() - SEVEN_DAYS_MS)),
-        deps.getSnapshotAtOrBefore(entry.id, new Date(now.getTime() - THIRTY_DAYS_MS)),
-      ]);
-      sevenDayDelta = computeDeltas(currentSnapshot, sevenDayBaseline);
-      thirtyDayDelta = computeDeltas(currentSnapshot, thirtyDayBaseline);
-    }
-
-    views.push(toEntryView({ ...entry, lastError }, currentSnapshot, sevenDayDelta, thirtyDayDelta));
+  // Idempotent no-op when the cached snapshot is still fresh: a client that's
+  // slightly out of sync about staleness shouldn't spend budget or quota.
+  if (!isSnapshotStale(currentSnapshot, now)) {
+    return respond();
   }
 
-  return { status: 200, body: { entries: views, subscriptionRequired: !subscribed } };
+  const rateLimitResult = await checkAndRecordRateLimit({
+    store: deps.rateLimitStore,
+    profileId: context.profileId,
+    ipHash: hashIp(context.ip, deps.ipSalt),
+    eventType: 'watchlist_refresh',
+    profileLimit: WATCHLIST_REFRESH_PROFILE_LIMIT,
+    ipLimit: WATCHLIST_REFRESH_IP_LIMIT,
+    windowDays: 1,
+    now,
+  });
+
+  // Out of daily budget: serve what we have. Per the spec this is an expected
+  // state, not an error the client has to handle.
+  if (!rateLimitResult.allowed) {
+    return respond();
+  }
+
+  try {
+    const fetched = await fetchChannelSnapshotInput(deps, entry);
+    const summary = buildSnapshotSummary(fetched, now);
+    const snapshot: WatchlistSnapshot = { entryId: entry.id, capturedAt: now.toISOString(), ...summary };
+    await deps.insertSnapshot(snapshot);
+
+    // The snapshot is durably saved, so this refresh succeeded — reflect that
+    // in the response before touching last_error. A failure to clear the error
+    // column is a bookkeeping problem, not a reason to keep showing a stale
+    // error message (and its blanked-out row) for the rest of the TTL window.
+    currentSnapshot = snapshot;
+    lastError = null;
+    refreshed = true;
+    try {
+      await deps.clearEntryError(entry.id);
+    } catch {
+      // Intentionally swallowed: the next successful refresh will clear it.
+    }
+  } catch (err) {
+    await releaseRateLimitEventIfNeeded({ store: deps.rateLimitStore, eventId: rateLimitResult.eventId });
+    const message =
+      err instanceof ChannelNotFoundError
+        ? "We couldn't find this channel anymore — it may have been renamed or removed."
+        : "Couldn't refresh this competitor's stats. Will retry next visit.";
+    lastError = message;
+    try {
+      await deps.setEntryError(entry.id, message);
+    } catch {
+      // Same reasoning as clearEntryError above: the response still reports the
+      // failure accurately even if the column write didn't land.
+    }
+  }
+
+  return respond();
 }
 
 // ---- Remove ----

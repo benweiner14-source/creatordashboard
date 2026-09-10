@@ -70,6 +70,13 @@ export interface WatchlistEntryView {
   label: string | null;
   lastError: string | null;
   hasSnapshot: boolean;
+  /**
+   * True when this entry has no snapshot at all, or its latest one is older
+   * than WATCHLIST_SNAPSHOT_TTL_HOURS. GET /api/watchlist is read-only, so the
+   * client uses this to decide which entries to refresh in the background via
+   * POST /api/watchlist/refresh.
+   */
+  isStale: boolean;
   subscriberCount: number | null;
   totalViewCount: number | null;
   videoCount: number | null;
