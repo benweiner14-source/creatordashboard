@@ -5,10 +5,64 @@ import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
 import { watchlistPageReducer, createInitialWatchlistPageState, WATCHLIST_ENTRY_LIMIT } from '@/lib/watchlist/page-state';
+import type { WatchlistEntryView } from '@/lib/watchlist/types';
 
 export default function WatchlistPage() {
   const [state, dispatch] = useReducer(watchlistPageReducer, createInitialWatchlistPageState());
   const stillWorkingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unmounted = useRef(false);
+  // Entry ids a background refresh has already been started for, so a re-render
+  // or a post-add list re-fetch never asks the server to refresh one twice.
+  const refreshAttempted = useRef<Set<string>>(new Set());
+  // Serialises every refresh pass (bootstrap's and the one after an add) into a
+  // single chain, so "one refresh at a time" holds even if a creator adds a
+  // competitor while the bootstrap pass is still working through the backlog.
+  const refreshChain = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    // Reset on (re-)mount as well as setting it on unmount: React's dev-mode
+    // double-invoke runs the cleanup between the two effect passes, and a
+    // latched `true` would silently kill every background refresh in dev.
+    unmounted.current = false;
+    return () => {
+      unmounted.current = true;
+    };
+  }, []);
+
+  /**
+   * GET /api/watchlist is read-only, so anything past its TTL arrives stale.
+   * Refresh those one at a time in the background — sequentially, not in
+   * parallel, to stay gentle on the shared daily refresh budget and on the
+   * upstream APIs — merging each entry into the list as its response lands.
+   * Nothing here blocks the render; a failed refresh is silently left alone
+   * (the entry keeps showing its cached numbers and will retry next visit).
+   */
+  async function refreshStaleEntries(entries: WatchlistEntryView[], subscriptionRequired: boolean) {
+    if (subscriptionRequired) return; // Refreshing is the paid action; a 402 is guaranteed.
+    for (const entry of entries) {
+      if (!entry.isStale || refreshAttempted.current.has(entry.id)) continue;
+      refreshAttempted.current.add(entry.id);
+      try {
+        const response = await fetch('/api/watchlist/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entryId: entry.id }),
+        });
+        if (unmounted.current) return;
+        if (!response.ok) continue;
+        const data = await response.json();
+        if (data?.entry && !unmounted.current) {
+          dispatch({ type: 'REFRESH_ENTRY_SUCCESS', entry: data.entry });
+        }
+      } catch {
+        // Non-blocking by design: leave the cached row as it is.
+      }
+    }
+  }
+
+  function queueStaleRefreshes(entries: WatchlistEntryView[], subscriptionRequired: boolean) {
+    refreshChain.current = refreshChain.current.then(() => refreshStaleEntries(entries, subscriptionRequired)).catch(() => {});
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -20,7 +74,10 @@ export default function WatchlistPage() {
           return;
         }
         const data = await res.json();
-        dispatch({ type: 'BOOTSTRAPPED', entries: data.entries ?? [], subscriptionRequired: data.subscriptionRequired ?? false });
+        const entries: WatchlistEntryView[] = data.entries ?? [];
+        const subscriptionRequired: boolean = data.subscriptionRequired ?? false;
+        dispatch({ type: 'BOOTSTRAPPED', entries, subscriptionRequired });
+        queueStaleRefreshes(entries, subscriptionRequired);
       })
       .catch(() => {
         if (!cancelled) dispatch({ type: 'BOOTSTRAP_FAILED' });
@@ -28,6 +85,10 @@ export default function WatchlistPage() {
     return () => {
       cancelled = true;
     };
+    // Bootstrap runs exactly once on mount. queueStaleRefreshes closes over
+    // refs only, so re-running this effect when it is re-created would just
+    // re-issue the bootstrap GET for no reason.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isAdding = state.status === 'loaded' && state.adding;
@@ -53,11 +114,12 @@ export default function WatchlistPage() {
       }
       const refreshed = await fetch('/api/watchlist');
       const refreshedData = await refreshed.json();
-      dispatch({
-        type: 'ADD_SUCCESS',
-        entries: refreshedData.entries ?? [],
-        subscriptionRequired: refreshedData.subscriptionRequired ?? false,
-      });
+      const entries: WatchlistEntryView[] = refreshedData.entries ?? [];
+      const subscriptionRequired: boolean = refreshedData.subscriptionRequired ?? false;
+      dispatch({ type: 'ADD_SUCCESS', entries, subscriptionRequired });
+      // The entry just added has no snapshot yet, so it comes back stale —
+      // fetch its first snapshot in the background, same as on bootstrap.
+      queueStaleRefreshes(entries, subscriptionRequired);
     } catch {
       dispatch({ type: 'ADD_FAILED', error: 'Something went wrong on our end. Try again in a moment.' });
     }
@@ -199,6 +261,11 @@ export default function WatchlistPage() {
             {state.adding ? <Spinner label={state.addStillWorking ? 'Still checking their channel…' : 'Adding…'} /> : 'Add competitor'}
           </button>
         </form>
+        {state.bootstrapError && (
+          <p role="alert" className="text-sm text-red-600">
+            {state.bootstrapError}
+          </p>
+        )}
         {state.addError && (
           <p role="alert" className="text-sm text-red-600">
             {state.addError}
@@ -236,15 +303,43 @@ export default function WatchlistPage() {
                   </button>
                 </div>
 
-                {entry.lastError ? (
-                  <p className="mt-2 text-sm text-amber-700">{entry.lastError}</p>
-                ) : !entry.hasSnapshot ? (
+                {/* A failed refresh annotates the row; it never blanks it. An
+                    entry's last good snapshot is still the truest thing we know
+                    about that competitor, so the numbers stay put. */}
+                {entry.lastError && <p className="mt-2 text-sm text-amber-700">{entry.lastError}</p>}
+
+                {!entry.hasSnapshot ? (
                   <p className="mt-2 text-sm text-gray-500">Fetching first snapshot…</p>
                 ) : (
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <Stat label="Subscribers" value={entry.subscriberCount} delta={entry.sevenDayDelta?.subscriberDelta ?? null} />
-                    <Stat label="Total views" value={entry.totalViewCount} delta={entry.sevenDayDelta?.totalViewDelta ?? null} />
-                    <Stat label="Videos" value={entry.videoCount} delta={entry.sevenDayDelta?.videoDelta ?? null} />
+                    <Stat
+                      label="Subscribers"
+                      value={entry.subscriberCount}
+                      sevenDayDelta={entry.sevenDayDelta?.subscriberDelta ?? null}
+                      thirtyDayDelta={entry.thirtyDayDelta?.subscriberDelta ?? null}
+                      sevenDayBaseline={entry.sevenDayDelta?.comparedAgainstCapturedAt ?? null}
+                      thirtyDayBaseline={entry.thirtyDayDelta?.comparedAgainstCapturedAt ?? null}
+                    />
+                    {/* For TikTok/Instagram, total views and post count are a sum
+                        over a rolling ~50-post window, not lifetime totals — a
+                        delta on them measures the window sliding, not growth, so
+                        the badges are suppressed (the raw figure still shows). */}
+                    <Stat
+                      label="Total views"
+                      value={entry.totalViewCount}
+                      sevenDayDelta={entry.platform === 'youtube' ? entry.sevenDayDelta?.totalViewDelta ?? null : null}
+                      thirtyDayDelta={entry.platform === 'youtube' ? entry.thirtyDayDelta?.totalViewDelta ?? null : null}
+                      sevenDayBaseline={entry.sevenDayDelta?.comparedAgainstCapturedAt ?? null}
+                      thirtyDayBaseline={entry.thirtyDayDelta?.comparedAgainstCapturedAt ?? null}
+                    />
+                    <Stat
+                      label="Videos"
+                      value={entry.videoCount}
+                      sevenDayDelta={entry.platform === 'youtube' ? entry.sevenDayDelta?.videoDelta ?? null : null}
+                      thirtyDayDelta={entry.platform === 'youtube' ? entry.thirtyDayDelta?.videoDelta ?? null : null}
+                      sevenDayBaseline={entry.sevenDayDelta?.comparedAgainstCapturedAt ?? null}
+                      thirtyDayBaseline={entry.thirtyDayDelta?.comparedAgainstCapturedAt ?? null}
+                    />
                   </div>
                 )}
 
@@ -272,19 +367,53 @@ export default function WatchlistPage() {
   );
 }
 
-function Stat({ label, value, delta }: { label: string; value: number | null; delta: number | null }) {
+/**
+ * A delta's baseline is "the most recent snapshot at least N days old", which
+ * can be considerably older than N days when an entry was added a while ago and
+ * refreshed rarely. Labelling every 7-day delta "this week" overstated that;
+ * naming the actual comparison date is both honest and no less readable.
+ */
+function formatBaselineDate(capturedAt: string): string {
+  const date = new Date(capturedAt);
+  if (!Number.isFinite(date.getTime())) return 'earlier';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function DeltaBadge({ delta, baseline }: { delta: number; baseline: string | null }) {
+  return (
+    <span className={`block text-sm font-normal ${delta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+      {delta >= 0 ? '+' : ''}
+      {delta.toLocaleString()}
+      {baseline ? ` since ${formatBaselineDate(baseline)}` : ''}
+    </span>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  sevenDayDelta,
+  thirtyDayDelta,
+  sevenDayBaseline,
+  thirtyDayBaseline,
+}: {
+  label: string;
+  value: number | null;
+  sevenDayDelta: number | null;
+  thirtyDayDelta: number | null;
+  sevenDayBaseline: string | null;
+  thirtyDayBaseline: string | null;
+}) {
+  // With little history the ">=7 days old" and ">=30 days old" lookups often
+  // land on the same snapshot; showing the identical badge twice would just
+  // read as a rendering bug.
+  const showThirtyDay = thirtyDayDelta !== null && thirtyDayBaseline !== sevenDayBaseline;
   return (
     <div>
       <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-lg font-semibold text-gray-900">
-        {value === null ? '—' : value.toLocaleString()}
-        {delta !== null && (
-          <span className={`ml-2 text-sm font-normal ${delta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {delta >= 0 ? '+' : ''}
-            {delta.toLocaleString()} this week
-          </span>
-        )}
-      </p>
+      <p className="text-lg font-semibold text-gray-900">{value === null ? '—' : value.toLocaleString()}</p>
+      {sevenDayDelta !== null && <DeltaBadge delta={sevenDayDelta} baseline={sevenDayBaseline} />}
+      {showThirtyDay && <DeltaBadge delta={thirtyDayDelta} baseline={thirtyDayBaseline} />}
     </div>
   );
 }

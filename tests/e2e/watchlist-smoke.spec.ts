@@ -32,6 +32,7 @@ test('a subscribed visitor adds a competitor, sees its snapshot, expands top pos
             label: null,
             lastError: null,
             hasSnapshot: true,
+            isStale: false,
             subscriberCount: 42000,
             totalViewCount: 900000,
             videoCount: 30,
@@ -52,6 +53,17 @@ test('a subscribed visitor adds a competitor, sees its snapshot, expands top pos
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries, subscriptionRequired: false }) });
   });
 
+  // GET /api/watchlist is read-only now, so the page refreshes stale entries
+  // itself via POST /api/watchlist/refresh. The mocked list above hands back an
+  // already-fresh entry (isStale: false), so this should never be hit -- it is
+  // mocked as a no-op so a regression that refreshes regardless of staleness
+  // fails loudly on the assertion below rather than on an unrouted request.
+  let refreshCalls = 0;
+  await page.route('**/api/watchlist/refresh', async (route) => {
+    refreshCalls += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entry: null, refreshed: false }) });
+  });
+
   await page.route('**/api/watchlist/e2e-entry-1', async (route) => {
     await route.fulfill({ status: 204, contentType: 'application/json', body: '' });
   });
@@ -70,4 +82,6 @@ test('a subscribed visitor adds a competitor, sees its snapshot, expands top pos
 
   await page.getByRole('button', { name: /remove/i }).click();
   await expect(page.getByText(/no competitors tracked yet/i)).toBeVisible();
+
+  expect(refreshCalls).toBe(0);
 });
