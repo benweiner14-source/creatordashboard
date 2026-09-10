@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { handleAddWatchlistEntry, handleListWatchlist, WATCHLIST_REFRESH_PROFILE_LIMIT } from '@/lib/watchlist/handler';
+import { handleAddWatchlistEntry, handleListWatchlist, handleRemoveWatchlistEntry, WATCHLIST_REFRESH_PROFILE_LIMIT } from '@/lib/watchlist/handler';
 import { DuplicateWatchlistEntryError, WATCHLIST_ENTRY_LIMIT, type WatchlistEntry, type WatchlistSnapshot } from '@/lib/watchlist/types';
 import { createFakeYouTubeClient } from '../../../fakes/youtube.fake';
 import { createFakeScraperClient } from '../../../fakes/scraper.fake';
@@ -249,5 +249,32 @@ describe('handleListWatchlist', () => {
     await handleAddWatchlistEntry(deps, { profileId: 'p1', url: 'https://www.youtube.com/@creator' });
     await handleListWatchlist(deps, { profileId: 'p1', ip: '203.0.113.1', now: new Date('2026-09-10T00:00:00Z') });
     expect((deps as any).__snapshots).toHaveLength(1);
+  });
+});
+
+describe('handleRemoveWatchlistEntry', () => {
+  it('rejects requests without a signed-in profile', async () => {
+    const result = await handleRemoveWatchlistEntry(makeDeps(), { profileId: null, entryId: 'entry-1' });
+    expect(result.status).toBe(401);
+  });
+
+  it('removes an entry the profile owns', async () => {
+    const deps = makeDeps();
+    const added = await handleAddWatchlistEntry(deps, { profileId: 'p1', url: 'https://www.youtube.com/@creator' });
+    const entryId = (added.body.entry as { id: string }).id;
+
+    const result = await handleRemoveWatchlistEntry(deps, { profileId: 'p1', entryId });
+    expect(result.status).toBe(204);
+    expect(await deps.listEntries('p1')).toEqual([]);
+  });
+
+  it('returns 404 for an entry that does not exist or belongs to someone else', async () => {
+    const deps = makeDeps();
+    const added = await handleAddWatchlistEntry(deps, { profileId: 'p1', url: 'https://www.youtube.com/@creator' });
+    const entryId = (added.body.entry as { id: string }).id;
+
+    const result = await handleRemoveWatchlistEntry(deps, { profileId: 'someone-else', entryId });
+    expect(result.status).toBe(404);
+    expect(await deps.listEntries('p1')).toHaveLength(1); // untouched
   });
 });

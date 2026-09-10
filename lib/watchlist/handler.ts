@@ -244,3 +244,29 @@ export async function handleListWatchlist(deps: ListWatchlistDeps, context: List
 
   return { status: 200, body: { entries: views, subscriptionRequired: !subscribed } };
 }
+
+// ---- Remove ----
+
+export interface RemoveWatchlistEntryDeps {
+  deleteEntry: (profileId: string, entryId: string) => Promise<boolean>;
+}
+
+export interface RemoveWatchlistEntryContext {
+  profileId: string | null;
+  entryId: string;
+}
+
+export async function handleRemoveWatchlistEntry(
+  deps: RemoveWatchlistEntryDeps,
+  context: RemoveWatchlistEntryContext
+): Promise<WatchlistHandlerResult> {
+  if (!context.profileId) {
+    return { status: 401, body: { error: 'You must be signed in to remove a competitor.' } };
+  }
+
+  const deleted = await deps.deleteEntry(context.profileId, context.entryId);
+  if (!deleted) {
+    return { status: 404, body: { error: 'Watchlist entry not found.' } };
+  }
+  return { status: 204, body: {} };
+}
