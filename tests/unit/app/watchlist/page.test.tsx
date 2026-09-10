@@ -89,16 +89,62 @@ describe('WatchlistPage', () => {
 
   describe('adding a competitor', () => {
     beforeEach(() => {
+      let getCallCount = 0;
       const fetchMock = vi.fn((url: string, init?: RequestInit) => {
         if (url === '/api/watchlist' && (!init || init.method === undefined)) {
-          return Promise.resolve(jsonResponse({ entries: [], subscriptionRequired: false }));
+          getCallCount += 1;
+          if (getCallCount === 1) {
+            // Bootstrap GET: nothing tracked yet.
+            return Promise.resolve(jsonResponse({ entries: [], subscriptionRequired: false }));
+          }
+          // Re-fetch GET after a successful POST: the freshly-added entry, in full.
+          return Promise.resolve(
+            jsonResponse({
+              entries: [
+                {
+                  id: 'entry-new',
+                  platform: 'youtube',
+                  handle: 'freshcreator',
+                  url: 'https://www.youtube.com/@freshcreator',
+                  label: 'Fresh rival',
+                  lastError: null,
+                  hasSnapshot: false,
+                  subscriberCount: null,
+                  totalViewCount: null,
+                  videoCount: null,
+                  topPosts: [],
+                  sevenDayDelta: null,
+                  thirtyDayDelta: null,
+                },
+              ],
+              subscriptionRequired: false,
+            })
+          );
         }
         if (url === '/api/watchlist' && init?.method === 'POST') {
+          // Deliberately bare, unlike the full entry the re-fetch GET returns above — if the
+          // page ever regressed to appending this response directly instead of re-fetching,
+          // the assertions below (which look for data only the GET response carries) would fail.
           return Promise.resolve(jsonResponse({ entry: { id: 'entry-new' } }));
         }
         return Promise.resolve(jsonResponse({ error: 'unexpected call' }, 500));
       });
       vi.stubGlobal('fetch', fetchMock);
+    });
+
+    it('re-fetches the list after a successful add and renders the fresh entry, not the bare POST response', async () => {
+      render(<WatchlistPage />);
+      await waitFor(() => expect(screen.getByText(/no competitors tracked yet/i)).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText(/channel or profile link/i), {
+        target: { value: 'https://www.youtube.com/@freshcreator' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /add competitor/i }));
+
+      await waitFor(() => expect(screen.getByText('Fresh rival')).toBeInTheDocument());
+      // Only the re-fetched GET response carries this handle/platform text — the bare POST
+      // response ({ entry: { id: 'entry-new' } }) has no handle or platform at all.
+      expect(screen.getByText(/youtube · @freshcreator/i)).toBeInTheDocument();
     });
 
     it('shows an error and keeps the form usable when adding fails', async () => {
@@ -156,6 +202,48 @@ describe('WatchlistPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /remove/i }));
     await waitFor(() => expect(screen.getByText(/no competitors tracked yet/i)).toBeInTheDocument());
+  });
+
+  it('shows an error and keeps the entry when the remove request fails', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        return Promise.resolve(jsonResponse({ error: 'Something went wrong removing that competitor.' }, 500));
+      }
+      return Promise.resolve(
+        jsonResponse({
+          entries: [
+            {
+              id: 'entry-1',
+              platform: 'youtube',
+              handle: 'creator',
+              url: 'https://www.youtube.com/@creator',
+              label: null,
+              lastError: null,
+              hasSnapshot: false,
+              subscriberCount: null,
+              totalViewCount: null,
+              videoCount: null,
+              topPosts: [],
+              sevenDayDelta: null,
+              thirtyDayDelta: null,
+            },
+          ],
+          subscriptionRequired: false,
+        })
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<WatchlistPage />);
+    await waitFor(() => expect(screen.getByText('@creator')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong removing that competitor.')
+    );
+    // The entry must still be shown — REMOVE_FAILED should not remove it from the list.
+    expect(screen.getByText('@creator')).toBeInTheDocument();
   });
 
   it('shows an entry-level error message instead of stats when lastError is set', async () => {
