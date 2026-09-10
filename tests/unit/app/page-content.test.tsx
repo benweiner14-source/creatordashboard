@@ -62,4 +62,9 @@ describe('MarketingPage content (signed out)', () => {
       screen.getByRole('heading', { name: /understand your content, in plain english/i })
     ).toBeInTheDocument();
   });
+
+  it('links to the competitor watchlist tool', async () => {
+    await renderSignedOut();
+    expect(screen.getByRole('link', { name: /track your competitors/i })).toHaveAttribute('href', '/watchlist');
+  });
 });

@@ -49,6 +49,9 @@ export default async function MarketingPage() {
       <Link href="/linkedin" className="text-indigo-700 underline">
         Build a LinkedIn content strategy
       </Link>
+      <Link href="/watchlist" className="text-indigo-700 underline">
+        Track your competitors
+      </Link>
     </main>
   );
 }
