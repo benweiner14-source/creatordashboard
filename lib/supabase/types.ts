@@ -261,6 +261,54 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['linkedin_profile_audits']['Insert']>;
         Relationships: [];
       };
+      watchlist_entries: {
+        Row: {
+          id: string;
+          profile_id: string;
+          platform: 'youtube' | 'tiktok' | 'instagram';
+          handle: string;
+          url: string;
+          label: string | null;
+          last_error: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          platform: 'youtube' | 'tiktok' | 'instagram';
+          handle: string;
+          url: string;
+          label?: string | null;
+          last_error?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['watchlist_entries']['Insert']>;
+        Relationships: [];
+      };
+      watchlist_snapshots: {
+        Row: {
+          id: string;
+          entry_id: string;
+          captured_at: string;
+          subscriber_count: number | null;
+          total_view_count: number;
+          video_count: number;
+          top_posts: unknown;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          entry_id: string;
+          captured_at?: string;
+          subscriber_count?: number | null;
+          total_view_count: number;
+          video_count: number;
+          top_posts: unknown;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['watchlist_snapshots']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

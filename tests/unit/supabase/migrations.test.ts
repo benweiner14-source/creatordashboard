@@ -163,4 +163,23 @@ describe('supabase migrations', () => {
     expect(sql).toContain('needs_work jsonb not null');
     expect(sql).not.toMatch(/(^|[^a-z0-9])(pdf|file)([^a-z0-9]|$)/i);
   });
+
+  it('includes a watchlist_entries table migration unique per profile/platform/handle', () => {
+    const sql = readMigrationContaining('create_watchlist_tables');
+    expect(sql).toContain('create table public.watchlist_entries');
+    expect(sql).toContain('platform public.diagnostic_platform not null');
+    expect(sql).toContain('unique (profile_id, platform, handle)');
+    expect(sql).toContain('"Watchlist entries are viewable by owner"');
+    expect(sql).toContain('"Watchlist entries are insertable by owner"');
+    expect(sql).toContain('"Watchlist entries are deletable by owner"');
+  });
+
+  it('includes a watchlist_snapshots table migration owned indirectly through its entry', () => {
+    const sql = readMigrationContaining('create_watchlist_tables');
+    expect(sql).toContain('create table public.watchlist_snapshots');
+    expect(sql).toContain('references public.watchlist_entries(id) on delete cascade');
+    expect(sql).toContain('top_posts jsonb not null');
+    expect(sql).toContain('"Watchlist snapshots are viewable by owner"');
+    expect(sql).toContain('watchlist_snapshots_entry_id_captured_at_idx');
+  });
 });
