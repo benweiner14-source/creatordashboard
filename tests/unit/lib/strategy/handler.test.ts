@@ -156,6 +156,52 @@ describe('handleStrategyBreakdownRequest', () => {
     });
   });
 
+  it('ranks top posts by views-per-hour, not raw view count', async () => {
+    const now = Date.now();
+    const hoursAgo = (h: number) => new Date(now - h * 60 * 60 * 1000).toISOString();
+    // "Old but huge" racked up more total views, but it's been live for 30
+    // days -- 20/hr. "New and rising" is only 10 hours old at 90/hr.
+    const uploads: VideoMetadata[] = [
+      {
+        id: 'v1',
+        title: 'Old but huge',
+        description: '',
+        publishedAt: hoursAgo(24 * 30),
+        durationSeconds: 500,
+        viewCount: 14400,
+        likeCount: 100,
+        commentCount: 10,
+        tags: [],
+      },
+      {
+        id: 'v2',
+        title: 'New and rising',
+        description: '',
+        publishedAt: hoursAgo(10),
+        durationSeconds: 500,
+        viewCount: 900,
+        likeCount: 50,
+        commentCount: 5,
+        tags: [],
+      },
+    ];
+    let savedTopPosts: Array<{ captionOrTitle: string; viewCount: number }> | undefined;
+    const deps = makeDeps({
+      youtubeClient: createFakeYouTubeClient({}, uploads),
+      saveStrategyBreakdown: async (params) => {
+        savedTopPosts = params.topPosts;
+        return { id: 'strategy-1' };
+      },
+    });
+    const result = await handleStrategyBreakdownRequest(deps, {
+      profileId: 'p1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/@creator',
+    });
+    expect(result.status).toBe(200);
+    expect(savedTopPosts?.[0].captionOrTitle).toBe('New and rising');
+  });
+
   it('returns a friendly 404 without releasing the rate-limit slot when the YouTube channel does not exist', async () => {
     const deps = makeDeps({ youtubeClient: createNotFoundYouTubeClient() });
     let result;
