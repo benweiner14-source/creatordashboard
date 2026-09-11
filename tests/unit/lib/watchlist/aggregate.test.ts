@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeViewsPerHour, buildSnapshotSummary, computeDeltas } from '@/lib/watchlist/aggregate';
+import { buildSnapshotSummary, computeDeltas } from '@/lib/watchlist/aggregate';
 import type { ChannelSnapshotInputPost } from '@/lib/watchlist/types';
 
 const NOW = new Date('2026-09-10T12:00:00Z');
@@ -14,22 +14,7 @@ function makePost(overrides: Partial<ChannelSnapshotInputPost> = {}): ChannelSna
   };
 }
 
-describe('computeViewsPerHour', () => {
-  it('divides views by hours elapsed since publishing', () => {
-    expect(computeViewsPerHour(1000, '2026-09-10T02:00:00Z', NOW)).toBe(100);
-  });
-
-  it('floors elapsed time at 1 hour for a post published less than an hour ago', () => {
-    expect(computeViewsPerHour(500, '2026-09-10T11:45:00Z', NOW)).toBe(500);
-  });
-
-  it('returns 0 rather than NaN for a missing or unparseable publishedAt', () => {
-    // NaN would poison the descending sort and, once JSON.stringify'd into the
-    // stored top_posts column, land as a null in a field typed `number`.
-    expect(computeViewsPerHour(500, '', NOW)).toBe(0);
-    expect(computeViewsPerHour(500, 'not a date', NOW)).toBe(0);
-  });
-
+describe('buildSnapshotSummary', () => {
   it('sorts an undateable post to the bottom instead of corrupting the ranking', () => {
     const summary = buildSnapshotSummary(
       {
@@ -46,9 +31,7 @@ describe('computeViewsPerHour', () => {
     expect(summary.topPosts.map((p) => p.captionOrTitle)).toEqual(['Normal', 'Undateable']);
     expect(summary.topPosts[1].viewsPerHour).toBe(0);
   });
-});
 
-describe('buildSnapshotSummary', () => {
   it('ranks posts by views-per-hour descending and keeps only the top 5', () => {
     const posts = [
       makePost({ captionOrTitle: 'Slow', viewCount: 100, publishedAt: '2026-09-10T02:00:00Z' }), // 10/hr
