@@ -190,7 +190,7 @@ export async function handleRecapRequest(deps: RecapHandlerDeps, context: RecapR
       }
     }
 
-    const aggregation = aggregateRecap(postsByPlatform);
+    const aggregation = aggregateRecap(postsByPlatform, context.now);
     if (!aggregation.topPost || aggregation.totals.postCount === 0) {
       // `warnings` now also carries non-failure entries (`_connection_expired`
       // for a platform that may not even be in `connected`, `_views_unavailable`
