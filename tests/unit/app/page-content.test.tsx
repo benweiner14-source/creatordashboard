@@ -36,11 +36,6 @@ describe('MarketingPage content (signed out)', () => {
     render(await MarketingPage());
   }
 
-  it('links to the diagnostic tool', async () => {
-    await renderSignedOut();
-    expect(screen.getByRole('link', { name: /run a free diagnostic/i })).toHaveAttribute('href', '/diagnostic');
-  });
-
   it('links to the monthly recap tool', async () => {
     await renderSignedOut();
     expect(screen.getByRole('link', { name: /get your monthly recap card/i })).toHaveAttribute('href', '/recap');
@@ -59,7 +54,7 @@ describe('MarketingPage content (signed out)', () => {
   it('shows the value-proposition headline', async () => {
     await renderSignedOut();
     expect(
-      screen.getByRole('heading', { name: /understand your content, in plain english/i })
+      screen.getByRole('heading', { name: /everything a creator needs to grow, in one dashboard/i })
     ).toBeInTheDocument();
   });
 

@@ -43,34 +43,8 @@ describe('HomePage', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => homeResponse() }));
     render(<HomePage />);
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Run your first diagnostic' })).toBeInTheDocument());
-    expect(screen.getByRole('heading', { name: "Generate this month's recap" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: "Generate this month's recap" })).toBeInTheDocument());
     expect(screen.getByRole('heading', { name: "Set your niche to get this week's ideas" })).toBeInTheDocument();
-  });
-
-  it('shows the latest diagnostic score when one exists', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () =>
-          homeResponse({
-            diagnostic: {
-              id: 'diagnostic-1',
-              platform: 'youtube',
-              overallScore: 78,
-              hookStrengthScore: 82,
-              retentionRiskScore: 61,
-              timingScore: 88,
-              formatFitScore: 75,
-              createdAt: '2026-08-13T00:00:00Z',
-            },
-          }),
-      })
-    );
-    render(<HomePage />);
-    await waitFor(() => expect(screen.getByText('78')).toBeInTheDocument());
-    expect(screen.getByText('/100')).toBeInTheDocument();
   });
 
   it('shows the recap stat and top post when a card exists for this month', async () => {
@@ -151,6 +125,5 @@ describe('HomePage', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     render(<HomePage />);
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
-    expect(screen.getByRole('link', { name: /run a diagnostic instead/i })).toHaveAttribute('href', '/diagnostic');
   });
 });

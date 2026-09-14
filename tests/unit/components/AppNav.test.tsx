@@ -33,7 +33,7 @@ describe('AppNav', () => {
     render(<AppNav />);
     await waitFor(() => expect(screen.getByText('jordan@example.com')).toBeInTheDocument());
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Diagnostic' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Recap' })).not.toHaveAttribute('aria-current');
   });
 
   it('includes a Billing link', async () => {

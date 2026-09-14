@@ -24,30 +24,23 @@ export default async function MarketingPage() {
   return (
     <main className="mx-auto flex max-w-2xl flex-col items-center gap-6 px-6 py-24 text-center">
       <h1 className="text-4xl font-bold text-gray-900">
-        Understand your content, in plain English.
+        Everything a creator needs to grow, in one dashboard.
       </h1>
       <p className="text-lg text-gray-600">
-        Paste a link to a video or post and get a report on your hook, your retention risk,
-        your posting timing, and your format fit &mdash; explained in words you actually
-        understand, not jargon.
+        Weekly content ideas, a shareable recap of your month, a breakdown of any channel&apos;s
+        strategy, and a watchlist on your competitors &mdash; all in one place.
       </p>
       <Link
-        href="/diagnostic"
+        href="/ideas"
         className="rounded-full bg-indigo-600 px-8 py-3 text-lg font-semibold text-white hover:bg-indigo-700"
       >
-        Run a free diagnostic
+        Get weekly content ideas
       </Link>
       <Link href="/recap" className="text-indigo-700 underline">
         Get your monthly recap card
       </Link>
-      <Link href="/ideas" className="text-indigo-700 underline">
-        Get weekly content ideas
-      </Link>
       <Link href="/strategy" className="text-indigo-700 underline">
         Break down a channel you admire
-      </Link>
-      <Link href="/linkedin" className="text-indigo-700 underline">
-        Build a LinkedIn content strategy
       </Link>
       <Link href="/watchlist" className="text-indigo-700 underline">
         Track your competitors
