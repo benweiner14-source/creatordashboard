@@ -44,7 +44,7 @@ describe('HomePage', () => {
     render(<HomePage />);
 
     await waitFor(() => expect(screen.getByRole('heading', { name: "Generate this month's recap" })).toBeInTheDocument());
-    expect(screen.getByRole('heading', { name: "Set your niche to get this week's ideas" })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: "Set your GTA6 focus to get this week's ideas" })).toBeInTheDocument();
   });
 
   it('shows the recap stat and top post when a card exists for this month', async () => {
@@ -77,7 +77,7 @@ describe('HomePage', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => homeResponse() }));
     render(<HomePage />);
     await waitFor(() =>
-      expect(screen.getByRole('link', { name: 'Set my niche' })).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Set my focus' })).toBeInTheDocument()
     );
   });
 

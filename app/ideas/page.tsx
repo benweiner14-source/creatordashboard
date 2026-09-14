@@ -153,7 +153,7 @@ export default function IdeasPage() {
           <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
           <UpgradePrompt
             title="Weekly Content Ideas is part of Creator Dashboard's paid plan"
-            body="Get a ranked shortlist of niche-specific content concepts every week for $10/mo."
+            body="Get a ranked shortlist of GTA6 content concepts every week for $10/mo."
           />
         </main>
       </>
@@ -165,17 +165,17 @@ export default function IdeasPage() {
       <AppNav />
       <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
         <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
-        <p className="text-gray-600">Set your niche once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
+        <p className="text-gray-600">Set your GTA6 focus once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
 
         <div className="flex flex-col gap-3">
           <label htmlFor="ideas-niche" className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-            Your niche
+            Your GTA6 focus
             <input
               id="ideas-niche"
               type="text"
               value={state.niche}
               onChange={(e) => dispatch({ type: 'NICHE_CHANGED', value: e.target.value })}
-              placeholder="e.g. home baking, personal finance for Gen Z"
+              placeholder="e.g. GTA RP, speedrunning, comedy skits, mod showcases, lore theories"
               disabled={state.status === 'generating' || state.status === 'ideasReady'}
               className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
             />
