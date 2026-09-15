@@ -364,6 +364,100 @@ describe('WatchlistPage', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/couldn't load your watchlist/i));
   });
 
+  describe('suggested creators', () => {
+    it('shows suggested GTA6 creator quick-add chips when the list is empty', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ entries: [], subscriptionRequired: false })));
+      render(<WatchlistPage />);
+      await waitFor(() => expect(screen.getByText(/suggested gta6 creators to track/i)).toBeInTheDocument());
+      expect(screen.getByRole('button', { name: /nought/i })).toBeInTheDocument();
+    });
+
+    it('hides the suggested creators section once there is at least one entry', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          jsonResponse({
+            entries: [
+              {
+                id: 'entry-1',
+                platform: 'youtube',
+                handle: 'creator',
+                url: 'https://www.youtube.com/@creator',
+                label: 'Main rival',
+                lastError: null,
+                hasSnapshot: true,
+                isStale: false,
+                subscriberCount: 4200,
+                totalViewCount: 900000,
+                videoCount: 150,
+                topPosts: [],
+                sevenDayDelta: null,
+                thirtyDayDelta: null,
+              },
+            ],
+            subscriptionRequired: false,
+          })
+        )
+      );
+      render(<WatchlistPage />);
+      await waitFor(() => expect(screen.getByText('Main rival')).toBeInTheDocument());
+      expect(screen.queryByText(/suggested gta6 creators to track/i)).not.toBeInTheDocument();
+    });
+
+    it('clicking a suggested creator adds it via the same POST flow as the manual form', async () => {
+      let getCallCount = 0;
+      const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/watchlist' && (!init || init.method === undefined)) {
+          getCallCount += 1;
+          if (getCallCount === 1) {
+            return Promise.resolve(jsonResponse({ entries: [], subscriptionRequired: false }));
+          }
+          return Promise.resolve(
+            jsonResponse({
+              entries: [
+                {
+                  id: 'entry-nought',
+                  platform: 'youtube',
+                  handle: 'NoughtPointFourLIVE',
+                  url: 'https://www.youtube.com/@NoughtPointFourLIVE',
+                  label: 'Nought',
+                  lastError: null,
+                  hasSnapshot: false,
+                  isStale: false,
+                  subscriberCount: null,
+                  totalViewCount: null,
+                  videoCount: null,
+                  topPosts: [],
+                  sevenDayDelta: null,
+                  thirtyDayDelta: null,
+                },
+              ],
+              subscriptionRequired: false,
+            })
+          );
+        }
+        if (url === '/api/watchlist' && init?.method === 'POST') {
+          return Promise.resolve(jsonResponse({ entry: { id: 'entry-nought' } }));
+        }
+        return Promise.resolve(jsonResponse({ error: 'unexpected call' }, 500));
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      render(<WatchlistPage />);
+      await waitFor(() => expect(screen.getByRole('button', { name: /nought/i })).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /nought/i }));
+
+      await waitFor(() => expect(screen.getByText(/youtube · @noughtpointfourlive/i)).toBeInTheDocument());
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/watchlist',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ url: 'https://www.youtube.com/@NoughtPointFourLIVE', label: 'Nought' }),
+        })
+      );
+    });
+  });
+
   describe('background refresh of stale entries', () => {
     function staleEntry(id: string, handle: string) {
       return {

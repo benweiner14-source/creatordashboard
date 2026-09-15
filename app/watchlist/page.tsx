@@ -5,6 +5,7 @@ import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
 import { watchlistPageReducer, createInitialWatchlistPageState, WATCHLIST_ENTRY_LIMIT } from '@/lib/watchlist/page-state';
+import { SUGGESTED_CREATORS, type SuggestedCreator } from '@/lib/watchlist/suggested-creators';
 import type { WatchlistEntryView } from '@/lib/watchlist/types';
 
 export default function WatchlistPage() {
@@ -165,6 +166,12 @@ export default function WatchlistPage() {
     void submitAdd(addUrl, addLabel);
   }
 
+  function handleQuickAdd(creator: SuggestedCreator) {
+    if (state.status !== 'loaded' || state.adding || atCap) return;
+    dispatch({ type: 'ADD_SUBMIT' });
+    void submitAdd(creator.url, creator.label);
+  }
+
   if (state.status === 'loading') {
     return <p>Loading…</p>;
   }
@@ -278,7 +285,25 @@ export default function WatchlistPage() {
         )}
 
         {state.entries.length === 0 ? (
-          <p className="text-gray-500">No competitors tracked yet — add a channel above to get started.</p>
+          <div className="flex flex-col gap-3">
+            <p className="text-gray-500">No competitors tracked yet — add a channel above to get started.</p>
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium text-gray-700">Suggested GTA6 creators to track</p>
+              <div className="flex flex-wrap gap-2">
+                {SUGGESTED_CREATORS.map((creator) => (
+                  <button
+                    key={`${creator.platform}:${creator.url}`}
+                    type="button"
+                    onClick={() => handleQuickAdd(creator)}
+                    disabled={state.adding}
+                    className="rounded-full border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:border-indigo-600 hover:text-indigo-700 disabled:opacity-50"
+                  >
+                    {creator.label} <span className="text-gray-400">· {creator.platform}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         ) : (
           <ul className="flex flex-col gap-4">
             {state.entries.map((entry) => (
