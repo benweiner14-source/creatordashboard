@@ -58,10 +58,15 @@ create table public.warroom_alerts (
 );
 
 alter table public.warroom_alerts enable row level security;
-
-create policy "War Room alerts are viewable by any signed-in subscriber"
-  on public.warroom_alerts for select
-  using ((select auth.uid()) is not null);
+-- CORRECTED post-implementation (final whole-branch review): no select
+-- policy for regular users. The predicate below only checked sign-in, not
+-- subscription, despite its own name — a real paywall bypass, since
+-- GET /api/warroom already exclusively reads this table through the
+-- service-role client and gates on subscription in the handler. Do not
+-- reintroduce this policy:
+--   create policy "War Room alerts are viewable by any signed-in subscriber"
+--     on public.warroom_alerts for select
+--     using ((select auth.uid()) is not null);
 
 create index warroom_alerts_detected_at_idx
   on public.warroom_alerts (detected_at desc);
