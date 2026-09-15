@@ -32,6 +32,9 @@ export async function handleWarroomOptIn(
   if (!context.profileId) {
     return { status: 401, body: { error: 'You must be signed in to change this setting.' } };
   }
+  if (context.optIn && !(await deps.hasActiveSubscription(context.profileId))) {
+    return { status: 402, body: { error: 'GTA6 War Room email alerts require an active subscription.', upgradeUrl: '/billing' } };
+  }
   await deps.setEmailOptIn(context.profileId, context.optIn);
   return { status: 200, body: { ok: true } };
 }

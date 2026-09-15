@@ -50,7 +50,27 @@ describe('handleWarroomOptIn', () => {
     expect(result.status).toBe(401);
   });
 
-  it('saves the opt-in value for a signed-in profile', async () => {
+  it('rejects turning email alerts on for an unsubscribed profile', async () => {
+    const deps = makeDeps({ hasActiveSubscription: async () => false });
+    const result = await handleWarroomOptIn(deps, { profileId: 'p1', optIn: true });
+    expect(result.status).toBe(402);
+    expect(result.body.upgradeUrl).toBe('/billing');
+  });
+
+  it('allows turning email alerts off even for an unsubscribed profile', async () => {
+    let saved: { profileId: string; optIn: boolean } | null = null;
+    const deps = makeDeps({
+      hasActiveSubscription: async () => false,
+      setEmailOptIn: async (profileId, optIn) => {
+        saved = { profileId, optIn };
+      },
+    });
+    const result = await handleWarroomOptIn(deps, { profileId: 'p1', optIn: false });
+    expect(result.status).toBe(200);
+    expect(saved).toEqual({ profileId: 'p1', optIn: false });
+  });
+
+  it('saves the opt-in value for a subscribed profile', async () => {
     let saved: { profileId: string; optIn: boolean } | null = null;
     const deps = makeDeps({
       setEmailOptIn: async (profileId, optIn) => {
