@@ -2087,7 +2087,10 @@ describe('WarroomPage', () => {
   it('shows the upgrade prompt when the bootstrap fetch requires payment', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 402, json: async () => ({ error: 'payment required', upgradeUrl: '/billing' }) }));
     render(<WarroomPage />);
-    await waitFor(() => expect(screen.getByText(/requires an active subscription/i)).toBeInTheDocument());
+    // The page's 402 branch renders a static <UpgradePrompt>, not the fetched
+    // error body (same pattern as /ideas and /strategy) — assert against
+    // that component's own title text, not the discarded API error string.
+    await waitFor(() => expect(screen.getByText(/is part of creator dashboard's paid plan/i)).toBeInTheDocument());
   });
 
   it('renders each alert with its severity and platform', async () => {
