@@ -2037,6 +2037,55 @@ describe('warroomPageReducer', () => {
     expect(warroomPageReducer(state, { type: 'OPT_IN_TOGGLED', optIn: true })).toBe(state);
   });
 });
+
+describe('warroomPageReducer — sign-in sub-flow', () => {
+  // Mirrors tests/unit/lib/ideas/page-state.test.ts's "sign-in sub-flow"
+  // describe block exactly — this reducer is a distinct function from
+  // ideasPageReducer, so nothing else would catch a future edit that broke
+  // sign-in here even though the logic is a byte-for-byte copy today.
+  it('updates the email field from needsSignIn', () => {
+    const state: WarroomPageState = { status: 'needsSignIn', email: '', notice: null };
+    expect(warroomPageReducer(state, { type: 'EMAIL_CHANGED', email: 'a@b.com' })).toEqual({
+      status: 'needsSignIn',
+      email: 'a@b.com',
+      notice: null,
+    });
+  });
+
+  it('moves to submittingMagicLink on SUBMIT_EMAIL with a valid email', () => {
+    const state: WarroomPageState = { status: 'needsSignIn', email: 'a@b.com', notice: null };
+    expect(warroomPageReducer(state, { type: 'SUBMIT_EMAIL' })).toEqual({ status: 'submittingMagicLink', email: 'a@b.com' });
+  });
+
+  it('ignores SUBMIT_EMAIL with an invalid email', () => {
+    const state: WarroomPageState = { status: 'needsSignIn', email: 'not-an-email', notice: null };
+    expect(warroomPageReducer(state, { type: 'SUBMIT_EMAIL' })).toBe(state);
+  });
+
+  it('moves to checkEmail on MAGIC_LINK_SENT', () => {
+    const state: WarroomPageState = { status: 'submittingMagicLink', email: 'a@b.com' };
+    expect(warroomPageReducer(state, { type: 'MAGIC_LINK_SENT' })).toEqual({ status: 'checkEmail', email: 'a@b.com' });
+  });
+
+  it('moves to magicLinkError on MAGIC_LINK_FAILED', () => {
+    const state: WarroomPageState = { status: 'submittingMagicLink', email: 'a@b.com' };
+    expect(warroomPageReducer(state, { type: 'MAGIC_LINK_FAILED', error: 'boom' })).toEqual({
+      status: 'magicLinkError',
+      email: 'a@b.com',
+      error: 'boom',
+    });
+  });
+
+  it('moves back to submittingMagicLink on RESEND_EMAIL', () => {
+    const state: WarroomPageState = { status: 'checkEmail', email: 'a@b.com' };
+    expect(warroomPageReducer(state, { type: 'RESEND_EMAIL' })).toEqual({ status: 'submittingMagicLink', email: 'a@b.com' });
+  });
+
+  it('moves back to needsSignIn on RETRY_EMAIL', () => {
+    const state: WarroomPageState = { status: 'checkEmail', email: 'a@b.com' };
+    expect(warroomPageReducer(state, { type: 'RETRY_EMAIL' })).toEqual({ status: 'needsSignIn', email: 'a@b.com', notice: null });
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2128,7 +2177,7 @@ export function warroomPageReducer(state: WarroomPageState, event: WarroomPageEv
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/unit/lib/warroom/page-state.test.ts`
-Expected: PASS
+Expected: PASS (all 15 cases)
 
 - [ ] **Step 5: Commit**
 
