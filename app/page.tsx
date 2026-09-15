@@ -24,26 +24,27 @@ export default async function MarketingPage() {
   return (
     <main className="mx-auto flex max-w-2xl flex-col items-center gap-6 px-6 py-24 text-center">
       <h1 className="text-4xl font-bold text-gray-900">
-        Everything a creator needs to grow, in one dashboard.
+        GTA 6 is about to be the biggest launch gaming has ever seen.
       </h1>
       <p className="text-lg text-gray-600">
-        Weekly content ideas, a shareable recap of your month, a breakdown of any channel&apos;s
-        strategy, and a watchlist on your competitors &mdash; all in one place.
+        The creators who build their audience now &mdash; before launch &mdash; will own this niche
+        for years. Creator Dashboard gives you weekly GTA 6 content ideas, a shareable recap of your
+        growth, a breakdown of any channel&apos;s strategy, and a watchlist on who&apos;s already ahead.
       </p>
       <Link
         href="/ideas"
         className="rounded-full bg-indigo-600 px-8 py-3 text-lg font-semibold text-white hover:bg-indigo-700"
       >
-        Get weekly content ideas
+        Get this week&apos;s GTA 6 content ideas
       </Link>
       <Link href="/recap" className="text-indigo-700 underline">
-        Get your monthly recap card
+        Track your GTA 6 channel&apos;s growth every month
       </Link>
       <Link href="/strategy" className="text-indigo-700 underline">
-        Break down a channel you admire
+        Break down any GTA 6 creator&apos;s strategy
       </Link>
       <Link href="/watchlist" className="text-indigo-700 underline">
-        Track your competitors
+        See who&apos;s already ahead &mdash; track GTA 6 creators
       </Link>
     </main>
   );
