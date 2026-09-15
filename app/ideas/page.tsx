@@ -20,6 +20,7 @@ function IdeasPageInner() {
   const searchParams = useSearchParams();
   const warroomContext = searchParams.get('context');
   const stillWorkingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contextConsumedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +96,9 @@ function IdeasPageInner() {
       if (!res.ok) {
         dispatch({ type: 'GENERATE_FAILED', error: data.error ?? 'Something went wrong generating your content ideas.' });
         return;
+      }
+      if (warroomContext) {
+        contextConsumedRef.current = !data.cached;
       }
       dispatch({ type: 'GENERATE_SUCCESS', ideas: data.digest.contentIdeas, cached: data.cached ?? false });
     } catch {
@@ -246,7 +250,7 @@ function IdeasPageInner() {
 
         {state.status === 'ideasReady' && (
           <div className="flex flex-col gap-4">
-            {warroomContext ? (
+            {warroomContext && !contextConsumedRef.current ? (
               <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
                 You started from a War Room alert, but this week&apos;s ideas were already generated — new ideas are
                 ready again next Monday.

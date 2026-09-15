@@ -275,6 +275,25 @@ describe('IdeasPage', () => {
     );
   });
 
+  it('does not show the "already generated" banner when context was actually used to generate fresh ideas', async () => {
+    useSearchParamsMock.mockReturnValue(new URLSearchParams('context=GTA+6+trailer+breakdown'));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digest: null }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ digest: { id: 'd1', weekStart: '2026-08-10', contentIdeas: [] }, cached: false }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByRole('button', { name: /get this week's ideas/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get this week's ideas/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/already generated/i)).not.toBeInTheDocument();
+  });
+
   it("shows a War-Room-specific notice when arriving with ?context= but this week's ideas already exist", async () => {
     // handleIdeasRequest short-circuits to the cached digest before `context`
     // is ever read, and bootstrap goes straight to ideasReady, so the generate
