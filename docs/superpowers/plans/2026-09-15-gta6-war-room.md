@@ -327,8 +327,11 @@ function post(overrides: Partial<DiscoveredPost> = {}): DiscoveredPost {
 }
 
 describe('classifySeverity — TikTok', () => {
-  it('classifies already_viral by view count regardless of age', () => {
-    expect(classifySeverity(post({ viewCount: 1_000_000, publishedAt: '2026-09-10T00:00:00Z' }), NOW)).toBe('already_viral');
+  it('classifies already_viral by view count regardless of the tier-specific age windows', () => {
+    // 40 hours old -- well past the going_viral/heating_up windows (180min/240min),
+    // but still inside the universal 48h cutoff, so already_viral's lack of an
+    // extra age condition is what's being tested here, not the 48h cutoff itself.
+    expect(classifySeverity(post({ viewCount: 1_000_000, publishedAt: '2026-09-13T20:00:00Z' }), NOW)).toBe('already_viral');
   });
 
   it('classifies going_viral by view count within the 180min window', () => {
@@ -349,8 +352,10 @@ describe('classifySeverity — TikTok', () => {
 });
 
 describe('classifySeverity — Instagram', () => {
-  it('classifies already_viral by engagement regardless of age', () => {
-    expect(classifySeverity(post({ platform: 'instagram', engagementCount: 15_000, publishedAt: '2026-09-10T00:00:00Z' }), NOW)).toBe(
+  it('classifies already_viral by engagement regardless of the tier-specific age windows', () => {
+    // 40 hours old -- past going_viral/heating_up's own windows (120min/180min),
+    // still inside the universal 48h cutoff.
+    expect(classifySeverity(post({ platform: 'instagram', engagementCount: 15_000, publishedAt: '2026-09-13T20:00:00Z' }), NOW)).toBe(
       'already_viral'
     );
   });
@@ -370,8 +375,12 @@ describe('classifySeverity — Instagram', () => {
 
 describe('classifySeverity — YouTube', () => {
   it('classifies already_viral by total views regardless of viewsPerHour', () => {
+    // 47 hours old (just inside the 48h cutoff): 200,000 views / 47h ≈ 4255
+    // views/hour, which is BELOW the 5000 viewsPerHour threshold -- so this
+    // isolates the "views >= 200,000" branch of already_viral, proving it
+    // triggers independent of viewsPerHour, without also tripping the 48h cutoff.
     expect(
-      classifySeverity(post({ platform: 'youtube', viewCount: 200_000, publishedAt: '2026-09-01T00:00:00Z' }), NOW)
+      classifySeverity(post({ platform: 'youtube', viewCount: 200_000, publishedAt: '2026-09-13T13:00:00Z' }), NOW)
     ).toBe('already_viral');
   });
 
