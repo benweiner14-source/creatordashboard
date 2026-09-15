@@ -1500,7 +1500,14 @@ export async function GET(request: Request) {
   const result = await runWarroomCron(
     {
       isPaused: async () => {
-        const { data } = await serviceClient.from('warroom_settings').select('paused').eq('id', true).single();
+        const { data, error } = await serviceClient.from('warroom_settings').select('paused').eq('id', true).single();
+        if (error) {
+          // Fail loud, not open: this read is the cron's cost-control safety
+          // valve. Silently treating a read error as "not paused" would let
+          // the job keep calling paid Apify actors during exactly the
+          // outage where the pause flag is least trustworthy.
+          throw new Error(`Failed to read War Room pause state: ${error.message}`);
+        }
         return data?.paused ?? false;
       },
       countAlertsToday: async (asOf) => {
@@ -1538,10 +1545,18 @@ export async function GET(request: Request) {
         return { inserted: (data?.length ?? 0) > 0 };
       },
       pauseForBudget: async (reason) => {
-        await serviceClient
+        const { error } = await serviceClient
           .from('warroom_settings')
           .update({ paused: true, paused_reason: reason, paused_at: new Date().toISOString() })
           .eq('id', true);
+        if (error) {
+          // If this write silently fails, the pause never actually takes
+          // effect: next hour's isPaused() still reads false, the cron
+          // calls the discovery clients again, hits the same budget error,
+          // and re-sends the operator email — every hour, forever. Throw so
+          // the failure is visible instead of a quiet no-op.
+          throw new Error(`Failed to persist War Room pause: ${error.message}`);
+        }
       },
       getOptedInEmails: async () => {
         const { data: profiles } = await serviceClient.from('profiles').select('id').eq('warroom_email_opt_in', true);
