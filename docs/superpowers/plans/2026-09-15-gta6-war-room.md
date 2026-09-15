@@ -1868,11 +1868,17 @@ export async function GET() {
     {
       hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
       getRecentAlerts: async () => {
-        const { data } = await serviceClient
+        const { data, error } = await serviceClient
           .from('warroom_alerts')
           .select('*')
           .order('detected_at', { ascending: false })
           .limit(100);
+        if (error) {
+          // A query failure must surface as a 500, not silently render as an
+          // empty feed (200 with no alerts looks identical to "nothing has
+          // happened yet" from the client's point of view).
+          throw new Error(`Failed to load War Room alerts: ${error.message}`);
+        }
         return (data ?? []).map(mapAlertRow);
       },
       setEmailOptIn: async () => {}, // unused on this route
@@ -1908,7 +1914,14 @@ export async function POST(request: Request) {
       hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
       getRecentAlerts: async () => [], // unused on this route
       setEmailOptIn: async (profileId, optIn) => {
-        await serviceClient.from('profiles').update({ warroom_email_opt_in: optIn }).eq('id', profileId);
+        const { error } = await serviceClient.from('profiles').update({ warroom_email_opt_in: optIn }).eq('id', profileId);
+        if (error) {
+          // Mirrors app/api/digest/opt-in/route.ts's updateDigestOptIn: a
+          // silently-failed write must not report { ok: true } back to the
+          // client, or the user believes their preference was saved when
+          // it wasn't.
+          throw new Error(`Failed to save War Room email preference: ${error.message}`);
+        }
       },
     },
     { profileId: user?.id ?? null, optIn: Boolean(body.optIn) }
