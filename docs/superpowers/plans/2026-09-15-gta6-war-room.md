@@ -1738,7 +1738,27 @@ describe('handleWarroomOptIn', () => {
     expect(result.status).toBe(401);
   });
 
-  it('saves the opt-in value for a signed-in profile', async () => {
+  it('rejects turning email alerts on for an unsubscribed profile', async () => {
+    const deps = makeDeps({ hasActiveSubscription: async () => false });
+    const result = await handleWarroomOptIn(deps, { profileId: 'p1', optIn: true });
+    expect(result.status).toBe(402);
+    expect(result.body.upgradeUrl).toBe('/billing');
+  });
+
+  it('allows turning email alerts off even for an unsubscribed profile', async () => {
+    let saved: { profileId: string; optIn: boolean } | null = null;
+    const deps = makeDeps({
+      hasActiveSubscription: async () => false,
+      setEmailOptIn: async (profileId, optIn) => {
+        saved = { profileId, optIn };
+      },
+    });
+    const result = await handleWarroomOptIn(deps, { profileId: 'p1', optIn: false });
+    expect(result.status).toBe(200);
+    expect(saved).toEqual({ profileId: 'p1', optIn: false });
+  });
+
+  it('saves the opt-in value for a subscribed profile', async () => {
     let saved: { profileId: string; optIn: boolean } | null = null;
     const deps = makeDeps({
       setEmailOptIn: async (profileId, optIn) => {
@@ -1760,7 +1780,7 @@ Expected: FAIL — `handleWarroomOptIn is not exported`
 
 - [ ] **Step 3: Add `handleWarroomOptIn` to `lib/warroom/handler.ts`**
 
-Append to the file:
+Append to the file. Note this gates *turning email alerts on* behind an active subscription — mirroring this codebase's existing `saveDigestOptIn` (`lib/digest/opt-in.ts`) pattern exactly, since War Room's in-app feed is already subscription-gated (Task 8) and letting a non-subscriber receive the paywalled feature's content by email instead would bypass that gate. Turning email alerts *off* is always allowed regardless of subscription status, same as the digest precedent:
 ```ts
 export async function handleWarroomOptIn(
   deps: WarroomHandlerDeps,
@@ -1768,6 +1788,9 @@ export async function handleWarroomOptIn(
 ): Promise<WarroomHandlerResult> {
   if (!context.profileId) {
     return { status: 401, body: { error: 'You must be signed in to change this setting.' } };
+  }
+  if (context.optIn && !(await deps.hasActiveSubscription(context.profileId))) {
+    return { status: 402, body: { error: 'GTA6 War Room email alerts require an active subscription.', upgradeUrl: '/billing' } };
   }
   await deps.setEmailOptIn(context.profileId, context.optIn);
   return { status: 200, body: { ok: true } };
@@ -1777,7 +1800,7 @@ export async function handleWarroomOptIn(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/unit/lib/warroom/handler.test.ts`
-Expected: PASS (all 5 cases)
+Expected: PASS (all 7 cases)
 
 - [ ] **Step 5: Commit**
 
