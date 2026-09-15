@@ -1628,6 +1628,7 @@ function makeDeps(overrides: Partial<WarroomHandlerDeps> = {}): WarroomHandlerDe
   return {
     hasActiveSubscription: async () => true,
     getRecentAlerts: async () => [],
+    getEmailOptIn: async () => false,
     setEmailOptIn: async () => {},
     ...overrides,
   };
@@ -1646,7 +1647,7 @@ describe('handleListWarroomAlerts', () => {
     expect(result.body.upgradeUrl).toBe('/billing');
   });
 
-  it('returns the recent alerts for a subscribed profile', async () => {
+  it('returns the recent alerts and the profile\'s current opt-in value for a subscribed profile', async () => {
     const alert: WarroomAlertRow = {
       id: 'a1',
       platform: 'youtube',
@@ -1659,10 +1660,11 @@ describe('handleListWarroomAlerts', () => {
       severity: 'already_viral',
       detectedAt: '2026-09-15T11:00:00Z',
     };
-    const deps = makeDeps({ getRecentAlerts: async () => [alert] });
+    const deps = makeDeps({ getRecentAlerts: async () => [alert], getEmailOptIn: async () => true });
     const result = await handleListWarroomAlerts(deps, { profileId: 'p1' });
     expect(result.status).toBe(200);
     expect(result.body.alerts).toEqual([alert]);
+    expect(result.body.emailOptIn).toBe(true);
   });
 });
 ```
@@ -1673,12 +1675,15 @@ Run: `npx vitest run tests/unit/lib/warroom/handler.test.ts`
 Expected: FAIL — `Cannot find module '@/lib/warroom/handler'`
 
 - [ ] **Step 3: Write `lib/warroom/handler.ts`**
+
+The response body must include the profile's current opt-in value (not just the alerts) — the `/warroom` page's bootstrap fetch (Task 12) reads `data.emailOptIn` from this exact response to initialize the checkbox's checked state on page load, so omitting it here would make the page always show the checkbox unchecked regardless of what's actually saved:
 ```ts
 import type { WarroomAlertRow } from './types';
 
 export interface WarroomHandlerDeps {
   hasActiveSubscription: (profileId: string) => Promise<boolean>;
   getRecentAlerts: () => Promise<WarroomAlertRow[]>;
+  getEmailOptIn: (profileId: string) => Promise<boolean>;
   setEmailOptIn: (profileId: string, optIn: boolean) => Promise<void>;
 }
 
@@ -1697,8 +1702,8 @@ export async function handleListWarroomAlerts(
   if (!(await deps.hasActiveSubscription(context.profileId))) {
     return { status: 402, body: { error: 'GTA6 War Room requires an active subscription.', upgradeUrl: '/billing' } };
   }
-  const alerts = await deps.getRecentAlerts();
-  return { status: 200, body: { alerts } };
+  const [alerts, emailOptIn] = await Promise.all([deps.getRecentAlerts(), deps.getEmailOptIn(context.profileId)]);
+  return { status: 200, body: { alerts, emailOptIn } };
 }
 ```
 
@@ -1723,7 +1728,7 @@ git commit -m "feat(warroom): add handleListWarroomAlerts"
 - Modify: `tests/unit/lib/warroom/handler.test.ts`
 
 **Interfaces:**
-- Consumes: `WarroomHandlerDeps` (Task 8, extended here with no new fields — `setEmailOptIn` was already declared in Task 8's interface, just unused until now)
+- Consumes: `WarroomHandlerDeps` (Task 8, since amended to add `getEmailOptIn` — unused by this handler, only by `handleListWarroomAlerts`; `setEmailOptIn` was already declared in Task 8's interface, just unused until now)
 - Produces: `handleWarroomOptIn(deps, context): Promise<{status, body}>` — relied on by Task 10 (opt-in route)
 
 - [ ] **Step 1: Write the failing test**
@@ -1881,6 +1886,17 @@ export async function GET() {
         }
         return (data ?? []).map(mapAlertRow);
       },
+      // Bootstraps the /warroom page's checkbox to the profile's actually
+      // saved preference. Without this, the page would always initialize
+      // emailOptIn as false regardless of what's persisted, since this
+      // GET response is the only place it reads that value from.
+      getEmailOptIn: async (profileId) => {
+        const { data, error } = await serviceClient.from('profiles').select('warroom_email_opt_in').eq('id', profileId).single();
+        if (error) {
+          throw new Error(`Failed to load War Room email preference: ${error.message}`);
+        }
+        return data?.warroom_email_opt_in ?? false;
+      },
       setEmailOptIn: async () => {}, // unused on this route
     },
     { profileId: user?.id ?? null }
@@ -1913,6 +1929,7 @@ export async function POST(request: Request) {
       // true would silently defeat that check.
       hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
       getRecentAlerts: async () => [], // unused on this route
+      getEmailOptIn: async () => false, // unused on this route
       setEmailOptIn: async (profileId, optIn) => {
         const { error } = await serviceClient.from('profiles').update({ warroom_email_opt_in: optIn }).eq('id', profileId);
         if (error) {
