@@ -37,6 +37,9 @@ export default async function MarketingPage() {
       >
         Get this week&apos;s GTA 6 content ideas
       </Link>
+      <Link href="/warroom" className="text-indigo-700 underline">
+        See what&apos;s trending in GTA 6 right now
+      </Link>
       <Link href="/recap" className="text-indigo-700 underline">
         Track your GTA 6 channel&apos;s growth every month
       </Link>

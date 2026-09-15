@@ -71,4 +71,9 @@ describe('MarketingPage content (signed out)', () => {
       '/watchlist'
     );
   });
+
+  it('links to the GTA 6 War Room', async () => {
+    await renderSignedOut();
+    expect(screen.getByRole('link', { name: /see what's trending in gta 6 right now/i })).toHaveAttribute('href', '/warroom');
+  });
 });

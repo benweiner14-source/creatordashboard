@@ -119,4 +119,13 @@ describe('AppNav', () => {
       expect(Array.from(node.classList)).not.toContain('hidden');
     }
   });
+
+  it('includes a War Room link right after Home', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+    render(<AppNav />);
+    const links = await screen.findAllByRole('link');
+    const labels = links.map((l) => l.textContent);
+    const homeIndex = labels.indexOf('Home');
+    expect(labels[homeIndex + 1]).toBe('War Room');
+  });
 });
