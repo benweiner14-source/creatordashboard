@@ -163,4 +163,53 @@ describe('supabase migrations', () => {
     expect(sql).toContain('needs_work jsonb not null');
     expect(sql).not.toMatch(/(^|[^a-z0-9])(pdf|file)([^a-z0-9]|$)/i);
   });
+
+  it('includes a watchlist_entries table migration unique per profile/platform/handle', () => {
+    const sql = readMigrationContaining('create_watchlist_tables');
+    expect(sql).toContain('create table public.watchlist_entries');
+    expect(sql).toContain('platform public.diagnostic_platform not null');
+    expect(sql).toContain('unique (profile_id, platform, handle)');
+    expect(sql).toContain('"Watchlist entries are viewable by owner"');
+    expect(sql).toContain('"Watchlist entries are insertable by owner"');
+    expect(sql).toContain('"Watchlist entries are deletable by owner"');
+  });
+
+  it('includes a watchlist_snapshots table migration owned indirectly through its entry', () => {
+    const sql = readMigrationContaining('create_watchlist_tables');
+    expect(sql).toContain('create table public.watchlist_snapshots');
+    expect(sql).toContain('references public.watchlist_entries(id) on delete cascade');
+    expect(sql).toContain('top_posts jsonb not null');
+    expect(sql).toContain('"Watchlist snapshots are viewable by owner"');
+    expect(sql).toContain('watchlist_snapshots_entry_id_captured_at_idx');
+  });
+
+  it('includes a warroom_alerts table migration deduplicated by platform and external post id, with no user-facing RLS policy', () => {
+    const sql = readMigrationContaining('create_warroom_tables');
+    expect(sql).toContain('create table public.warroom_alerts');
+    expect(sql).toContain("severity text not null check (severity in ('heating_up', 'going_viral', 'already_viral'))");
+    expect(sql).toContain('unique (platform, external_post_id)');
+    expect(sql).toContain('alter table public.warroom_alerts enable row level security');
+    // The feed route reads this table exclusively through the service-role
+    // client and gates on subscription status in the handler, so any
+    // anon/authenticated select policy here would be a paywall bypass.
+    expect(sql).not.toMatch(/create policy[\s\S]*?on public\.warroom_alerts/);
+    expect(sql).toContain('warroom_alerts_detected_at_idx');
+  });
+
+  it('includes a warroom_settings singleton table migration with no user-facing RLS policy', () => {
+    const sql = readMigrationContaining('create_warroom_tables');
+    expect(sql).toContain('create table public.warroom_settings');
+    expect(sql).toContain('id boolean primary key default true check (id)');
+    expect(sql).toContain('alter table public.warroom_settings enable row level security');
+    // Checked as "no policy mentions warroom_settings" rather than a bare
+    // `not.toContain('create policy')` so this stays precise if a policy on
+    // some other table is ever added to this migration.
+    expect(sql).not.toMatch(/create policy[\s\S]*?on public\.warroom_settings/);
+  });
+
+  it('adds a warroom_email_opt_in column to profiles', () => {
+    const sql = readMigrationContaining('create_warroom_tables');
+    expect(sql).toContain('alter table public.profiles');
+    expect(sql).toContain('add column warroom_email_opt_in boolean not null default false');
+  });
 });

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { filterPostsToMonth, aggregateRecap } from '@/lib/recap/aggregate';
 import type { AggregatablePost } from '@/lib/recap/types';
 
+const NOW = new Date('2026-08-31T00:00:00Z');
+
 function post(overrides: Partial<AggregatablePost> = {}): AggregatablePost {
   return {
     platform: 'tiktok',
@@ -51,6 +53,32 @@ describe('aggregateRecap', () => {
       viewCount: 900,
       permalink: 'https://tiktok.com/@x/video/1',
     });
+  });
+
+  it('picks the post with the higher views-per-hour, not the higher raw view count', () => {
+    // "Old but huge" racked up more total views, but it's been live for
+    // 30 days -- 20/hr. "New and rising" is only 10 hours old at 90/hr.
+    const result = aggregateRecap(
+      {
+        youtube: [
+          post({
+            platform: 'youtube',
+            captionOrTitle: 'Old but huge',
+            viewCount: 14400,
+            publishedAt: '2026-08-01T00:00:00Z', // 30 days before NOW
+          }),
+          post({
+            platform: 'youtube',
+            captionOrTitle: 'New and rising',
+            viewCount: 900,
+            publishedAt: '2026-08-30T14:00:00Z', // 10 hours before NOW
+          }),
+        ],
+      },
+      NOW
+    );
+
+    expect(result.topPost?.captionOrTitle).toBe('New and rising');
   });
 
   it('drops a platform entirely when it has no posts, rather than including a zeroed entry', () => {

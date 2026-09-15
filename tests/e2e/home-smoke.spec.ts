@@ -1,12 +1,20 @@
 // tests/e2e/home-smoke.spec.ts
 import { test, expect } from '@playwright/test';
 
-test('dashboard home renders all three sections and nav links work', async ({ page }) => {
+test('dashboard home renders both sections and nav links work', async ({ page }) => {
   await page.route('**/api/session', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ email: 'jordan@example.com' }),
+    });
+  });
+
+  await page.route('**/api/strategy', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ history: [] }),
     });
   });
 
@@ -16,16 +24,7 @@ test('dashboard home renders all three sections and nav links work', async ({ pa
       contentType: 'application/json',
       body: JSON.stringify({
         email: 'jordan@example.com',
-        diagnostic: {
-          id: 'diagnostic-1',
-          platform: 'youtube',
-          overallScore: 78,
-          hookStrengthScore: 82,
-          retentionRiskScore: 61,
-          timingScore: 88,
-          formatFitScore: 75,
-          createdAt: '2026-08-13T00:00:00Z',
-        },
+        diagnostic: null,
         recap: {
           id: 'card-1',
           month: '2026-08-01',
@@ -53,17 +52,16 @@ test('dashboard home renders all three sections and nav links work', async ({ pa
   await page.goto('/home');
 
   await expect(page.getByText('Welcome back, Jordan.')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Latest diagnostic' })).toBeVisible();
   await expect(page.getByText('142K')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Get my ideas' })).toBeVisible();
 
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
-  await page.getByRole('link', { name: 'Diagnostic' }).click();
-  await expect(page).toHaveURL(/\/diagnostic$/);
+  await page.getByRole('link', { name: 'Strategy' }).click();
+  await expect(page).toHaveURL(/\/strategy$/);
   // The nav is mocked out of every unit test, so this is the only place its
   // mount point on the destination page is verified at all.
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Run a diagnostic' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Creator strategy breakdown' })).toBeVisible();
 });
 
 // <AppNav> is mocked to () => null in every unit test file, so each of its four
@@ -109,7 +107,7 @@ test('the nav renders on /ideas once the page reaches its authenticated view', a
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ niche: 'home baking', digestEmailOptIn: false, digest: null }),
+      body: JSON.stringify({ niche: 'home baking', digest: null }),
     });
   });
 

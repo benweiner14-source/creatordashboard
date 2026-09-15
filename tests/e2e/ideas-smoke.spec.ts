@@ -41,39 +41,11 @@ test('setting a niche and generating shows the returned idea cards', async ({ pa
   });
 
   await page.goto('/ideas');
-  await page.getByLabel(/your niche/i).fill('home baking');
+  await page.getByLabel(/your gta 6 focus/i).fill('home baking');
   await page.getByRole('button', { name: /save niche/i }).click();
   await page.getByRole('button', { name: /get this week's ideas/i }).click();
 
   await expect(page.getByRole('heading', { name: 'Sourdough Speedrun' })).toBeVisible();
   await expect(page.getByText('Bake a loaf in under 2 hours on camera')).toBeVisible();
   await expect(page.getByText(/Speed Recap/)).toBeVisible();
-});
-
-test('toggling the weekly email option persists the change', async ({ page }) => {
-  let digestEmailOptIn = false;
-
-  await page.route('**/api/ideas', async (route) => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ niche: 'home baking', digestEmailOptIn, digest: null }),
-      });
-      return;
-    }
-    await route.continue();
-  });
-
-  await page.route('**/api/digest/opt-in', async (route) => {
-    const body = route.request().postDataJSON() as { optIn: boolean };
-    digestEmailOptIn = body.optIn;
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
-  });
-
-  await page.goto('/ideas');
-  const toggle = page.getByRole('checkbox', { name: /email me this every monday morning/i });
-  await expect(toggle).not.toBeChecked();
-  await toggle.check();
-  await expect(toggle).toBeChecked();
 });

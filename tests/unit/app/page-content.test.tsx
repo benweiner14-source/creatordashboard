@@ -36,30 +36,44 @@ describe('MarketingPage content (signed out)', () => {
     render(await MarketingPage());
   }
 
-  it('links to the diagnostic tool', async () => {
-    await renderSignedOut();
-    expect(screen.getByRole('link', { name: /run a free diagnostic/i })).toHaveAttribute('href', '/diagnostic');
-  });
-
   it('links to the monthly recap tool', async () => {
     await renderSignedOut();
-    expect(screen.getByRole('link', { name: /get your monthly recap card/i })).toHaveAttribute('href', '/recap');
+    expect(screen.getByRole('link', { name: /track your gta 6 channel's growth every month/i })).toHaveAttribute(
+      'href',
+      '/recap'
+    );
   });
 
   it('links to the weekly ideas tool', async () => {
     await renderSignedOut();
-    expect(screen.getByRole('link', { name: /get weekly content ideas/i })).toHaveAttribute('href', '/ideas');
+    expect(screen.getByRole('link', { name: /get this week's gta 6 content ideas/i })).toHaveAttribute('href', '/ideas');
   });
 
   it('links to the strategy breakdown tool', async () => {
     await renderSignedOut();
-    expect(screen.getByRole('link', { name: /break down a channel you admire/i })).toHaveAttribute('href', '/strategy');
+    expect(screen.getByRole('link', { name: /break down any gta 6 creator's strategy/i })).toHaveAttribute(
+      'href',
+      '/strategy'
+    );
   });
 
   it('shows the value-proposition headline', async () => {
     await renderSignedOut();
     expect(
-      screen.getByRole('heading', { name: /understand your content, in plain english/i })
+      screen.getByRole('heading', { name: /gta 6 is about to be the biggest launch gaming has ever seen/i })
     ).toBeInTheDocument();
+  });
+
+  it('links to the competitor watchlist tool', async () => {
+    await renderSignedOut();
+    expect(screen.getByRole('link', { name: /see who's already ahead — track gta 6 creators/i })).toHaveAttribute(
+      'href',
+      '/watchlist'
+    );
+  });
+
+  it('links to the GTA 6 War Room', async () => {
+    await renderSignedOut();
+    expect(screen.getByRole('link', { name: /see what's trending in gta 6 right now/i })).toHaveAttribute('href', '/warroom');
   });
 });

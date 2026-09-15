@@ -3,24 +3,11 @@ import type { ContentIdea } from '@/lib/integrations/claude-ideas';
 
 export type IdeasPageState =
   | { status: 'loading' }
-  | { status: 'needsNiche'; niche: string; error: string | null; digestEmailOptIn: boolean; digestOptInError: string | null }
-  | { status: 'readyToGenerate'; niche: string; digestEmailOptIn: boolean; digestOptInError: string | null }
-  | {
-      status: 'generating';
-      niche: string;
-      stillWorking: boolean;
-      digestEmailOptIn: boolean;
-      digestOptInError: string | null;
-    }
-  | {
-      status: 'ideasReady';
-      niche: string;
-      ideas: ContentIdea[];
-      digestEmailOptIn: boolean;
-      digestOptInError: string | null;
-      cached?: boolean;
-    }
-  | { status: 'generationFailed'; niche: string; error: string; digestEmailOptIn: boolean; digestOptInError: string | null }
+  | { status: 'needsNiche'; niche: string; error: string | null }
+  | { status: 'readyToGenerate'; niche: string }
+  | { status: 'generating'; niche: string; stillWorking: boolean }
+  | { status: 'ideasReady'; niche: string; ideas: ContentIdea[]; cached?: boolean }
+  | { status: 'generationFailed'; niche: string; error: string }
   | { status: 'requiresUpgrade' }
   // Sign-in sub-flow, mirroring lib/recap/page-state.ts so the same
   // <SignInPrompt> component drives it.
@@ -30,7 +17,7 @@ export type IdeasPageState =
   | { status: 'magicLinkError'; email: string; error: string };
 
 export type IdeasPageEvent =
-  | { type: 'BOOTSTRAPPED'; niche: string; ideas: ContentIdea[] | null; digestEmailOptIn: boolean }
+  | { type: 'BOOTSTRAPPED'; niche: string; ideas: ContentIdea[] | null }
   | { type: 'BOOTSTRAP_FAILED' }
   | { type: 'BOOTSTRAP_UNAUTHORIZED' }
   | { type: 'BOOTSTRAP_PAYMENT_REQUIRED' }
@@ -42,8 +29,6 @@ export type IdeasPageEvent =
   | { type: 'GENERATE_SUCCESS'; ideas: ContentIdea[]; cached?: boolean }
   | { type: 'GENERATE_FAILED'; error: string }
   | { type: 'EDIT_NICHE' }
-  | { type: 'DIGEST_OPT_IN_TOGGLED'; optIn: boolean }
-  | { type: 'DIGEST_OPT_IN_SAVE_FAILED'; previousValue: boolean; error: string }
   | { type: 'EMAIL_CHANGED'; email: string }
   | { type: 'SUBMIT_EMAIL' }
   | { type: 'MAGIC_LINK_SENT' }
@@ -58,14 +43,6 @@ export function isNicheEditingState(state: IdeasPageState): state is Extract<Ide
   return (NICHE_EDITING_STATUSES as readonly string[]).includes(state.status);
 }
 
-const DIGEST_TOGGLE_STATUSES = ['needsNiche', 'readyToGenerate', 'generating', 'ideasReady', 'generationFailed'] as const;
-type DigestToggleStatus = (typeof DIGEST_TOGGLE_STATUSES)[number];
-
-/** True for every status that carries digestEmailOptIn — i.e. everywhere except loading and the sign-in sub-flow. */
-export function hasDigestOptInState(state: IdeasPageState): state is Extract<IdeasPageState, { status: DigestToggleStatus }> {
-  return (DIGEST_TOGGLE_STATUSES as readonly string[]).includes(state.status);
-}
-
 export function createInitialIdeasPageState(): IdeasPageState {
   return { status: 'loading' };
 }
@@ -74,25 +51,17 @@ export function ideasPageReducer(state: IdeasPageState, event: IdeasPageEvent): 
   switch (event.type) {
     case 'BOOTSTRAPPED':
       if (event.ideas) {
-        return {
-          status: 'ideasReady',
-          niche: event.niche,
-          ideas: event.ideas,
-          digestEmailOptIn: event.digestEmailOptIn,
-          digestOptInError: null,
-        };
+        return { status: 'ideasReady', niche: event.niche, ideas: event.ideas };
       }
       return event.niche
-        ? { status: 'readyToGenerate', niche: event.niche, digestEmailOptIn: event.digestEmailOptIn, digestOptInError: null }
-        : { status: 'needsNiche', niche: '', error: null, digestEmailOptIn: event.digestEmailOptIn, digestOptInError: null };
+        ? { status: 'readyToGenerate', niche: event.niche }
+        : { status: 'needsNiche', niche: '', error: null };
 
     case 'BOOTSTRAP_FAILED':
       return {
         status: 'needsNiche',
         niche: '',
         error: "We couldn't load your content ideas settings. Please refresh and try again.",
-        digestEmailOptIn: false,
-        digestOptInError: null,
       };
 
     case 'BOOTSTRAP_UNAUTHORIZED':
@@ -107,40 +76,15 @@ export function ideasPageReducer(state: IdeasPageState, event: IdeasPageEvent): 
     case 'NICHE_SAVED':
       if (!isNicheEditingState(state)) return state;
       return state.niche.trim()
-        ? {
-            status: 'readyToGenerate',
-            niche: state.niche,
-            digestEmailOptIn: state.digestEmailOptIn,
-            digestOptInError: state.digestOptInError,
-          }
-        : {
-            status: 'needsNiche',
-            niche: state.niche,
-            error: null,
-            digestEmailOptIn: state.digestEmailOptIn,
-            digestOptInError: state.digestOptInError,
-          };
+        ? { status: 'readyToGenerate', niche: state.niche }
+        : { status: 'needsNiche', niche: state.niche, error: null };
 
     case 'NICHE_SAVE_FAILED':
-      return isNicheEditingState(state)
-        ? {
-            status: 'needsNiche',
-            niche: state.niche,
-            error: event.error,
-            digestEmailOptIn: state.digestEmailOptIn,
-            digestOptInError: state.digestOptInError,
-          }
-        : state;
+      return isNicheEditingState(state) ? { status: 'needsNiche', niche: state.niche, error: event.error } : state;
 
     case 'GENERATE':
       return state.status === 'readyToGenerate' || state.status === 'generationFailed'
-        ? {
-            status: 'generating',
-            niche: state.niche,
-            stillWorking: false,
-            digestEmailOptIn: state.digestEmailOptIn,
-            digestOptInError: state.digestOptInError,
-          }
+        ? { status: 'generating', niche: state.niche, stillWorking: false }
         : state;
 
     case 'GENERATE_STILL_WORKING':
@@ -148,44 +92,14 @@ export function ideasPageReducer(state: IdeasPageState, event: IdeasPageEvent): 
 
     case 'GENERATE_SUCCESS':
       return state.status === 'generating'
-        ? {
-            status: 'ideasReady',
-            niche: state.niche,
-            ideas: event.ideas,
-            digestEmailOptIn: state.digestEmailOptIn,
-            digestOptInError: state.digestOptInError,
-            ...(event.cached ? { cached: true } : {}),
-          }
+        ? { status: 'ideasReady', niche: state.niche, ideas: event.ideas, ...(event.cached ? { cached: true } : {}) }
         : state;
 
     case 'GENERATE_FAILED':
-      return state.status === 'generating'
-        ? {
-            status: 'generationFailed',
-            niche: state.niche,
-            error: event.error,
-            digestEmailOptIn: state.digestEmailOptIn,
-            digestOptInError: state.digestOptInError,
-          }
-        : state;
+      return state.status === 'generating' ? { status: 'generationFailed', niche: state.niche, error: event.error } : state;
 
     case 'EDIT_NICHE':
-      return state.status === 'ideasReady'
-        ? {
-            status: 'readyToGenerate',
-            niche: state.niche,
-            digestEmailOptIn: state.digestEmailOptIn,
-            digestOptInError: state.digestOptInError,
-          }
-        : state;
-
-    case 'DIGEST_OPT_IN_TOGGLED':
-      return hasDigestOptInState(state) ? { ...state, digestEmailOptIn: event.optIn, digestOptInError: null } : state;
-
-    case 'DIGEST_OPT_IN_SAVE_FAILED':
-      return hasDigestOptInState(state)
-        ? { ...state, digestEmailOptIn: event.previousValue, digestOptInError: event.error }
-        : state;
+      return state.status === 'ideasReady' ? { status: 'readyToGenerate', niche: state.niche } : state;
 
     case 'EMAIL_CHANGED':
       return state.status === 'needsSignIn' || state.status === 'magicLinkError'

@@ -1,3 +1,4 @@
+import { computeViewsPerHour } from '@/lib/metrics';
 import type { AggregatablePost, PlatformTotals, RecapAggregation, RecapPlatform } from './types';
 
 export function filterPostsToMonth(
@@ -13,11 +14,13 @@ export function filterPostsToMonth(
 }
 
 export function aggregateRecap(
-  postsByPlatform: Partial<Record<RecapPlatform, AggregatablePost[]>>
+  postsByPlatform: Partial<Record<RecapPlatform, AggregatablePost[]>>,
+  now: Date = new Date()
 ): RecapAggregation {
   const platformData: RecapAggregation['platformData'] = {};
   const totals: PlatformTotals = { views: 0, likes: 0, comments: 0, postCount: 0 };
   let topPost: RecapAggregation['topPost'] = null;
+  let topPostViewsPerHour = -Infinity;
 
   for (const platform of Object.keys(postsByPlatform) as RecapPlatform[]) {
     const posts = postsByPlatform[platform];
@@ -34,8 +37,14 @@ export function aggregateRecap(
     totals.postCount += posts.length;
 
     for (const post of posts) {
-      if (!topPost || post.viewCount > topPost.viewCount) {
+      // Ranked by views-per-hour rather than raw view count, so a post
+      // that's actually accelerating right now beats an older post that
+      // simply had more time to accumulate views -- the same VPH metric
+      // lib/watchlist/aggregate.ts uses to rank a competitor's top posts.
+      const viewsPerHour = computeViewsPerHour(post.viewCount, post.publishedAt, now);
+      if (!topPost || viewsPerHour > topPostViewsPerHour) {
         topPost = { platform, captionOrTitle: post.captionOrTitle, viewCount: post.viewCount, permalink: post.permalink };
+        topPostViewsPerHour = viewsPerHour;
       }
     }
   }

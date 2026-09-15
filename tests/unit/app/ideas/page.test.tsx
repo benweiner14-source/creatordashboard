@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+const { useSearchParamsMock } = vi.hoisted(() => ({
+  useSearchParamsMock: vi.fn(() => new URLSearchParams()),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: useSearchParamsMock,
 }));
 
 vi.mock('@/components/AppNav', () => ({
@@ -14,15 +19,16 @@ import IdeasPage from '@/app/ideas/page';
 describe('IdeasPage', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    useSearchParamsMock.mockReturnValue(new URLSearchParams());
   });
 
-  it('shows the niche form when no niche is set yet', async () => {
+  it('shows the GTA 6 focus form when no focus is set yet', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: null, digest: null }) })
     );
     render(<IdeasPage />);
-    await waitFor(() => expect(screen.getByLabelText(/your niche/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/your gta 6 focus/i)).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /get this week's ideas/i })).not.toBeInTheDocument();
   });
 
@@ -249,6 +255,68 @@ describe('IdeasPage', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/ideas', { method: 'POST' });
   });
 
+  it('threads a ?context= query param into the generate request', async () => {
+    useSearchParamsMock.mockReturnValue(new URLSearchParams('context=GTA+6+trailer+breakdown'));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digest: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ digest: { id: 'd1', weekStart: '2026-08-10', contentIdeas: [] } }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByRole('button', { name: /get this week's ideas/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get this week's ideas/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/ideas',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ context: 'GTA 6 trailer breakdown' }) })
+      )
+    );
+  });
+
+  it('does not show the "already generated" banner when context was actually used to generate fresh ideas', async () => {
+    useSearchParamsMock.mockReturnValue(new URLSearchParams('context=GTA+6+trailer+breakdown'));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digest: null }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ digest: { id: 'd1', weekStart: '2026-08-10', contentIdeas: [] }, cached: false }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByRole('button', { name: /get this week's ideas/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get this week's ideas/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/already generated/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a War-Room-specific notice when arriving with ?context= but this week's ideas already exist", async () => {
+    // handleIdeasRequest short-circuits to the cached digest before `context`
+    // is ever read, and bootstrap goes straight to ideasReady, so the generate
+    // button (the only place context is threaded into a POST) never renders —
+    // the user has to be told their alert context couldn't be used.
+    useSearchParamsMock.mockReturnValue(new URLSearchParams('context=GTA+6+trailer+breakdown'));
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        niche: 'home baking',
+        digest: { id: 'd1', weekStart: '2026-08-10', contentIdeas: [] },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+
+    await waitFor(() => expect(screen.getByText(/already generated/i)).toBeInTheDocument());
+    expect(screen.getByText(/War Room alert/i)).toBeInTheDocument();
+    expect(screen.queryByText(/your niche update will apply starting next week/i)).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1); // bootstrap only — no POST
+  });
+
   it('keeps the saved niche visible in the input while generating, instead of blanking it', async () => {
     let resolveGenerate: (value: unknown) => void = () => {};
     const fetchMock = vi
@@ -268,7 +336,7 @@ describe('IdeasPage', () => {
 
     // While the POST /api/ideas request is still pending, state.status === 'generating'.
     await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
-    expect(screen.getByLabelText(/your niche/i)).toHaveValue('home baking');
+    expect(screen.getByLabelText(/your gta 6 focus/i)).toHaveValue('home baking');
 
     resolveGenerate({
       ok: true,
@@ -309,8 +377,8 @@ describe('IdeasPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(<IdeasPage />);
-    await waitFor(() => screen.getByLabelText(/your niche/i));
-    fireEvent.change(screen.getByLabelText(/your niche/i), { target: { value: 'home baking' } });
+    await waitFor(() => screen.getByLabelText(/your gta 6 focus/i));
+    fireEvent.change(screen.getByLabelText(/your gta 6 focus/i), { target: { value: 'home baking' } });
     fireEvent.click(screen.getByRole('button', { name: /save niche/i }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: /get this week's ideas/i })).toBeInTheDocument());
@@ -318,67 +386,5 @@ describe('IdeasPage', () => {
       '/api/ideas/niche',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ niche: 'home baking' }) })
     );
-  });
-
-  it('shows the digest opt-in checkbox once a niche is set, unchecked by default', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: 'home baking', digestEmailOptIn: false, digest: null }) })
-    );
-    render(<IdeasPage />);
-    const checkbox = await screen.findByRole('checkbox', { name: /email me this every monday morning/i });
-    expect(checkbox).not.toBeChecked();
-  });
-
-  it('does not show the digest opt-in checkbox before a niche is set', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: null, digest: null }) }));
-    render(<IdeasPage />);
-    await waitFor(() => expect(screen.getByLabelText(/your niche/i)).toBeInTheDocument());
-    expect(screen.queryByRole('checkbox', { name: /email me this every monday morning/i })).not.toBeInTheDocument();
-  });
-
-  it('reflects digestEmailOptIn: true from bootstrap as checked', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: 'home baking', digestEmailOptIn: true, digest: null }) })
-    );
-    render(<IdeasPage />);
-    const checkbox = await screen.findByRole('checkbox', { name: /email me this every monday morning/i });
-    expect(checkbox).toBeChecked();
-  });
-
-  it('toggling the checkbox on saves via POST /api/digest/opt-in', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digestEmailOptIn: false, digest: null }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(<IdeasPage />);
-    const checkbox = await screen.findByRole('checkbox', { name: /email me this every monday morning/i });
-    fireEvent.click(checkbox);
-
-    expect(checkbox).toBeChecked();
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenLastCalledWith(
-        '/api/digest/opt-in',
-        expect.objectContaining({ method: 'POST', body: JSON.stringify({ optIn: true }) })
-      )
-    );
-  });
-
-  it('reverts the checkbox and shows an error when saving the toggle fails', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digestEmailOptIn: false, digest: null }) })
-      .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Something went wrong.' }) });
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(<IdeasPage />);
-    const checkbox = await screen.findByRole('checkbox', { name: /email me this every monday morning/i });
-    fireEvent.click(checkbox);
-
-    await waitFor(() => expect(checkbox).not.toBeChecked());
-    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong.');
   });
 });

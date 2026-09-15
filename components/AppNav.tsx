@@ -7,11 +7,11 @@ import { usePathname, useRouter } from 'next/navigation';
 
 const NAV_LINKS = [
   { href: '/home', label: 'Home' },
-  { href: '/diagnostic', label: 'Diagnostic' },
+  { href: '/warroom', label: 'War Room' },
   { href: '/recap', label: 'Recap' },
   { href: '/ideas', label: 'Ideas' },
   { href: '/strategy', label: 'Strategy' },
-  { href: '/linkedin', label: 'LinkedIn' },
+  { href: '/watchlist', label: 'Watchlist' },
   { href: '/billing', label: 'Billing' },
 ] as const;
 

@@ -33,7 +33,7 @@ describe('AppNav', () => {
     render(<AppNav />);
     await waitFor(() => expect(screen.getByText('jordan@example.com')).toBeInTheDocument());
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Diagnostic' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Recap' })).not.toHaveAttribute('aria-current');
   });
 
   it('includes a Billing link', async () => {
@@ -48,6 +48,13 @@ describe('AppNav', () => {
     render(<AppNav />);
     await waitFor(() => expect(screen.getByRole('link', { name: 'Strategy' })).toBeInTheDocument());
     expect(screen.getByRole('link', { name: 'Strategy' })).toHaveAttribute('href', '/strategy');
+  });
+
+  it('includes a Watchlist link', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+    render(<AppNav />);
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Watchlist' })).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'Watchlist' })).toHaveAttribute('href', '/watchlist');
   });
 
   it('calls sign-out then navigates home when Sign out is clicked', async () => {
@@ -111,5 +118,14 @@ describe('AppNav', () => {
     for (let node: HTMLElement | null = button; node && node !== container; node = node.parentElement) {
       expect(Array.from(node.classList)).not.toContain('hidden');
     }
+  });
+
+  it('includes a War Room link right after Home', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+    render(<AppNav />);
+    const links = await screen.findAllByRole('link');
+    const labels = links.map((l) => l.textContent);
+    const homeIndex = labels.indexOf('Home');
+    expect(labels[homeIndex + 1]).toBe('War Room');
   });
 });

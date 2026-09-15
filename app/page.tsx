@@ -24,30 +24,30 @@ export default async function MarketingPage() {
   return (
     <main className="mx-auto flex max-w-2xl flex-col items-center gap-6 px-6 py-24 text-center">
       <h1 className="text-4xl font-bold text-gray-900">
-        Understand your content, in plain English.
+        GTA 6 is about to be the biggest launch gaming has ever seen.
       </h1>
       <p className="text-lg text-gray-600">
-        Paste a link to a video or post and get a report on your hook, your retention risk,
-        your posting timing, and your format fit &mdash; explained in words you actually
-        understand, not jargon.
+        The creators who build their audience now &mdash; before launch &mdash; will own this niche
+        for years. Creator Dashboard gives you weekly GTA 6 content ideas, a shareable recap of your
+        growth, a breakdown of any channel&apos;s strategy, and a watchlist on who&apos;s already ahead.
       </p>
       <Link
-        href="/diagnostic"
+        href="/ideas"
         className="rounded-full bg-indigo-600 px-8 py-3 text-lg font-semibold text-white hover:bg-indigo-700"
       >
-        Run a free diagnostic
+        Get this week&apos;s GTA 6 content ideas
+      </Link>
+      <Link href="/warroom" className="text-indigo-700 underline">
+        See what&apos;s trending in GTA 6 right now
       </Link>
       <Link href="/recap" className="text-indigo-700 underline">
-        Get your monthly recap card
-      </Link>
-      <Link href="/ideas" className="text-indigo-700 underline">
-        Get weekly content ideas
+        Track your GTA 6 channel&apos;s growth every month
       </Link>
       <Link href="/strategy" className="text-indigo-700 underline">
-        Break down a channel you admire
+        Break down any GTA 6 creator&apos;s strategy
       </Link>
-      <Link href="/linkedin" className="text-indigo-700 underline">
-        Build a LinkedIn content strategy
+      <Link href="/watchlist" className="text-indigo-700 underline">
+        See who&apos;s already ahead &mdash; track GTA 6 creators
       </Link>
     </main>
   );

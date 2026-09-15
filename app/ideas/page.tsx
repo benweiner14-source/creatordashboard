@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useReducer, useRef } from 'react';
+import { Suspense, useEffect, useReducer, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
-import { ideasPageReducer, createInitialIdeasPageState, isNicheEditingState, hasDigestOptInState } from '@/lib/ideas/page-state';
+import { ideasPageReducer, createInitialIdeasPageState, isNicheEditingState } from '@/lib/ideas/page-state';
 import type { ContentIdea } from '@/lib/integrations/claude-ideas';
 
 const MEDIUM_LABELS: Record<ContentIdea['medium'], string> = {
@@ -14,9 +15,12 @@ const MEDIUM_LABELS: Record<ContentIdea['medium'], string> = {
   both: 'Reel + Carousel',
 };
 
-export default function IdeasPage() {
+function IdeasPageInner() {
   const [state, dispatch] = useReducer(ideasPageReducer, createInitialIdeasPageState());
+  const searchParams = useSearchParams();
+  const warroomContext = searchParams.get('context');
   const stillWorkingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [contextConsumed, setContextConsumed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,7 +45,6 @@ export default function IdeasPage() {
           type: 'BOOTSTRAPPED',
           niche: data.niche ?? '',
           ideas: data.digest?.contentIdeas ?? null,
-          digestEmailOptIn: data.digestEmailOptIn ?? false,
         });
       })
       .catch(() => {
@@ -82,11 +85,20 @@ export default function IdeasPage() {
   async function generate() {
     dispatch({ type: 'GENERATE' });
     try {
-      const res = await fetch('/api/ideas', { method: 'POST' });
+      const res = warroomContext
+        ? await fetch('/api/ideas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: warroomContext }),
+          })
+        : await fetch('/api/ideas', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) {
         dispatch({ type: 'GENERATE_FAILED', error: data.error ?? 'Something went wrong generating your content ideas.' });
         return;
+      }
+      if (warroomContext) {
+        setContextConsumed(!data.cached);
       }
       dispatch({ type: 'GENERATE_SUCCESS', ideas: data.digest.contentIdeas, cached: data.cached ?? false });
     } catch {
@@ -109,29 +121,6 @@ export default function IdeasPage() {
       dispatch({ type: 'MAGIC_LINK_SENT' });
     } catch {
       dispatch({ type: 'MAGIC_LINK_FAILED', error: "We couldn't reach the server. Check your connection and try again." });
-    }
-  }
-
-  async function toggleDigestOptIn(optIn: boolean) {
-    if (!hasDigestOptInState(state)) return;
-    const previousValue = state.digestEmailOptIn;
-    dispatch({ type: 'DIGEST_OPT_IN_TOGGLED', optIn });
-    try {
-      const res = await fetch('/api/digest/opt-in', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optIn }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        dispatch({ type: 'DIGEST_OPT_IN_SAVE_FAILED', previousValue, error: data.error ?? 'Something went wrong saving that.' });
-      }
-    } catch {
-      dispatch({
-        type: 'DIGEST_OPT_IN_SAVE_FAILED',
-        previousValue,
-        error: "We couldn't reach the server. Check your connection and try again.",
-      });
     }
   }
 
@@ -177,7 +166,7 @@ export default function IdeasPage() {
           <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
           <UpgradePrompt
             title="Weekly Content Ideas is part of Creator Dashboard's paid plan"
-            body="Get a ranked shortlist of niche-specific content concepts every week for $10/mo."
+            body="Get a ranked shortlist of GTA 6 content concepts every week for $10/mo."
           />
         </main>
       </>
@@ -189,17 +178,17 @@ export default function IdeasPage() {
       <AppNav />
       <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
         <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
-        <p className="text-gray-600">Set your niche once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
+        <p className="text-gray-600">Set your GTA 6 focus once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
 
         <div className="flex flex-col gap-3">
           <label htmlFor="ideas-niche" className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-            Your niche
+            Your GTA 6 focus
             <input
               id="ideas-niche"
               type="text"
               value={state.niche}
               onChange={(e) => dispatch({ type: 'NICHE_CHANGED', value: e.target.value })}
-              placeholder="e.g. home baking, personal finance for Gen Z"
+              placeholder="e.g. GTA RP, speedrunning, comedy skits, mod showcases, lore theories"
               disabled={state.status === 'generating' || state.status === 'ideasReady'}
               className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
             />
@@ -223,25 +212,6 @@ export default function IdeasPage() {
             </button>
           )}
         </div>
-
-        {hasDigestOptInState(state) && state.status !== 'needsNiche' && (
-          <div className="flex flex-col gap-1">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={state.digestEmailOptIn}
-                onChange={(e) => toggleDigestOptIn(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              Email me this every Monday morning
-            </label>
-            {state.digestOptInError && (
-              <p role="alert" className="text-sm text-red-600">
-                {state.digestOptInError}
-              </p>
-            )}
-          </div>
-        )}
 
         {state.status === 'needsNiche' && state.error && (
           <p role="alert" className="text-sm text-red-600">
@@ -280,10 +250,17 @@ export default function IdeasPage() {
 
         {state.status === 'ideasReady' && (
           <div className="flex flex-col gap-4">
-            {state.cached && (
+            {warroomContext && !contextConsumed ? (
               <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                These are this week&apos;s saved ideas — your niche update will apply starting next week.
+                You started from a War Room alert, but this week&apos;s ideas were already generated — new ideas are
+                ready again next Monday.
               </p>
+            ) : (
+              state.cached && (
+                <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  These are this week&apos;s saved ideas — your niche update will apply starting next week.
+                </p>
+              )
             )}
             {state.ideas.map((idea, index) => {
               const safeSourceUrl = idea.sourceUrl && /^https?:\/\//i.test(idea.sourceUrl) ? idea.sourceUrl : null;
@@ -329,5 +306,13 @@ export default function IdeasPage() {
         )}
       </main>
     </>
+  );
+}
+
+export default function IdeasPage() {
+  return (
+    <Suspense fallback={<p>Loading…</p>}>
+      <IdeasPageInner />
+    </Suspense>
   );
 }

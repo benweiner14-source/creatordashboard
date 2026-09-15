@@ -3,6 +3,7 @@ import { ChannelNotFoundError, type YouTubeClient } from '@/lib/integrations/you
 import type { ScraperClient } from '@/lib/integrations/scraper';
 import type { StrategyBreakdownClient } from '@/lib/integrations/claude-strategy';
 import { detectHandlePlatform, normalizeHandle } from '@/lib/recap/handles';
+import { computeViewsPerHour } from '@/lib/metrics';
 import { computeCadence, computeFormatMix, computeAverageEngagementRate } from './aggregate';
 import type { ChannelPost, CadenceSummary, FormatMixSummary } from './types';
 
@@ -124,8 +125,13 @@ export async function handleStrategyBreakdownRequest(
     const cadence = computeCadence(channelPosts);
     const formatMix = computeFormatMix(channelPosts);
     const averageEngagementRate = computeAverageEngagementRate(platform, channelPosts);
-    const topPosts = [...channelPosts]
-      .sort((a, b) => b.viewCount - a.viewCount)
+    // Ranked by views-per-hour rather than raw view count, so a post that's
+    // actually accelerating right now beats an older post that simply had
+    // more time to accumulate views -- see lib/watchlist/aggregate.ts and
+    // lib/recap/aggregate.ts, which rank their top posts the same way.
+    const topPosts = channelPosts
+      .map((p) => ({ ...p, viewsPerHour: computeViewsPerHour(p.viewCount, p.publishedAt) }))
+      .sort((a, b) => b.viewsPerHour - a.viewsPerHour)
       .slice(0, 3)
       .map((p) => ({ captionOrTitle: p.captionOrTitle, viewCount: p.viewCount }));
 

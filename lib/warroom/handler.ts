@@ -1,0 +1,41 @@
+import type { WarroomAlertRow } from './types';
+
+export interface WarroomHandlerDeps {
+  hasActiveSubscription: (profileId: string) => Promise<boolean>;
+  getRecentAlerts: () => Promise<WarroomAlertRow[]>;
+  getEmailOptIn: (profileId: string) => Promise<boolean>;
+  setEmailOptIn: (profileId: string, optIn: boolean) => Promise<void>;
+}
+
+export interface WarroomHandlerResult {
+  status: number;
+  body: Record<string, unknown>;
+}
+
+export async function handleListWarroomAlerts(
+  deps: WarroomHandlerDeps,
+  context: { profileId: string | null }
+): Promise<WarroomHandlerResult> {
+  if (!context.profileId) {
+    return { status: 401, body: { error: 'You must be signed in to view the War Room.' } };
+  }
+  if (!(await deps.hasActiveSubscription(context.profileId))) {
+    return { status: 402, body: { error: 'GTA6 War Room requires an active subscription.', upgradeUrl: '/billing' } };
+  }
+  const [alerts, emailOptIn] = await Promise.all([deps.getRecentAlerts(), deps.getEmailOptIn(context.profileId)]);
+  return { status: 200, body: { alerts, emailOptIn } };
+}
+
+export async function handleWarroomOptIn(
+  deps: WarroomHandlerDeps,
+  context: { profileId: string | null; optIn: boolean }
+): Promise<WarroomHandlerResult> {
+  if (!context.profileId) {
+    return { status: 401, body: { error: 'You must be signed in to change this setting.' } };
+  }
+  if (context.optIn && !(await deps.hasActiveSubscription(context.profileId))) {
+    return { status: 402, body: { error: 'GTA6 War Room email alerts require an active subscription.', upgradeUrl: '/billing' } };
+  }
+  await deps.setEmailOptIn(context.profileId, context.optIn);
+  return { status: 200, body: { ok: true } };
+}

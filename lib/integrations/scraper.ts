@@ -24,6 +24,7 @@ export interface ProfilePost {
   likeCount: number;
   commentCount: number;
   durationSeconds?: number;
+  followerCount?: number;
   permalink: string;
 }
 
@@ -78,6 +79,8 @@ function profileUrlFor(platform: 'tiktok' | 'instagram', handle: string): string
 }
 
 function normalizeProfilePost(platform: 'tiktok' | 'instagram', item: Record<string, unknown>): ProfilePost {
+  const authorMeta = item.authorMeta as Record<string, unknown> | undefined;
+  const rawFollowerCount = platform === 'tiktok' ? authorMeta?.fans : item.followersCount;
   return {
     platform,
     id: String(item.id ?? item.videoId ?? item.shortCode ?? ''),
@@ -89,6 +92,7 @@ function normalizeProfilePost(platform: 'tiktok' | 'instagram', item: Record<str
     durationSeconds: item.videoDuration !== undefined || item.duration !== undefined
       ? Number(item.videoDuration ?? item.duration ?? 0)
       : undefined,
+    followerCount: rawFollowerCount !== undefined ? Number(rawFollowerCount) : undefined,
     permalink: String(item.webVideoUrl ?? item.url ?? item.permalink ?? ''),
   };
 }

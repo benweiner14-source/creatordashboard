@@ -7,13 +7,11 @@ import Link from 'next/link';
 import { AppNav } from '@/components/AppNav';
 import { HomeCard } from '@/components/HomeCard';
 import { PlatformBadge, type BadgePlatform } from '@/components/PlatformBadge';
-import { ScoreRing } from '@/components/ScoreRing';
-import { formatCompactNumber, formatRelativeDays } from '@/lib/home/format';
+import { formatCompactNumber } from '@/lib/home/format';
 import { deriveDisplayNameFromEmail } from '@/lib/home/display-name';
 import type { HomeData } from '@/lib/home/types';
 import type { RecapPlatform } from '@/lib/recap/types';
 
-const RING_COLORS = ['#4338ca', '#7c3aed', '#4338ca', '#7c3aed'] as const;
 const RECAP_PLATFORM_ORDER: RecapPlatform[] = ['youtube', 'tiktok', 'instagram'];
 
 export default function HomePage() {
@@ -55,9 +53,6 @@ export default function HomePage() {
       <>
         <AppNav />
         <p role="alert">We couldn&apos;t load your dashboard. Please refresh and try again.</p>
-        <p>
-          <Link href="/diagnostic">Run a diagnostic instead</Link>
-        </p>
       </>
     );
   }
@@ -77,76 +72,11 @@ export default function HomePage() {
         <p className="mt-2 max-w-md text-[#e4defc]">Here&apos;s how your tools are looking this week.</p>
       </header>
 
-      <main className="grid grid-cols-1 gap-4 p-6 [&>article]:motion-safe:animate-rise md:grid-cols-3">
-        <DiagnosticCard diagnostic={data.diagnostic} />
+      <main className="grid grid-cols-1 gap-4 p-6 [&>article]:motion-safe:animate-rise md:grid-cols-2">
         <RecapCard recap={data.recap} />
         <IdeasCard ideas={data.ideas} />
       </main>
     </div>
-  );
-}
-
-function DiagnosticCard({ diagnostic }: { diagnostic: HomeData['diagnostic'] }) {
-  if (!diagnostic) {
-    return (
-      <HomeCard variant="cta" ariaLabelledBy="diagnostic-cta-heading">
-        <h3 id="diagnostic-cta-heading" className="font-serif text-xl font-normal">
-          Run your first diagnostic
-        </h3>
-        <p className="text-sm text-white/90">
-          Paste a link and get a plain-English breakdown of your hook, retention, timing, and format — takes under a
-          minute.
-        </p>
-        <Link
-          href="/diagnostic"
-          className="mt-auto self-start rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-900"
-        >
-          Run a diagnostic
-        </Link>
-      </HomeCard>
-    );
-  }
-
-  const rings: Array<{ key: string; label: string; value: number }> = [
-    { key: 'hook', label: 'Hook', value: diagnostic.hookStrengthScore },
-    { key: 'retention', label: 'Retention', value: diagnostic.retentionRiskScore },
-    { key: 'timing', label: 'Timing', value: diagnostic.timingScore },
-    { key: 'format', label: 'Format', value: diagnostic.formatFitScore },
-  ];
-
-  return (
-    <HomeCard ariaLabelledBy="diagnostic-heading">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <PlatformBadge platform={diagnostic.platform as BadgePlatform} />
-          <h3 id="diagnostic-heading" className="font-bold text-gray-900">
-            Latest diagnostic
-          </h3>
-        </div>
-      </div>
-
-      <p className="text-4xl font-bold tracking-tight text-gray-900">
-        {diagnostic.overallScore}
-        <span className="ml-1 text-lg font-medium text-gray-400">/100</span>
-      </p>
-
-      <div
-        role="img"
-        aria-label={rings.map((r) => `${r.label} ${Math.round(r.value)}`).join(', ')}
-        className="flex flex-wrap gap-3"
-      >
-        {rings.map((ring, i) => (
-          <ScoreRing key={ring.key} value={ring.value} label={ring.label} color={RING_COLORS[i]} />
-        ))}
-      </div>
-
-      <div className="mt-auto flex items-center justify-between gap-3">
-        <span className="text-xs text-gray-400">Checked {formatRelativeDays(new Date(diagnostic.createdAt), new Date())}</span>
-        <Link href="/diagnostic" className="text-sm font-semibold text-indigo-900">
-          Run another →
-        </Link>
-      </div>
-    </HomeCard>
   );
 }
 
@@ -231,14 +161,14 @@ function IdeasCard({ ideas }: { ideas: HomeData['ideas'] }) {
     return (
       <HomeCard variant="cta" ariaLabelledBy="ideas-cta-heading">
         <h3 id="ideas-cta-heading" className="font-serif text-xl font-normal">
-          Set your niche to get this week&apos;s ideas
+          Set your GTA 6 focus to get this week&apos;s ideas
         </h3>
         <p className="text-sm text-white/90">Takes 10 seconds — we&apos;ll research what&apos;s trending for you every Monday.</p>
         <Link
           href="/ideas"
           className="mt-auto self-start rounded-full bg-white px-5 py-2.5 text-sm font-bold text-indigo-900"
         >
-          Set my niche
+          Set my focus
         </Link>
       </HomeCard>
     );

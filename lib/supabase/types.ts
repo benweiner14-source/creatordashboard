@@ -12,6 +12,7 @@ export interface Database {
           instagram_handle: string | null;
           digest_email_opt_in: boolean;
           digest_last_sent_at: string | null;
+          warroom_email_opt_in: boolean;
           created_at: string;
         };
         Insert: {
@@ -24,6 +25,7 @@ export interface Database {
           instagram_handle?: string | null;
           digest_email_opt_in?: boolean;
           digest_last_sent_at?: string | null;
+          warroom_email_opt_in?: boolean;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
@@ -259,6 +261,99 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['linkedin_profile_audits']['Insert']>;
+        Relationships: [];
+      };
+      watchlist_entries: {
+        Row: {
+          id: string;
+          profile_id: string;
+          platform: 'youtube' | 'tiktok' | 'instagram';
+          handle: string;
+          url: string;
+          label: string | null;
+          last_error: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          platform: 'youtube' | 'tiktok' | 'instagram';
+          handle: string;
+          url: string;
+          label?: string | null;
+          last_error?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['watchlist_entries']['Insert']>;
+        Relationships: [];
+      };
+      watchlist_snapshots: {
+        Row: {
+          id: string;
+          entry_id: string;
+          captured_at: string;
+          subscriber_count: number | null;
+          total_view_count: number;
+          video_count: number;
+          top_posts: unknown;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          entry_id: string;
+          captured_at?: string;
+          subscriber_count?: number | null;
+          total_view_count: number;
+          video_count: number;
+          top_posts: unknown;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['watchlist_snapshots']['Insert']>;
+        Relationships: [];
+      };
+      warroom_alerts: {
+        Row: {
+          id: string;
+          platform: 'youtube' | 'tiktok' | 'instagram';
+          external_post_id: string;
+          url: string;
+          caption_or_title: string;
+          view_count: number;
+          engagement_count: number;
+          published_at: string;
+          severity: string;
+          detected_at: string;
+        };
+        Insert: {
+          id?: string;
+          platform: 'youtube' | 'tiktok' | 'instagram';
+          external_post_id: string;
+          url: string;
+          caption_or_title: string;
+          view_count: number;
+          engagement_count: number;
+          published_at: string;
+          severity: string;
+          detected_at?: string;
+        };
+        Update: {
+          id?: string;
+          platform?: 'youtube' | 'tiktok' | 'instagram';
+          external_post_id?: string;
+          url?: string;
+          caption_or_title?: string;
+          view_count?: number;
+          engagement_count?: number;
+          published_at?: string;
+          severity?: string;
+          detected_at?: string;
+        };
+        Relationships: [];
+      };
+      warroom_settings: {
+        Row: { id: boolean; paused: boolean; paused_reason: string | null; paused_at: string | null };
+        Insert: { id?: boolean; paused?: boolean; paused_reason?: string | null; paused_at?: string | null };
+        Update: { id?: boolean; paused?: boolean; paused_reason?: string | null; paused_at?: string | null };
         Relationships: [];
       };
     };
