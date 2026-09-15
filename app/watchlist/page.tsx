@@ -288,7 +288,7 @@ export default function WatchlistPage() {
           <div className="flex flex-col gap-3">
             <p className="text-gray-500">No competitors tracked yet — add a channel above to get started.</p>
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium text-gray-700">Suggested GTA6 creators to track</p>
+              <p className="text-sm font-medium text-gray-700">Suggested GTA 6 creators to track</p>
               <div className="flex flex-wrap gap-2">
                 {SUGGESTED_CREATORS.map((creator) => (
                   <button

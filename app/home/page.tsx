@@ -161,7 +161,7 @@ function IdeasCard({ ideas }: { ideas: HomeData['ideas'] }) {
     return (
       <HomeCard variant="cta" ariaLabelledBy="ideas-cta-heading">
         <h3 id="ideas-cta-heading" className="font-serif text-xl font-normal">
-          Set your GTA6 focus to get this week&apos;s ideas
+          Set your GTA 6 focus to get this week&apos;s ideas
         </h3>
         <p className="text-sm text-white/90">Takes 10 seconds — we&apos;ll research what&apos;s trending for you every Monday.</p>
         <Link

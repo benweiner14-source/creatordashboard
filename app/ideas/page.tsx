@@ -153,7 +153,7 @@ export default function IdeasPage() {
           <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
           <UpgradePrompt
             title="Weekly Content Ideas is part of Creator Dashboard's paid plan"
-            body="Get a ranked shortlist of GTA6 content concepts every week for $10/mo."
+            body="Get a ranked shortlist of GTA 6 content concepts every week for $10/mo."
           />
         </main>
       </>
@@ -165,11 +165,11 @@ export default function IdeasPage() {
       <AppNav />
       <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
         <h1 className="text-2xl font-bold text-gray-900">Weekly content ideas</h1>
-        <p className="text-gray-600">Set your GTA6 focus once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
+        <p className="text-gray-600">Set your GTA 6 focus once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
 
         <div className="flex flex-col gap-3">
           <label htmlFor="ideas-niche" className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-            Your GTA6 focus
+            Your GTA 6 focus
             <input
               id="ideas-niche"
               type="text"

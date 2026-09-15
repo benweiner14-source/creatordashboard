@@ -16,13 +16,13 @@ describe('IdeasPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows the GTA6 focus form when no focus is set yet', async () => {
+  it('shows the GTA 6 focus form when no focus is set yet', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: null, digest: null }) })
     );
     render(<IdeasPage />);
-    await waitFor(() => expect(screen.getByLabelText(/your gta6 focus/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/your gta 6 focus/i)).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /get this week's ideas/i })).not.toBeInTheDocument();
   });
 
@@ -268,7 +268,7 @@ describe('IdeasPage', () => {
 
     // While the POST /api/ideas request is still pending, state.status === 'generating'.
     await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
-    expect(screen.getByLabelText(/your gta6 focus/i)).toHaveValue('home baking');
+    expect(screen.getByLabelText(/your gta 6 focus/i)).toHaveValue('home baking');
 
     resolveGenerate({
       ok: true,
@@ -309,8 +309,8 @@ describe('IdeasPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(<IdeasPage />);
-    await waitFor(() => screen.getByLabelText(/your gta6 focus/i));
-    fireEvent.change(screen.getByLabelText(/your gta6 focus/i), { target: { value: 'home baking' } });
+    await waitFor(() => screen.getByLabelText(/your gta 6 focus/i));
+    fireEvent.change(screen.getByLabelText(/your gta 6 focus/i), { target: { value: 'home baking' } });
     fireEvent.click(screen.getByRole('button', { name: /save niche/i }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: /get this week's ideas/i })).toBeInTheDocument());

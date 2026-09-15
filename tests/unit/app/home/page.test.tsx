@@ -44,7 +44,7 @@ describe('HomePage', () => {
     render(<HomePage />);
 
     await waitFor(() => expect(screen.getByRole('heading', { name: "Generate this month's recap" })).toBeInTheDocument());
-    expect(screen.getByRole('heading', { name: "Set your GTA6 focus to get this week's ideas" })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: "Set your GTA 6 focus to get this week's ideas" })).toBeInTheDocument();
   });
 
   it('shows the recap stat and top post when a card exists for this month', async () => {

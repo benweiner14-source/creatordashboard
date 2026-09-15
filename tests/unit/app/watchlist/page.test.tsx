@@ -365,10 +365,10 @@ describe('WatchlistPage', () => {
   });
 
   describe('suggested creators', () => {
-    it('shows suggested GTA6 creator quick-add chips when the list is empty', async () => {
+    it('shows suggested GTA 6 creator quick-add chips when the list is empty', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ entries: [], subscriptionRequired: false })));
       render(<WatchlistPage />);
-      await waitFor(() => expect(screen.getByText(/suggested gta6 creators to track/i)).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText(/suggested gta 6 creators to track/i)).toBeInTheDocument());
       expect(screen.getByRole('button', { name: /nought/i })).toBeInTheDocument();
     });
 
@@ -401,7 +401,7 @@ describe('WatchlistPage', () => {
       );
       render(<WatchlistPage />);
       await waitFor(() => expect(screen.getByText('Main rival')).toBeInTheDocument());
-      expect(screen.queryByText(/suggested gta6 creators to track/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/suggested gta 6 creators to track/i)).not.toBeInTheDocument();
     });
 
     it('clicking a suggested creator adds it via the same POST flow as the manual form', async () => {
