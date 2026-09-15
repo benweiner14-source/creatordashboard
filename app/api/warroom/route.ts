@@ -41,11 +41,17 @@ export async function GET() {
     {
       hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
       getRecentAlerts: async () => {
-        const { data } = await serviceClient
+        const { data, error } = await serviceClient
           .from('warroom_alerts')
           .select('*')
           .order('detected_at', { ascending: false })
           .limit(100);
+        if (error) {
+          // A query failure must surface as a 500, not silently render as an
+          // empty feed (200 with no alerts looks identical to "nothing has
+          // happened yet" from the client's point of view).
+          throw new Error(`Failed to load War Room alerts: ${error.message}`);
+        }
         return (data ?? []).map(mapAlertRow);
       },
       setEmailOptIn: async () => {}, // unused on this route
