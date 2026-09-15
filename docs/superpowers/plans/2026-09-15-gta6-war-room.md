@@ -1888,6 +1888,7 @@ export async function GET() {
 ```ts
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server';
+import { hasActiveSubscription } from '@/lib/billing/entitlements';
 import { handleWarroomOptIn } from '@/lib/warroom/handler';
 
 export async function POST(request: Request) {
@@ -1900,7 +1901,11 @@ export async function POST(request: Request) {
 
   const result = await handleWarroomOptIn(
     {
-      hasActiveSubscription: async () => true, // unused on this route
+      // Real, not a stub: handleWarroomOptIn calls this when optIn is true
+      // (Task 9) to block a non-subscriber from turning on email alerts for
+      // a feature they can't otherwise view. Stubbing this to always return
+      // true would silently defeat that check.
+      hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
       getRecentAlerts: async () => [], // unused on this route
       setEmailOptIn: async (profileId, optIn) => {
         await serviceClient.from('profiles').update({ warroom_email_opt_in: optIn }).eq('id', profileId);
