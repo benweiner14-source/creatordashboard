@@ -183,12 +183,16 @@ describe('supabase migrations', () => {
     expect(sql).toContain('watchlist_snapshots_entry_id_captured_at_idx');
   });
 
-  it('includes a warroom_alerts table migration deduplicated by platform and external post id', () => {
+  it('includes a warroom_alerts table migration deduplicated by platform and external post id, with no user-facing RLS policy', () => {
     const sql = readMigrationContaining('create_warroom_tables');
     expect(sql).toContain('create table public.warroom_alerts');
     expect(sql).toContain("severity text not null check (severity in ('heating_up', 'going_viral', 'already_viral'))");
     expect(sql).toContain('unique (platform, external_post_id)');
-    expect(sql).toContain('"War Room alerts are viewable by any signed-in subscriber"');
+    expect(sql).toContain('alter table public.warroom_alerts enable row level security');
+    // The feed route reads this table exclusively through the service-role
+    // client and gates on subscription status in the handler, so any
+    // anon/authenticated select policy here would be a paywall bypass.
+    expect(sql).not.toMatch(/create policy[\s\S]*?on public\.warroom_alerts/);
     expect(sql).toContain('warroom_alerts_detected_at_idx');
   });
 
@@ -197,9 +201,9 @@ describe('supabase migrations', () => {
     expect(sql).toContain('create table public.warroom_settings');
     expect(sql).toContain('id boolean primary key default true check (id)');
     expect(sql).toContain('alter table public.warroom_settings enable row level security');
-    // Checked as "no policy mentions warroom_settings" (not a bare
-    // `not.toContain('create policy')`), since the migration file also
-    // contains warroom_alerts' own, legitimate policy earlier in the same file.
+    // Checked as "no policy mentions warroom_settings" rather than a bare
+    // `not.toContain('create policy')` so this stays precise if a policy on
+    // some other table is ever added to this migration.
     expect(sql).not.toMatch(/create policy[\s\S]*?on public\.warroom_settings/);
   });
 

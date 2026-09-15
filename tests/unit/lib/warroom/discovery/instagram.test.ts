@@ -94,7 +94,24 @@ describe('searchGta6InstagramPosts', () => {
   });
 
   it('throws when the Apify request itself responds with a non-2xx status', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429 }));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429, text: async () => '' }));
     await expect(searchGta6InstagramPosts('test-token')).rejects.toThrow('status 429');
+  });
+
+  it('includes the response body in the thrown error so budget-exceeded detection can match it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 402,
+        text: async () => 'Actor run failed: monthly usage hard limit exceeded',
+      })
+    );
+    await expect(searchGta6InstagramPosts('test-token')).rejects.toThrow(/monthly usage hard limit exceeded/);
+  });
+
+  it('returns no posts when a 200 response body is not an array', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ error: 'something' }) }));
+    await expect(searchGta6InstagramPosts('test-token')).resolves.toEqual({ posts: [], errors: [] });
   });
 });

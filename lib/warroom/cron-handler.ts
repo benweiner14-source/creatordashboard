@@ -2,6 +2,14 @@ import type { EmailClient } from '@/lib/integrations/resend';
 import { classifySeverity } from './scoring';
 import type { DiscoveredPost, DiscoveryResult, WarroomSeverity } from './types';
 
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function safeUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? escapeHtml(url) : '#';
+}
+
 /** Reused verbatim from the reference Social War Room system — design spec §4. */
 const BUDGET_EXCEEDED_RE = /hard limit exceeded|platform-feature-disabled|monthly usage/i;
 
@@ -19,6 +27,7 @@ export interface WarroomCronDeps {
   getOptedInEmails: () => Promise<string[]>;
   emailClient: EmailClient;
   operatorEmail: string;
+  sleep: (ms: number) => Promise<void>;
 }
 
 export interface WarroomCronResult {
@@ -63,7 +72,7 @@ export async function runWarroomCron(deps: WarroomCronDeps, now: Date): Promise<
     await deps.emailClient.sendEmail({
       to: deps.operatorEmail,
       subject: '🛑 GTA6 War Room Paused — Apify Budget Exhausted',
-      html: `<p>The War Room cron paused itself after detecting an Apify budget error:</p><p>${budgetError}</p><p>Reactivate manually once usage resets (design spec §4) — this does not happen automatically.</p>`,
+      html: `<p>The War Room cron paused itself after detecting an Apify budget error:</p><p>${escapeHtml(budgetError)}</p><p>Reactivate manually once usage resets (design spec §4) — this does not happen automatically.</p>`,
     });
     return { skipped: 'budget_exceeded', inserted: 0 };
   }
@@ -84,7 +93,13 @@ export async function runWarroomCron(deps: WarroomCronDeps, now: Date): Promise<
   }
 
   candidates.sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || b.post.viewCount - a.post.viewCount);
-  const capped = candidates.slice(0, WARROOM_PER_RUN_CAP);
+  // Clamp to whatever headroom remains under the daily cap, not just the
+  // flat per-run cap — otherwise a run starting at e.g. todayCount=29 could
+  // still insert up to WARROOM_PER_RUN_CAP more, exceeding the stated
+  // 30/day limit. The earlier todayCount >= WARROOM_DAILY_ALERT_CAP guard
+  // means remainingCapacity here is always >= 1.
+  const remainingCapacity = WARROOM_DAILY_ALERT_CAP - todayCount;
+  const capped = candidates.slice(0, Math.min(WARROOM_PER_RUN_CAP, remainingCapacity));
 
   let insertedCount = 0;
   const newlyInserted: Array<{ post: DiscoveredPost; severity: WarroomSeverity }> = [];
@@ -101,11 +116,24 @@ export async function runWarroomCron(deps: WarroomCronDeps, now: Date): Promise<
     const recipients = await deps.getOptedInEmails();
     for (const to of recipients) {
       for (const { post, severity } of emailWorthy) {
-        await deps.emailClient.sendEmail({
-          to,
-          subject: `${severity === 'already_viral' ? '💥 Already Viral' : '🚀 Going Viral'} on ${post.platform}`,
-          html: `<p>${post.captionOrTitle}</p><p><a href="${post.url}">View post</a></p>`,
-        });
+        try {
+          await deps.emailClient.sendEmail({
+            to,
+            subject: `${severity === 'already_viral' ? '💥 Already Viral' : '🚀 Going Viral'} on ${post.platform}`,
+            html: `<p>${escapeHtml(post.captionOrTitle)}</p><p><a href="${safeUrl(post.url)}">View post</a></p>`,
+          });
+        } catch (err) {
+          // One bad address or one rate-limited request must not abort the
+          // whole fan-out and silently drop every remaining recipient's
+          // email — the alerts are already inserted and permanently
+          // deduped, so a thrown error here means this alert is never
+          // emailed to anyone again.
+          console.error('War Room email send failed (non-fatal):', to, err instanceof Error ? err.message : err);
+        }
+        // Stay under Resend's default rate limit (2 req/s) — this is a
+        // simple fixed-delay throttle, not a sophisticated batching
+        // scheme, which is fine given the small per-run cap.
+        await deps.sleep(600);
       }
     }
   }

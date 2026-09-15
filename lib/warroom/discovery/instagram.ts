@@ -51,9 +51,16 @@ export async function searchGta6InstagramPosts(apifyToken: string): Promise<Disc
     body: JSON.stringify({ hashtags: ['gta6', 'gtavi', 'grandtheftauto6'], resultsLimit: 50, searchType: 'hashtag' }),
   });
   if (!response.ok) {
-    throw new Error(`Apify Instagram scraper request failed with status ${response.status}`);
+    // Include the body: the cron's budget-exceeded detection regex
+    // (lib/warroom/cron-handler.ts) matches on this message, and Apify puts
+    // the real "monthly usage hard limit exceeded" text in the body.
+    const body = await response.text().catch(() => '');
+    throw new Error(`Apify Instagram scraper request failed with status ${response.status}: ${body.slice(0, 500)}`);
   }
-  const items: RawInstagramItem[] = await response.json();
+  const rawItems = await response.json();
+  // A 200 whose body is not an array (e.g. an error object) degrades to zero
+  // posts rather than throwing "items is not iterable" below.
+  const items: RawInstagramItem[] = Array.isArray(rawItems) ? rawItems : [];
 
   const posts: DiscoveredPost[] = [];
   const errors: string[] = [];

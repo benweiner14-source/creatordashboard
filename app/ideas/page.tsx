@@ -246,10 +246,17 @@ function IdeasPageInner() {
 
         {state.status === 'ideasReady' && (
           <div className="flex flex-col gap-4">
-            {state.cached && (
+            {warroomContext ? (
               <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                These are this week&apos;s saved ideas — your niche update will apply starting next week.
+                You started from a War Room alert, but this week&apos;s ideas were already generated — new ideas are
+                ready again next Monday.
               </p>
+            ) : (
+              state.cached && (
+                <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  These are this week&apos;s saved ideas — your niche update will apply starting next week.
+                </p>
+              )
             )}
             {state.ideas.map((idea, index) => {
               const safeSourceUrl = idea.sourceUrl && /^https?:\/\//i.test(idea.sourceUrl) ? idea.sourceUrl : null;

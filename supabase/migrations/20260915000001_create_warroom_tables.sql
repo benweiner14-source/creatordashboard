@@ -13,10 +13,13 @@ create table public.warroom_alerts (
 );
 
 alter table public.warroom_alerts enable row level security;
-
-create policy "War Room alerts are viewable by any signed-in subscriber"
-  on public.warroom_alerts for select
-  using ((select auth.uid()) is not null);
+-- No select policy for regular users: GET /api/warroom (the feed route)
+-- is the only reader and always uses the service-role client, gating on
+-- subscription status in the handler (lib/warroom/handler.ts) — unlike
+-- every other paid-content table in this codebase (which gate by owning
+-- profile_id), this is a shared feed with no profile_id to gate by, so
+-- RLS enabled with zero policies is the correct default-deny here, same
+-- pattern as warroom_settings below.
 
 create index warroom_alerts_detected_at_idx
   on public.warroom_alerts (detected_at desc);
@@ -28,7 +31,7 @@ create table public.warroom_settings (
   paused_at timestamptz
 );
 
-insert into public.warroom_settings (id) values (true);
+insert into public.warroom_settings (id) values (true) on conflict (id) do nothing;
 
 alter table public.warroom_settings enable row level security;
 -- No select/insert/update policy for regular users: this table is

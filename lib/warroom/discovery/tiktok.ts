@@ -60,9 +60,16 @@ export async function searchGta6TikToks(apifyToken: string): Promise<DiscoveryRe
     }),
   });
   if (!response.ok) {
-    throw new Error(`Apify TikTok scraper request failed with status ${response.status}`);
+    // Include the body: the cron's budget-exceeded detection regex
+    // (lib/warroom/cron-handler.ts) matches on this message, and Apify puts
+    // the real "monthly usage hard limit exceeded" text in the body.
+    const body = await response.text().catch(() => '');
+    throw new Error(`Apify TikTok scraper request failed with status ${response.status}: ${body.slice(0, 500)}`);
   }
-  const items: RawTikTokItem[] = await response.json();
+  const rawItems = await response.json();
+  // A 200 whose body is not an array (e.g. an error object) degrades to zero
+  // posts rather than throwing "items is not iterable" below.
+  const items: RawTikTokItem[] = Array.isArray(rawItems) ? rawItems : [];
 
   const posts: DiscoveredPost[] = [];
   const errors: string[] = [];

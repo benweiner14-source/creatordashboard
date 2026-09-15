@@ -77,7 +77,7 @@ describe('searchGta6Videos', () => {
   });
 
   it('throws when search.list responds with a non-2xx status', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => '' }));
     await expect(searchGta6Videos('test-key', new Date())).rejects.toThrow('status 403');
   });
 
@@ -92,6 +92,7 @@ describe('searchGta6Videos', () => {
       return Promise.resolve({
         ok: false,
         status: 500,
+        text: async () => '',
       });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -99,5 +100,36 @@ describe('searchGta6Videos', () => {
     await expect(searchGta6Videos('test-key', new Date())).rejects.toThrow(
       /videos\.list.*status 500/
     );
+  });
+
+  it("includes search.list's response body in the thrown error so budget-exceeded detection can match it", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'quotaExceeded: monthly usage hard limit exceeded',
+      })
+    );
+    await expect(searchGta6Videos('test-key', new Date())).rejects.toThrow(/monthly usage hard limit exceeded/);
+  });
+
+  it("includes videos.list's response body in the thrown error so budget-exceeded detection can match it", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('/search')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: [{ id: { videoId: 'v1' } }] }),
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 403,
+        text: async () => 'quotaExceeded: monthly usage hard limit exceeded',
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(searchGta6Videos('test-key', new Date())).rejects.toThrow(/monthly usage hard limit exceeded/);
   });
 });

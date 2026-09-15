@@ -275,6 +275,29 @@ describe('IdeasPage', () => {
     );
   });
 
+  it("shows a War-Room-specific notice when arriving with ?context= but this week's ideas already exist", async () => {
+    // handleIdeasRequest short-circuits to the cached digest before `context`
+    // is ever read, and bootstrap goes straight to ideasReady, so the generate
+    // button (the only place context is threaded into a POST) never renders —
+    // the user has to be told their alert context couldn't be used.
+    useSearchParamsMock.mockReturnValue(new URLSearchParams('context=GTA+6+trailer+breakdown'));
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        niche: 'home baking',
+        digest: { id: 'd1', weekStart: '2026-08-10', contentIdeas: [] },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+
+    await waitFor(() => expect(screen.getByText(/already generated/i)).toBeInTheDocument());
+    expect(screen.getByText(/War Room alert/i)).toBeInTheDocument();
+    expect(screen.queryByText(/your niche update will apply starting next week/i)).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1); // bootstrap only — no POST
+  });
+
   it('keeps the saved niche visible in the input while generating, instead of blanking it', async () => {
     let resolveGenerate: (value: unknown) => void = () => {};
     const fetchMock = vi

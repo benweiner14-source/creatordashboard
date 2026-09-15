@@ -39,6 +39,7 @@ function makeDeps(overrides: Partial<WarroomCronDeps> = {}): { deps: WarroomCron
     getOptedInEmails: async () => [],
     emailClient: client,
     operatorEmail: 'operator@example.com',
+    sleep: async () => {}, // the fan-out's rate-limit throttle, instant in tests
     ...overrides,
   };
   return { deps, inserted };
@@ -198,6 +199,94 @@ describe('runWarroomCron', () => {
     });
     await runWarroomCron(deps, NOW);
     expect(sent).toHaveLength(0);
+  });
+
+  it('does not abort the email fan-out when one send fails', async () => {
+    const sent: string[] = [];
+    const { deps } = makeDeps({
+      discoverYoutube: async () => ({ posts: [post({ externalPostId: 'v1', viewCount: 300_000 })], errors: [] }),
+      getOptedInEmails: async () => ['fail@example.com', 'ok@example.com'],
+      emailClient: {
+        sendEmail: async (params) => {
+          if (params.to === 'fail@example.com') throw new Error('429 rate limited');
+          sent.push(params.to);
+        },
+      },
+    });
+    const result = await runWarroomCron(deps, NOW);
+    expect(result.skipped).toBeNull();
+    expect(sent).toEqual(['ok@example.com']);
+  });
+
+  it('throttles between sends so the fan-out stays under Resend\'s rate limit', async () => {
+    const delays: number[] = [];
+    const { client } = createFakeEmailClient();
+    const { deps } = makeDeps({
+      discoverYoutube: async () => ({ posts: [post()], errors: [] }),
+      getOptedInEmails: async () => ['a@example.com', 'b@example.com'],
+      emailClient: client,
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    });
+    await runWarroomCron(deps, NOW);
+    expect(delays).toHaveLength(2);
+    expect(delays.every((ms) => ms >= 500)).toBe(true);
+  });
+
+  it('HTML-escapes scraped post content before interpolating it into email HTML', async () => {
+    const { client, sent } = createFakeEmailClient();
+    const { deps } = makeDeps({
+      discoverYoutube: async () => ({
+        posts: [
+          post({
+            externalPostId: 'v1',
+            viewCount: 300_000,
+            captionOrTitle: '<script>alert(1)</script>',
+            url: 'https://example.com/"onmouseover="x',
+          }),
+        ],
+        errors: [],
+      }),
+      getOptedInEmails: async () => ['a@example.com'],
+      emailClient: client,
+    });
+    await runWarroomCron(deps, NOW);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].html).not.toContain('<script>');
+    expect(sent[0].html).toContain('&lt;script&gt;');
+    expect(sent[0].html).not.toContain('"onmouseover="x');
+  });
+
+  it('escapes the budget error before interpolating it into the operator email', async () => {
+    const { client, sent } = createFakeEmailClient();
+    const { deps } = makeDeps({
+      discoverTikTok: async () => ({ posts: [], errors: ['<img src=x onerror=y> monthly usage hard limit exceeded'] }),
+      emailClient: client,
+    });
+    await runWarroomCron(deps, NOW);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].html).not.toContain('<img src=x');
+    expect(sent[0].html).toContain('&lt;img src=x');
+  });
+
+  it('clamps the per-run insert count to the remaining daily headroom, not just the flat per-run cap', async () => {
+    const { deps, inserted } = makeDeps({
+      countAlertsToday: async () => WARROOM_DAILY_ALERT_CAP - 2, // only 2 slots left today
+      discoverYoutube: async () => ({
+        posts: [
+          post({ externalPostId: 'v1', viewCount: 300_000 }),
+          post({ externalPostId: 'v2', viewCount: 300_000 }),
+          post({ externalPostId: 'v3', viewCount: 300_000 }),
+          post({ externalPostId: 'v4', viewCount: 300_000 }),
+          post({ externalPostId: 'v5', viewCount: 300_000 }),
+        ],
+        errors: [],
+      }),
+    });
+    const result = await runWarroomCron(deps, NOW);
+    expect(result.inserted).toBe(2);
+    expect(inserted).toHaveLength(2);
   });
 
   it('does not re-email for an alert insertAlert reports as an existing duplicate', async () => {

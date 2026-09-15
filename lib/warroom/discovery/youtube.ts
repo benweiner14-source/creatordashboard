@@ -46,7 +46,11 @@ export async function searchGta6Videos(apiKey: string, publishedAfter: Date): Pr
 
   const searchResponse = await fetch(searchUrl.toString());
   if (!searchResponse.ok) {
-    throw new Error(`YouTube search.list request failed with status ${searchResponse.status}`);
+    // Include the body: the cron's budget-exceeded detection regex
+    // (lib/warroom/cron-handler.ts) matches on this message, and the actual
+    // quota/limit text lives in the response body, not the status code.
+    const body = await searchResponse.text().catch(() => '');
+    throw new Error(`YouTube search.list request failed with status ${searchResponse.status}: ${body.slice(0, 500)}`);
   }
   const searchData = await searchResponse.json();
   const videoIds: string[] = (searchData.items ?? [])
@@ -62,7 +66,8 @@ export async function searchGta6Videos(apiKey: string, publishedAfter: Date): Pr
 
   const videosResponse = await fetch(videosUrl.toString());
   if (!videosResponse.ok) {
-    throw new Error(`YouTube videos.list request failed with status ${videosResponse.status}`);
+    const body = await videosResponse.text().catch(() => '');
+    throw new Error(`YouTube videos.list request failed with status ${videosResponse.status}: ${body.slice(0, 500)}`);
   }
   const videosData = await videosResponse.json();
   const posts = (videosData.items ?? []).map((item: YoutubeVideoItem) => normalizeYoutubeVideo(item));
