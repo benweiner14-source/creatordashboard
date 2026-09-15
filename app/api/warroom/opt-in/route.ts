@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       // true would silently defeat that check.
       hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
       getRecentAlerts: async () => [], // unused on this route
+      getEmailOptIn: async () => false, // unused on this route
       setEmailOptIn: async (profileId, optIn) => {
         const { error } = await serviceClient.from('profiles').update({ warroom_email_opt_in: optIn }).eq('id', profileId);
         if (error) {

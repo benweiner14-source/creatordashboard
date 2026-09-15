@@ -54,6 +54,17 @@ export async function GET() {
         }
         return (data ?? []).map(mapAlertRow);
       },
+      // Bootstraps the /warroom page's checkbox to the profile's actually
+      // saved preference. Without this, the page would always initialize
+      // emailOptIn as false regardless of what's persisted, since this
+      // GET response is the only place it reads that value from.
+      getEmailOptIn: async (profileId) => {
+        const { data, error } = await serviceClient.from('profiles').select('warroom_email_opt_in').eq('id', profileId).single();
+        if (error) {
+          throw new Error(`Failed to load War Room email preference: ${error.message}`);
+        }
+        return data?.warroom_email_opt_in ?? false;
+      },
       setEmailOptIn: async () => {}, // unused on this route
     },
     { profileId: user?.id ?? null }

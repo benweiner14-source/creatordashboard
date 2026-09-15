@@ -6,6 +6,7 @@ function makeDeps(overrides: Partial<WarroomHandlerDeps> = {}): WarroomHandlerDe
   return {
     hasActiveSubscription: async () => true,
     getRecentAlerts: async () => [],
+    getEmailOptIn: async () => false,
     setEmailOptIn: async () => {},
     ...overrides,
   };
@@ -24,7 +25,7 @@ describe('handleListWarroomAlerts', () => {
     expect(result.body.upgradeUrl).toBe('/billing');
   });
 
-  it('returns the recent alerts for a subscribed profile', async () => {
+  it('returns the recent alerts and the profile\'s current opt-in value for a subscribed profile', async () => {
     const alert: WarroomAlertRow = {
       id: 'a1',
       platform: 'youtube',
@@ -37,10 +38,11 @@ describe('handleListWarroomAlerts', () => {
       severity: 'already_viral',
       detectedAt: '2026-09-15T11:00:00Z',
     };
-    const deps = makeDeps({ getRecentAlerts: async () => [alert] });
+    const deps = makeDeps({ getRecentAlerts: async () => [alert], getEmailOptIn: async () => true });
     const result = await handleListWarroomAlerts(deps, { profileId: 'p1' });
     expect(result.status).toBe(200);
     expect(result.body.alerts).toEqual([alert]);
+    expect(result.body.emailOptIn).toBe(true);
   });
 });
 

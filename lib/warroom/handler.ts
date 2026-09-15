@@ -3,6 +3,7 @@ import type { WarroomAlertRow } from './types';
 export interface WarroomHandlerDeps {
   hasActiveSubscription: (profileId: string) => Promise<boolean>;
   getRecentAlerts: () => Promise<WarroomAlertRow[]>;
+  getEmailOptIn: (profileId: string) => Promise<boolean>;
   setEmailOptIn: (profileId: string, optIn: boolean) => Promise<void>;
 }
 
@@ -21,8 +22,8 @@ export async function handleListWarroomAlerts(
   if (!(await deps.hasActiveSubscription(context.profileId))) {
     return { status: 402, body: { error: 'GTA6 War Room requires an active subscription.', upgradeUrl: '/billing' } };
   }
-  const alerts = await deps.getRecentAlerts();
-  return { status: 200, body: { alerts } };
+  const [alerts, emailOptIn] = await Promise.all([deps.getRecentAlerts(), deps.getEmailOptIn(context.profileId)]);
+  return { status: 200, body: { alerts, emailOptIn } };
 }
 
 export async function handleWarroomOptIn(
