@@ -24,3 +24,14 @@ export async function handleListWarroomAlerts(
   const alerts = await deps.getRecentAlerts();
   return { status: 200, body: { alerts } };
 }
+
+export async function handleWarroomOptIn(
+  deps: WarroomHandlerDeps,
+  context: { profileId: string | null; optIn: boolean }
+): Promise<WarroomHandlerResult> {
+  if (!context.profileId) {
+    return { status: 401, body: { error: 'You must be signed in to change this setting.' } };
+  }
+  await deps.setEmailOptIn(context.profileId, context.optIn);
+  return { status: 200, body: { ok: true } };
+}

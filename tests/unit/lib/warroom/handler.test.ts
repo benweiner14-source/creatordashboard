@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { handleListWarroomAlerts, type WarroomHandlerDeps } from '@/lib/warroom/handler';
+import { handleListWarroomAlerts, handleWarroomOptIn, type WarroomHandlerDeps } from '@/lib/warroom/handler';
 import type { WarroomAlertRow } from '@/lib/warroom/types';
 
 function makeDeps(overrides: Partial<WarroomHandlerDeps> = {}): WarroomHandlerDeps {
@@ -41,5 +41,24 @@ describe('handleListWarroomAlerts', () => {
     const result = await handleListWarroomAlerts(deps, { profileId: 'p1' });
     expect(result.status).toBe(200);
     expect(result.body.alerts).toEqual([alert]);
+  });
+});
+
+describe('handleWarroomOptIn', () => {
+  it('rejects a signed-out request', async () => {
+    const result = await handleWarroomOptIn(makeDeps(), { profileId: null, optIn: true });
+    expect(result.status).toBe(401);
+  });
+
+  it('saves the opt-in value for a signed-in profile', async () => {
+    let saved: { profileId: string; optIn: boolean } | null = null;
+    const deps = makeDeps({
+      setEmailOptIn: async (profileId, optIn) => {
+        saved = { profileId, optIn };
+      },
+    });
+    const result = await handleWarroomOptIn(deps, { profileId: 'p1', optIn: true });
+    expect(result.status).toBe(200);
+    expect(saved).toEqual({ profileId: 'p1', optIn: true });
   });
 });
