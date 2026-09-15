@@ -85,7 +85,7 @@ describe('runWarroomCron', () => {
     expect(inserted).toHaveLength(1);
   });
 
-  it('caps a single run to WARROOM_PER_RUN_CAP alerts, highest severity first', async () => {
+  it('caps a single run to WARROOM_PER_RUN_CAP alerts', async () => {
     const manyPosts = Array.from({ length: WARROOM_PER_RUN_CAP + 3 }, (_, i) =>
       post({ externalPostId: `p${i}`, viewCount: 300_000 })
     );
@@ -93,6 +93,34 @@ describe('runWarroomCron', () => {
     const result = await runWarroomCron(deps, NOW);
     expect(result.inserted).toBe(WARROOM_PER_RUN_CAP);
     expect(inserted).toHaveLength(WARROOM_PER_RUN_CAP);
+  });
+
+  it('keeps only the highest-severity alerts when discovery finds more than the per-run cap', async () => {
+    // 2 already_viral + 3 going_viral = exactly WARROOM_PER_RUN_CAP (5); 3 heating_up
+    // posts are also found but must all be dropped -- this is the only test that
+    // would fail if the cap's severity sort were ever inverted or removed, since
+    // the count-only cap test above passes regardless of sort order.
+    const alreadyViral = [
+      post({ externalPostId: 'av0', viewCount: 1_000_000, publishedAt: '2026-09-15T10:00:00Z' }), // 2h old
+      post({ externalPostId: 'av1', viewCount: 1_000_000, publishedAt: '2026-09-15T10:00:00Z' }),
+    ];
+    const goingViral = [
+      post({ externalPostId: 'gv0', viewCount: 4_400, publishedAt: '2026-09-15T10:00:00Z' }), // 2h old, 2200 views/hr
+      post({ externalPostId: 'gv1', viewCount: 4_400, publishedAt: '2026-09-15T10:00:00Z' }),
+      post({ externalPostId: 'gv2', viewCount: 4_400, publishedAt: '2026-09-15T10:00:00Z' }),
+    ];
+    const heatingUp = [
+      post({ externalPostId: 'hu0', viewCount: 6_000, publishedAt: '2026-09-15T02:00:00Z' }), // 10h old, 600 views/hr
+      post({ externalPostId: 'hu1', viewCount: 6_000, publishedAt: '2026-09-15T02:00:00Z' }),
+      post({ externalPostId: 'hu2', viewCount: 6_000, publishedAt: '2026-09-15T02:00:00Z' }),
+    ];
+    const { deps, inserted } = makeDeps({
+      discoverYoutube: async () => ({ posts: [...alreadyViral, ...goingViral, ...heatingUp], errors: [] }),
+    });
+    const result = await runWarroomCron(deps, NOW);
+    expect(result.inserted).toBe(WARROOM_PER_RUN_CAP);
+    const insertedIds = inserted.map((c) => c.post.externalPostId).sort();
+    expect(insertedIds).toEqual(['av0', 'av1', 'gv0', 'gv1', 'gv2']);
   });
 
   it('deduplicates identical (platform, externalPostId) pairs within a single run', async () => {
@@ -142,6 +170,22 @@ describe('runWarroomCron', () => {
     await runWarroomCron(deps, NOW);
     expect(sent).toHaveLength(2);
     expect(sent.map((e) => e.to).sort()).toEqual(['a@example.com', 'b@example.com']);
+  });
+
+  it('emails opted-in subscribers for a going_viral-only alert, not just already_viral', async () => {
+    // The other email test above only ever uses an already_viral post, so it
+    // can't catch a future edit that narrowed the fan-out filter to
+    // already_viral alone -- this specifically proves going_viral qualifies too.
+    const { client, sent } = createFakeEmailClient();
+    const goingViralPost = post({ viewCount: 4_400, publishedAt: '2026-09-15T10:00:00Z' }); // youtube going_viral
+    const { deps } = makeDeps({
+      discoverYoutube: async () => ({ posts: [goingViralPost], errors: [] }),
+      getOptedInEmails: async () => ['a@example.com'],
+      emailClient: client,
+    });
+    await runWarroomCron(deps, NOW);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe('a@example.com');
   });
 
   it('does not email opted-in subscribers for a heating_up-only alert', async () => {
