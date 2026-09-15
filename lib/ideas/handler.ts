@@ -25,6 +25,7 @@ export interface IdeasRequestContext {
   profileId: string | null;
   ip: string;
   now: Date;
+  context?: string;
 }
 
 export interface IdeasHandlerResult {
@@ -90,7 +91,7 @@ export async function handleIdeasRequest(deps: IdeasHandlerDeps, context: IdeasR
   }
 
   try {
-    const ideas = await deps.contentIdeasClient.generateContentIdeas(niche, context.now);
+    const ideas = await deps.contentIdeasClient.generateContentIdeas(niche, context.now, context.context);
 
     if (ideas.length === 0) {
       // A real, costly generation ran and genuinely found nothing honest

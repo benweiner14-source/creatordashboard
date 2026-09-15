@@ -94,4 +94,18 @@ describe('handleIdeasRequest', () => {
     result = await handleIdeasRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW });
     expect(result.status).toBe(429);
   });
+
+  it('threads an optional context string through to the content ideas client when provided', async () => {
+    let capturedContext: string | undefined;
+    const deps = makeDeps({
+      contentIdeasClient: {
+        generateContentIdeas: async (niche, _date, context) => {
+          capturedContext = context;
+          return [];
+        },
+      },
+    });
+    await handleIdeasRequest(deps, { profileId: 'p1', ip: '203.0.113.1', now: NOW, context: 'GTA 6 trailer breakdown' });
+    expect(capturedContext).toBe('GTA 6 trailer breakdown');
+  });
 });

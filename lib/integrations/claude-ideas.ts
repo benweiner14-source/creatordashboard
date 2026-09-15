@@ -14,7 +14,7 @@ export interface ContentIdea {
 }
 
 export interface ContentIdeasClient {
-  generateContentIdeas(niche: string, currentDate: Date): Promise<ContentIdea[]>;
+  generateContentIdeas(niche: string, currentDate: Date, extraContext?: string): Promise<ContentIdea[]>;
 }
 
 export const CONTENT_IDEAS_SYSTEM_PROMPT = `You are the weekly content-ideation engine for Creator Dashboard, a tool for GTA6 creators under 5,000 followers.
@@ -81,8 +81,11 @@ function extractJsonBlock(text: string): string {
 
 export function createClaudeContentIdeasClient(apiKey: string, model = 'claude-sonnet-5'): ContentIdeasClient {
   return {
-    async generateContentIdeas(niche: string, currentDate: Date): Promise<ContentIdea[]> {
+    async generateContentIdeas(niche: string, currentDate: Date, extraContext?: string): Promise<ContentIdea[]> {
       const safeNiche = escapeForContainmentTag(niche);
+      const contextLine = extraContext
+        ? `\nAlso factor in this specific moment the creator wants to start from: <context>${escapeForContainmentTag(extraContext)}</context>`
+        : '';
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -98,7 +101,7 @@ export function createClaudeContentIdeasClient(apiKey: string, model = 'claude-s
           messages: [
             {
               role: 'user',
-              content: `GTA6 focus: <niche>${safeNiche}</niche>\nToday's date: ${currentDate.toISOString().slice(0, 10)}\n\nGenerate this week's content ideas.`,
+              content: `GTA6 focus: <niche>${safeNiche}</niche>\nToday's date: ${currentDate.toISOString().slice(0, 10)}${contextLine}\n\nGenerate this week's content ideas.`,
             },
           ],
         }),

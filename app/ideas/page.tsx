@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useReducer, useRef } from 'react';
+import { Suspense, useEffect, useReducer, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
@@ -14,8 +15,10 @@ const MEDIUM_LABELS: Record<ContentIdea['medium'], string> = {
   both: 'Reel + Carousel',
 };
 
-export default function IdeasPage() {
+function IdeasPageInner() {
   const [state, dispatch] = useReducer(ideasPageReducer, createInitialIdeasPageState());
+  const searchParams = useSearchParams();
+  const warroomContext = searchParams.get('context');
   const stillWorkingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -81,7 +84,13 @@ export default function IdeasPage() {
   async function generate() {
     dispatch({ type: 'GENERATE' });
     try {
-      const res = await fetch('/api/ideas', { method: 'POST' });
+      const res = warroomContext
+        ? await fetch('/api/ideas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: warroomContext }),
+          })
+        : await fetch('/api/ideas', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) {
         dispatch({ type: 'GENERATE_FAILED', error: data.error ?? 'Something went wrong generating your content ideas.' });
@@ -286,5 +295,13 @@ export default function IdeasPage() {
         )}
       </main>
     </>
+  );
+}
+
+export default function IdeasPage() {
+  return (
+    <Suspense fallback={<p>Loading…</p>}>
+      <IdeasPageInner />
+    </Suspense>
   );
 }

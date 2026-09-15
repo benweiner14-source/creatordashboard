@@ -63,6 +63,7 @@ export async function POST(request: Request) {
       isTrustedPlatform: process.env.VERCEL === '1',
       trustedProxyHops: process.env.TRUSTED_PROXY_HOPS ? Number(process.env.TRUSTED_PROXY_HOPS) : undefined,
     });
+    const body = await request.json().catch(() => ({}));
 
     const result = await handleIdeasRequest(
       {
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
           return mapDigestRow(data);
         },
       },
-      { profileId: user?.id ?? null, ip, now: new Date() }
+      { profileId: user?.id ?? null, ip, now: new Date(), context: typeof body.context === 'string' ? body.context : undefined }
     );
 
     return NextResponse.json(result.body, { status: result.status });

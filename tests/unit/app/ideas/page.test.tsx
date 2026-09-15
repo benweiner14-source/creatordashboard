@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+const { useSearchParamsMock } = vi.hoisted(() => ({
+  useSearchParamsMock: vi.fn(() => new URLSearchParams()),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: useSearchParamsMock,
 }));
 
 vi.mock('@/components/AppNav', () => ({
@@ -14,6 +19,7 @@ import IdeasPage from '@/app/ideas/page';
 describe('IdeasPage', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    useSearchParamsMock.mockReturnValue(new URLSearchParams());
   });
 
   it('shows the GTA 6 focus form when no focus is set yet', async () => {
@@ -247,6 +253,26 @@ describe('IdeasPage', () => {
 
     await waitFor(() => expect(screen.getByText('Sourdough Speedrun')).toBeInTheDocument());
     expect(fetchMock).toHaveBeenLastCalledWith('/api/ideas', { method: 'POST' });
+  });
+
+  it('threads a ?context= query param into the generate request', async () => {
+    useSearchParamsMock.mockReturnValue(new URLSearchParams('context=GTA+6+trailer+breakdown'));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: 'home baking', digest: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ digest: { id: 'd1', weekStart: '2026-08-10', contentIdeas: [] } }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByRole('button', { name: /get this week's ideas/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get this week's ideas/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/ideas',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ context: 'GTA 6 trailer breakdown' }) })
+      )
+    );
   });
 
   it('keeps the saved niche visible in the input while generating, instead of blanking it', async () => {
