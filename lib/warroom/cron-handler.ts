@@ -38,8 +38,10 @@ export interface WarroomCronResult {
 const SEVERITY_RANK: Record<WarroomSeverity, number> = { already_viral: 3, going_viral: 2, heating_up: 1 };
 
 /**
- * One hourly pass: gate on pause/daily-cap, discover in parallel across
- * all three platforms, score, cap to the top WARROOM_PER_RUN_CAP alerts,
+ * One pass (currently scheduled daily, not hourly as originally designed —
+ * see the comment above app/api/cron/warroom/route.ts's maxDuration for
+ * why): gate on pause/daily-cap, discover in parallel across all three
+ * platforms, score, cap to the top WARROOM_PER_RUN_CAP alerts,
  * insert (relying on the DB's unique constraint for cross-run dedup), and
  * fan out opt-in email for the top two severities. See design spec §4.
  */

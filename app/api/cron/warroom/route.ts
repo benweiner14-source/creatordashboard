@@ -14,6 +14,15 @@ import type { DiscoveredPost, WarroomSeverity } from '@/lib/warroom/types';
 // cron's maxDuration.
 export const maxDuration = 300;
 
+// vercel.json currently schedules this daily ("0 0 * * *"), not hourly as
+// originally designed (design spec §4) -- Vercel Hobby plan only supports
+// daily cron jobs; hourly needs Pro. Switch vercel.json's schedule back to
+// "0 * * * *" once on Pro. Every discovery/scoring window here (YouTube's
+// 24h lookback, TikTok/Instagram's LAST_24H, classifySeverity's 12h/24h/48h
+// tiers) already assumes roughly a day's worth of content per run, so daily
+// cadence doesn't break anything -- it just means War Room is no longer
+// "real-time," closer to a daily digest, until this reverts to hourly.
+
 function isAuthorizedCronRequest(request: Request): boolean {
   const expected = process.env.CRON_SECRET;
   if (!expected) return false;
@@ -105,9 +114,9 @@ export async function GET(request: Request) {
           .eq('id', true);
         if (error) {
           // If this write silently fails, the pause never actually takes
-          // effect: next hour's isPaused() still reads false, the cron
+          // effect: next run's isPaused() still reads false, the cron
           // calls the discovery clients again, hits the same budget error,
-          // and re-sends the operator email — every hour, forever. Throw so
+          // and re-sends the operator email — every run, forever. Throw so
           // the failure is visible instead of a quiet no-op.
           throw new Error(`Failed to persist War Room pause: ${error.message}`);
         }

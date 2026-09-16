@@ -31,8 +31,10 @@ export function normalizeYoutubeVideo(item: YoutubeVideoItem): DiscoveredPost {
  * Two-call shape, matching lib/integrations/youtube.ts's existing
  * convention of a separate call per capability rather than widening one
  * call's `part` param: search.list finds candidate video IDs (100 quota
- * units), videos.list fetches their stats (1 unit). At hourly cadence
- * this stays well under the default 10,000/day quota — see design spec §2.
+ * units), videos.list fetches their stats (1 unit). At the currently
+ * scheduled cadence (daily; hourly once on Vercel Pro — see the comment
+ * above app/api/cron/warroom/route.ts's maxDuration) this stays well
+ * under the default 10,000/day quota — see design spec §2.
  */
 export async function searchGta6Videos(apiKey: string, publishedAfter: Date): Promise<DiscoveryResult> {
   const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
