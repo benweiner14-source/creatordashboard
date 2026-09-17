@@ -218,4 +218,12 @@ describe('supabase migrations', () => {
     expect(sql).toContain('alter table public.diagnostics');
     expect(sql).toContain('add column reach_score integer');
   });
+
+  it('includes a migration adding visual/audio columns to diagnostics', () => {
+    const sql = readMigrationContaining('add_visual_audio_columns');
+    expect(sql).toContain('alter table public.diagnostics');
+    expect(sql).toContain("visual_audio_status text check (visual_audio_status in ('pending', 'complete', 'failed'))");
+    expect(sql).toContain('visual_audio_narrative text');
+    expect(sql).toContain('visual_audio_error text');
+  });
 });

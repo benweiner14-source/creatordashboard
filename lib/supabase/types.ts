@@ -47,6 +47,9 @@ export interface Database {
           report_json: unknown | null;
           error_message: string | null;
           created_at: string;
+          visual_audio_status: 'pending' | 'complete' | 'failed' | null;
+          visual_audio_narrative: string | null;
+          visual_audio_error: string | null;
         };
         Insert: {
           id?: string;
@@ -63,6 +66,9 @@ export interface Database {
           report_json?: unknown | null;
           error_message?: string | null;
           created_at?: string;
+          visual_audio_status?: 'pending' | 'complete' | 'failed' | null;
+          visual_audio_narrative?: string | null;
+          visual_audio_error?: string | null;
         };
         Update: Partial<Database['public']['Tables']['diagnostics']['Insert']>;
         Relationships: [];
