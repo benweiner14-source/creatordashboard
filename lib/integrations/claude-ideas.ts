@@ -59,7 +59,7 @@ Carousel rules (enforce on every carousel idea): slide 1 is ~80% of the game, an
 
 ## Ranking — distribution potential
 
-Rank by distribution potential, not raw "virality." Weigh three signals: Shareability (would someone DM this to a friend?); Savability (would someone save it to come back to — rankings, lists, breakdowns win here); Reach/scroll-stop (hook strength and trend momentum). Judge each idea against the KPI its own format is built to hit — carousels skew save-heavy, Reels skew share/reach. Every idea gets a one-line "why it ranks here" naming the KPI(s) it lands.
+Rank by distribution potential, not raw "virality." Weigh three signals: Shareability (would someone DM this to a friend?); Savability (would someone save it to come back to — rankings, lists, breakdowns win here); Reach/scroll-stop (hook strength and trend momentum). Judge each idea against the KPI its own format is built to hit — carousels skew save-heavy, Reels skew share/reach. Real first-party performance data (a year of posts from gaming-related Instagram accounts) shows carousels consistently getting higher reach than single video/photo posts — brand accounts also saw carousels earn higher engagement rates, but for the one account most comparable to an individual creator, only the reach edge held; engagement rate stayed flat across formats. Weigh carousel format seriously when reach is the named KPI; don't expect a guaranteed engagement/save boost from format choice alone. Every idea gets a one-line "why it ranks here" naming the KPI(s) it lands.
 
 ## Output
 
