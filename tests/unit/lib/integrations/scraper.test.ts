@@ -88,6 +88,96 @@ describe('createApifyScraperClient', () => {
     await expect(client.fetchPost('https://example.com/x')).rejects.toThrow('Unsupported social URL');
   });
 
+  it('maps TikTok authorMeta.fans to followerCount with no extra request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [
+        {
+          id: '12345',
+          text: 'Day 1 of posting every day #creator',
+          createTimeISO: '2026-08-01T10:00:00Z',
+          videoDuration: 32,
+          playCount: 20000,
+          diggCount: 1500,
+          commentCount: 80,
+          authorMeta: { fans: 48300 },
+        },
+      ],
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApifyScraperClient('test-token');
+    const post = await client.fetchPost('https://www.tiktok.com/@user/video/12345');
+
+    expect(post.followerCount).toBe(48300);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches Instagram follower count via a second details call', async () => {
+    const postScrapeResponse = {
+      ok: true,
+      status: 200,
+      json: async () => [
+        {
+          id: 'abc123',
+          shortCode: 'abc123',
+          caption: 'A great reel',
+          timestamp: '2026-08-01T10:00:00Z',
+          videoViewCount: 34000,
+          likesCount: 500,
+          commentsCount: 12,
+          ownerUsername: 'nba2k',
+        },
+      ],
+    };
+    const detailsResponse = {
+      ok: true,
+      status: 200,
+      json: async () => [{ followersCount: 5400000 }],
+    };
+    const sequencedFetch = vi.fn()
+      .mockResolvedValueOnce(postScrapeResponse)
+      .mockResolvedValueOnce(detailsResponse);
+    vi.stubGlobal('fetch', sequencedFetch);
+
+    const client = createApifyScraperClient('test-token');
+    const post = await client.fetchPost('https://www.instagram.com/reel/abc123/');
+
+    expect(post.followerCount).toBe(5400000);
+    expect(sequencedFetch).toHaveBeenCalledTimes(2);
+    const secondCallBody = JSON.parse(sequencedFetch.mock.calls[1][1].body);
+    expect(secondCallBody).toEqual({ resultsType: 'details', directUrls: ['https://www.instagram.com/nba2k/'] });
+  });
+
+  it('omits followerCount (not throwing) when the Instagram details call fails', async () => {
+    const postScrapeResponse = {
+      ok: true,
+      status: 200,
+      json: async () => [
+        {
+          id: 'abc123',
+          caption: 'A great reel',
+          timestamp: '2026-08-01T10:00:00Z',
+          videoViewCount: 34000,
+          likesCount: 500,
+          commentsCount: 12,
+          ownerUsername: 'nba2k',
+        },
+      ],
+    };
+    const failedDetailsResponse = { ok: false, status: 500 };
+    const sequencedFetch = vi.fn()
+      .mockResolvedValueOnce(postScrapeResponse)
+      .mockResolvedValueOnce(failedDetailsResponse);
+    vi.stubGlobal('fetch', sequencedFetch);
+
+    const client = createApifyScraperClient('test-token');
+    const post = await client.fetchPost('https://www.instagram.com/reel/abc123/');
+
+    expect(post.followerCount).toBeUndefined();
+  });
+
   describe('fetchProfilePosts', () => {
     it('starts an async Apify run, polls until it succeeds, and normalizes the dataset items', async () => {
       const fetchMock = vi
