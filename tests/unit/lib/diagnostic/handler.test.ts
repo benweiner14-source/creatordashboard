@@ -111,6 +111,54 @@ describe('handleDiagnosticRequest', () => {
     expect(savedReport.scores.reach).not.toBeNull();
   });
 
+  it('omits Reach gracefully when YouTube subscriber count is hidden (null)', async () => {
+    const youtubeClient = createFakeYouTubeClient({ channelId: 'UCabc123' }, [], undefined, null);
+    let savedReport: any;
+    const deps = makeDeps({
+      youtubeClient,
+      saveDiagnostic: async ({ report }) => {
+        savedReport = report;
+        return { id: 'diagnostic-1' };
+      },
+    });
+
+    const result = await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/watch?v=abc123',
+    });
+
+    expect(result.status).toBe(200);
+    expect(savedReport.scores.reach).toBeNull();
+  });
+
+  it('omits Reach gracefully (never fails the diagnostic) when the YouTube subscriber-count lookup throws', async () => {
+    const fakeYouTubeClient = createFakeYouTubeClient({ channelId: 'UCabc123' });
+    const youtubeClient = {
+      ...fakeYouTubeClient,
+      getChannelSubscriberCount: async () => {
+        throw new Error('quota exceeded');
+      },
+    };
+    let savedReport: any;
+    const deps = makeDeps({
+      youtubeClient,
+      saveDiagnostic: async ({ report }) => {
+        savedReport = report;
+        return { id: 'diagnostic-1' };
+      },
+    });
+
+    const result = await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/watch?v=abc123',
+    });
+
+    expect(result.status).toBe(200);
+    expect(savedReport.scores.reach).toBeNull();
+  });
+
   it('rejects an unsupported URL', async () => {
     const result = await handleDiagnosticRequest(makeDeps(), {
       profileId: 'profile-1',

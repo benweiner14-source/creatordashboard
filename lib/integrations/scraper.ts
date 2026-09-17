@@ -119,7 +119,10 @@ async function fetchInstagramFollowerCount(ownerUsername: string, apiToken: stri
     const response = await fetch(runUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resultsType: 'details', directUrls: [`https://www.instagram.com/${ownerUsername}/`] }),
+      body: JSON.stringify({
+        resultsType: 'details',
+        directUrls: [`https://www.instagram.com/${encodeURIComponent(ownerUsername)}/`],
+      }),
     });
     if (!response.ok) return undefined;
     const items = await response.json();
@@ -203,7 +206,8 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
         throw new Error(`Apify returned no data for ${url}`);
       }
 
-      let followerCount: number | undefined = platform === 'tiktok' ? item.authorMeta?.fans : undefined;
+      let followerCount: number | undefined =
+        platform === 'tiktok' && item.authorMeta?.fans !== undefined ? Number(item.authorMeta.fans) : undefined;
       if (platform === 'instagram' && item.ownerUsername) {
         followerCount = await fetchInstagramFollowerCount(item.ownerUsername, apiToken);
       }
