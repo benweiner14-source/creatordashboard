@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { GlossaryText } from '@/components/GlossaryChip';
 
@@ -9,6 +9,17 @@ interface DiagnosticReportData {
   scores: { overallScore: number };
   explanationSegments: Array<{ type: 'text' | 'term'; value: string }>;
   confidenceCaveat?: string | null;
+}
+
+/**
+ * A non-2xx response that persisted nothing server-side (402 not subscribed,
+ * 401 session expired, 422 unsupported platform). Deliberately kept separate
+ * from `diagnostic.visualAudioStatus === 'failed'`, which means "the server
+ * wrote a failed status" and is the only case a retry can fix.
+ */
+interface EnrichBlocked {
+  message: string;
+  upgradeUrl?: string;
 }
 
 interface DiagnosticData {
@@ -24,6 +35,7 @@ export default function DiagnosticReportPage() {
   const [error, setError] = useState<string | null>(null);
   const [enriching, setEnriching] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
+  const [enrichBlocked, setEnrichBlocked] = useState<EnrichBlocked | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,10 +65,29 @@ export default function DiagnosticReportPage() {
   async function handleEnrich() {
     setEnriching(true);
     setEnrichError(null);
+    setEnrichBlocked(null);
     try {
       const res = await fetch(`/api/diagnostic/${params.id}/enrich`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) {
+        // 402/401/422 all mean the server persisted nothing and a retry can't
+        // help — they get their own message (and, for 402, an upgrade link)
+        // rather than the "failed + Try again" treatment.
+        if (res.status === 402) {
+          setEnrichBlocked({
+            message: data.error ?? 'Visual & Audio Analysis requires an active subscription.',
+            upgradeUrl: data.upgradeUrl,
+          });
+          return;
+        }
+        if (res.status === 401) {
+          setEnrichBlocked({ message: 'Your session has expired. Please sign in again to run this analysis.' });
+          return;
+        }
+        if (res.status === 422) {
+          setEnrichBlocked({ message: data.error ?? 'This analysis is not available for this platform yet.' });
+          return;
+        }
         setEnrichError(data.error ?? 'Something went wrong analyzing this video. Please try again.');
         setDiagnostic((prev) => (prev ? { ...prev, visualAudioStatus: 'failed' } : prev));
         return;
@@ -93,15 +124,39 @@ export default function DiagnosticReportPage() {
         <GlossaryText text={report.explanationSegments.map((s) => s.value).join('')} />
       </div>
 
-      {diagnostic.platform === 'tiktok' && !diagnostic.visualAudioStatus && (
-        <button
-          type="button"
-          onClick={handleEnrich}
-          disabled={enriching}
-          className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {enriching ? 'Analyzing your first 5 seconds…' : 'See how your first 5 seconds actually look'}
-        </button>
+      {/*
+        'pending' is treated as retryable, not as "in progress": the analysis
+        runs inside a single request, so a row still at 'pending' means that
+        request died (e.g. the 60s function timeout) and nothing will ever
+        write 'complete'/'failed'. Without this the section would render
+        nothing at all, forever, on an analysis the user already paid for.
+      */}
+      {diagnostic.platform === 'tiktok' &&
+        !enrichBlocked &&
+        (!diagnostic.visualAudioStatus || diagnostic.visualAudioStatus === 'pending') && (
+          <button
+            type="button"
+            onClick={handleEnrich}
+            disabled={enriching}
+            className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {enriching
+              ? 'Analyzing your first 5 seconds…'
+              : diagnostic.visualAudioStatus === 'pending'
+                ? 'Analysis may have been interrupted — try again'
+                : 'See how your first 5 seconds actually look'}
+          </button>
+        )}
+
+      {enrichBlocked && (
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>{enrichBlocked.message}</p>
+          {enrichBlocked.upgradeUrl && (
+            <a href={enrichBlocked.upgradeUrl} className="mt-2 inline-block font-medium underline">
+              Upgrade to unlock this analysis
+            </a>
+          )}
+        </div>
       )}
 
       {diagnostic.visualAudioStatus === 'complete' && diagnostic.visualAudioNarrative && (

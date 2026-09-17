@@ -193,4 +193,132 @@ describe('DiagnosticReportPage', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument());
     expect(screen.getByText(/couldn't process this video/i)).toBeInTheDocument();
   });
+
+  it('shows a retryable button when a previous analysis is stranded at pending', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            visual_audio_status: 'pending',
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+    );
+
+    render(<DiagnosticReportPage />);
+
+    // A row still at 'pending' means the request that wrote it died — the
+    // section must not silently render nothing.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /may have been interrupted/i })).toBeInTheDocument()
+    );
+    expect(screen.queryByRole('button', { name: /see how your first 5 seconds/i })).not.toBeInTheDocument();
+  });
+
+  it('shows an upgrade link and no retry button when the enrich call returns 402', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            visual_audio_status: null,
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 402,
+        json: async () => ({
+          error: 'Visual & Audio Analysis requires an active subscription.',
+          upgradeUrl: '/billing',
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /see how your first 5 seconds/i }));
+
+    await waitFor(() => expect(screen.getByText(/requires an active subscription/i)).toBeInTheDocument());
+    const upgradeLink = screen.getByRole('link', { name: /upgrade to unlock this analysis/i });
+    expect(upgradeLink).toHaveAttribute('href', '/billing');
+    // A 402 persisted nothing server-side, so there is nothing to retry.
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a sign-in message and no retry button when the enrich call returns 401', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            visual_audio_status: null,
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: 'You must be signed in to run this analysis.' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /see how your first 5 seconds/i }));
+
+    await waitFor(() => expect(screen.getByText(/sign in again/i)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the platform message and no retry button when the enrich call returns 422', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            visual_audio_status: null,
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 422,
+        json: async () => ({ error: 'Visual & Audio Analysis is not available for youtube yet.' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /see how your first 5 seconds/i }));
+
+    await waitFor(() => expect(screen.getByText(/not available for youtube yet/i)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
 });
