@@ -1,6 +1,6 @@
 // tests/unit/lib/integrations/scraper.test.ts
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { detectSocialPlatform, createApifyScraperClient } from '@/lib/integrations/scraper';
+import { detectSocialPlatform, createApifyScraperClient, PlatformNotSupportedError } from '@/lib/integrations/scraper';
 
 describe('detectSocialPlatform', () => {
   it('detects TikTok URLs', () => {
@@ -364,6 +364,79 @@ describe('createApifyScraperClient', () => {
       const client = createApifyScraperClient('test-token', { sleep: async () => {}, retryAttempts: 1 });
       await expect(client.fetchProfilePosts('instagram', 'creator')).rejects.toThrow();
       expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('fetchVideoForAnalysis', () => {
+    it('fetches a downloadable video, duration, and transcript for TikTok', async () => {
+      const scrapeResponse = {
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            mediaUrls: ['https://api.apify.com/v2/key-value-stores/abc/records/video-123.mp4'],
+            videoMeta: {
+              duration: 50.534,
+              transcriptionLink: 'https://api.apify.com/v2/key-value-stores/xyz/records/transcription-123.txt',
+            },
+          },
+        ],
+      };
+      const transcriptResponse = { ok: true, text: async () => 'You can actually play GTA 6 early.' };
+      const sequencedFetch = vi.fn()
+        .mockResolvedValueOnce(scrapeResponse)
+        .mockResolvedValueOnce(transcriptResponse);
+      vi.stubGlobal('fetch', sequencedFetch);
+
+      const client = createApifyScraperClient('test-token');
+      const video = await client.fetchVideoForAnalysis('tiktok', 'https://www.tiktok.com/@user/video/123');
+
+      expect(video.videoUrl).toBe('https://api.apify.com/v2/key-value-stores/abc/records/video-123.mp4?token=test-token');
+      expect(video.durationSeconds).toBe(50.534);
+      expect(video.transcript).toBe('You can actually play GTA 6 early.');
+
+      const firstCallBody = JSON.parse(sequencedFetch.mock.calls[0][1].body as string);
+      expect(firstCallBody).toEqual({
+        postURLs: ['https://www.tiktok.com/@user/video/123'],
+        shouldDownloadVideos: true,
+        downloadSubtitlesOptions: 'TRANSCRIBE_ALL_VIDEOS',
+      });
+      expect(sequencedFetch.mock.calls[1][0]).toContain('transcription-123.txt?token=test-token');
+    });
+
+    it('returns a null transcript (not throwing) when transcriptionLink is missing', async () => {
+      const scrapeResponse = {
+        ok: true,
+        status: 200,
+        json: async () => [{ mediaUrls: ['https://api.apify.com/v2/key-value-stores/abc/records/video-123.mp4'], videoMeta: { duration: 30 } }],
+      };
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(scrapeResponse));
+
+      const client = createApifyScraperClient('test-token');
+      const video = await client.fetchVideoForAnalysis('tiktok', 'https://www.tiktok.com/@user/video/123');
+
+      expect(video.transcript).toBeNull();
+    });
+
+    it('throws when no downloadable video is present in the response', async () => {
+      const scrapeResponse = { ok: true, status: 200, json: async () => [{ videoMeta: { duration: 30 } }] };
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(scrapeResponse));
+
+      const client = createApifyScraperClient('test-token');
+      await expect(client.fetchVideoForAnalysis('tiktok', 'https://www.tiktok.com/@user/video/123')).rejects.toThrow(
+        'No downloadable video found'
+      );
+    });
+
+    it('throws PlatformNotSupportedError for instagram, without making any request', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createApifyScraperClient('test-token');
+      await expect(
+        client.fetchVideoForAnalysis('instagram', 'https://www.instagram.com/reel/abc123/')
+      ).rejects.toThrow(PlatformNotSupportedError);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 });

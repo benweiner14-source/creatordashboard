@@ -29,6 +29,18 @@ export interface ProfilePost {
   permalink: string;
 }
 
+export interface DownloadedVideo {
+  videoUrl: string; // fetchable, includes the Apify token as a query param
+  durationSeconds: number;
+  transcript: string | null; // best-effort; null if unavailable
+}
+
+export class PlatformNotSupportedError extends Error {
+  constructor(public readonly platform: string) {
+    super(`Visual/audio analysis is not yet available for ${platform}.`);
+  }
+}
+
 export interface ScraperClient {
   detectPlatform(url: string): 'tiktok' | 'instagram' | null;
   fetchPost(url: string): Promise<SocialPostMetadata>;
@@ -38,6 +50,13 @@ export interface ScraperClient {
    * sync endpoint's response-timeout ceiling. See spec §2.1.
    */
   fetchProfilePosts(platform: 'tiktok' | 'instagram', handle: string): Promise<ProfilePost[]>;
+  /**
+   * Downloads the real video file and (best-effort) transcribes it, for the
+   * visual/audio enrichment pass — distinct from fetchPost, which never
+   * downloads media. Instagram throws PlatformNotSupportedError until its own
+   * video-acquisition path is validated and built. See design spec §2.
+   */
+  fetchVideoForAnalysis(platform: 'tiktok' | 'instagram', url: string): Promise<DownloadedVideo>;
 }
 
 export function detectSocialPlatform(url: string): 'tiktok' | 'instagram' | null {
@@ -131,6 +150,27 @@ async function fetchInstagramFollowerCount(ownerUsername: string, apiToken: stri
   } catch {
     // Never let a failed follower-count lookup fail the whole diagnostic — see spec §2 / Global Constraints.
     return undefined;
+  }
+}
+
+function buildVideoDownloadInput(url: string): Record<string, unknown> {
+  return {
+    postURLs: [url],
+    shouldDownloadVideos: true,
+    downloadSubtitlesOptions: 'TRANSCRIBE_ALL_VIDEOS',
+  };
+}
+
+async function fetchTranscript(transcriptionLink: string | undefined, apiToken: string): Promise<string | null> {
+  if (!transcriptionLink) return null;
+  try {
+    const response = await fetch(`${transcriptionLink}?token=${apiToken}`);
+    if (!response.ok) return null;
+    const text = (await response.text()).trim();
+    return text.length > 0 ? text : null;
+  } catch {
+    // Never let a failed transcript fetch fail the whole enrichment — see design spec §7.
+    return null;
   }
 }
 
@@ -248,6 +288,36 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
         }
       }
       throw lastError;
+    },
+    async fetchVideoForAnalysis(platform: 'tiktok' | 'instagram', url: string): Promise<DownloadedVideo> {
+      if (platform === 'instagram') {
+        throw new PlatformNotSupportedError('instagram');
+      }
+      const runUrl = `https://api.apify.com/v2/acts/${APIFY_ACTORS.tiktok}/run-sync-get-dataset-items?token=${apiToken}`;
+      const response = await fetch(runUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildVideoDownloadInput(url)),
+      });
+      if (!response.ok) {
+        throw new Error(`Apify video download failed with status ${response.status}`);
+      }
+      const items = await response.json();
+      const item = items[0];
+      if (!item) {
+        throw new Error(`Apify returned no data for ${url}`);
+      }
+      const videoMeta = item.videoMeta ?? {};
+      const rawVideoUrl = item.mediaUrls?.[0] ?? videoMeta.downloadAddr;
+      if (!rawVideoUrl) {
+        throw new Error(`No downloadable video found for ${url}`);
+      }
+      const transcript = await fetchTranscript(videoMeta.transcriptionLink, apiToken);
+      return {
+        videoUrl: `${rawVideoUrl}?token=${apiToken}`,
+        durationSeconds: Number(videoMeta.duration ?? 0),
+        transcript,
+      };
     },
   };
 }
