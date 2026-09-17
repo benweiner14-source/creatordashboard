@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'diagnostic-1' }),
@@ -76,5 +76,121 @@ describe('DiagnosticReportPage', () => {
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong loading your report. Please try again.')
     );
+  });
+
+  it('shows the enrich button for a tiktok diagnostic with no visual/audio status yet', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            visual_audio_status: null,
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+    );
+
+    render(<DiagnosticReportPage />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /see how your first 5 seconds/i })).toBeInTheDocument()
+    );
+  });
+
+  it('does not show the enrich button for a non-tiktok diagnostic', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          diagnostic: {
+            platform: 'instagram',
+            visual_audio_status: null,
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+    );
+
+    render(<DiagnosticReportPage />);
+
+    await waitFor(() => expect(screen.getByText('Strong hook')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /see how your first 5 seconds/i })).not.toBeInTheDocument();
+  });
+
+  it('clicking the enrich button shows the narrative on success', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            visual_audio_status: null,
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ narrative: 'Your opening frame has clear on-screen text that stops the scroll.' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    const button = await screen.findByRole('button', { name: /see how your first 5 seconds/i });
+    fireEvent.click(button);
+
+    await waitFor(() =>
+      expect(screen.getByText('Your opening frame has clear on-screen text that stops the scroll.')).toBeInTheDocument()
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toContain('/enrich');
+  });
+
+  it('shows a retry option when the enrich call fails', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            visual_audio_status: null,
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: "Couldn't process this video — it may be too short or in an unsupported format." }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    const button = await screen.findByRole('button', { name: /see how your first 5 seconds/i });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument());
+    expect(screen.getByText(/couldn't process this video/i)).toBeInTheDocument();
   });
 });
