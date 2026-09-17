@@ -13,7 +13,7 @@ export interface CombinedScore extends CombinedScoreInput {
 }
 
 const WEIGHTS_WITH_REACH = { hookStrength: 0.23, retentionRisk: 0.23, reach: 0.23, timing: 0.155, formatFit: 0.155 };
-const WEIGHTS_WITHOUT_REACH = { hookStrength: 0.3, retentionRisk: 0.3, timing: 0.2, formatFit: 0.2 };
+const WEIGHTS_WITHOUT_REACH = { hookStrength: 0.3, retentionRisk: 0.3, timing: 0.2, formatFit: 0.2, reach: 0 };
 
 export function combineScores(input: CombinedScoreInput): CombinedScore {
   const weights = input.reach ? WEIGHTS_WITH_REACH : WEIGHTS_WITHOUT_REACH;
