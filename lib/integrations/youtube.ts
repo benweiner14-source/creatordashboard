@@ -8,6 +8,7 @@ export interface VideoMetadata {
   likeCount: number;
   commentCount: number;
   tags: string[];
+  channelId: string;
 }
 
 /**
@@ -45,6 +46,12 @@ export interface YouTubeClient {
    * contentDetails. See lib/watchlist/handler.ts for the caller.
    */
   getChannelStats(handle: string): Promise<ChannelStats>;
+  /**
+   * Subscriber count by channel ID, not handle — Diagnostic only ever has a
+   * channelId from a video lookup, unlike Watchlist's getChannelStats(handle)
+   * which resolves from a stored handle. See design spec §2.
+   */
+  getChannelSubscriberCount(channelId: string): Promise<number | null>;
 }
 
 export function extractYouTubeVideoId(url: string): string | null {
@@ -76,7 +83,7 @@ function parseIso8601Duration(iso: string): number {
 
 function mapVideoItem(item: {
   id: string;
-  snippet: { title: string; description: string; publishedAt: string; tags?: string[] };
+  snippet: { title: string; description: string; publishedAt: string; tags?: string[]; channelId: string };
   statistics: { viewCount?: string; likeCount?: string; commentCount?: string };
   contentDetails: { duration: string };
 }): VideoMetadata {
@@ -90,6 +97,7 @@ function mapVideoItem(item: {
     likeCount: Number(item.statistics.likeCount ?? 0),
     commentCount: Number(item.statistics.commentCount ?? 0),
     tags: item.snippet.tags ?? [],
+    channelId: item.snippet.channelId,
   };
 }
 
@@ -168,6 +176,19 @@ export function createYouTubeClient(apiKey: string): YouTubeClient {
         totalViewCount: Number(stats.viewCount ?? 0),
         videoCount: Number(stats.videoCount ?? 0),
       };
+    },
+    async getChannelSubscriberCount(channelId: string): Promise<number | null> {
+      const url = new URL('https://www.googleapis.com/youtube/v3/channels');
+      url.searchParams.set('id', channelId);
+      url.searchParams.set('part', 'statistics');
+      url.searchParams.set('key', apiKey);
+      const data = await fetchYouTubeJson(url);
+      const channel = data.items?.[0];
+      if (!channel) {
+        throw new ChannelNotFoundError(channelId);
+      }
+      const stats = channel.statistics ?? {};
+      return stats.hiddenSubscriberCount ? null : Number(stats.subscriberCount ?? 0);
     },
   };
 }

@@ -212,4 +212,10 @@ describe('supabase migrations', () => {
     expect(sql).toContain('alter table public.profiles');
     expect(sql).toContain('add column warroom_email_opt_in boolean not null default false');
   });
+
+  it('includes a migration adding reach_score to diagnostics', () => {
+    const sql = readMigrationContaining('add_reach_score');
+    expect(sql).toContain('alter table public.diagnostics');
+    expect(sql).toContain('add column reach_score integer');
+  });
 });

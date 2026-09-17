@@ -13,6 +13,7 @@ describe('combineScores', () => {
       retentionRisk: makeScore(80),
       timing: makeScore(80),
       formatFit: makeScore(80),
+      reach: null,
     });
     expect(result.overallScore).toBe(80);
   });
@@ -23,12 +24,14 @@ describe('combineScores', () => {
       retentionRisk: makeScore(100),
       timing: makeScore(0),
       formatFit: makeScore(0),
+      reach: null,
     });
     const lowHookHighOthers = combineScores({
       hookStrength: makeScore(0),
       retentionRisk: makeScore(0),
       timing: makeScore(100),
       formatFit: makeScore(100),
+      reach: null,
     });
     expect(highHookLowOthers.overallScore).toBeGreaterThan(lowHookHighOthers.overallScore);
   });
@@ -39,7 +42,43 @@ describe('combineScores', () => {
       retentionRisk: makeScore(60),
       timing: makeScore(60),
       formatFit: makeScore(60),
+      reach: null,
     });
     expect(result.hookStrength.score).toBe(60);
+  });
+
+  it('uses the original 30/30/20/20 weights when reach is null', () => {
+    const withoutReach = combineScores({
+      hookStrength: makeScore(100),
+      retentionRisk: makeScore(100),
+      timing: makeScore(0),
+      formatFit: makeScore(0),
+      reach: null,
+    });
+    // 100*0.3 + 100*0.3 + 0*0.2 + 0*0.2 = 60
+    expect(withoutReach.overallScore).toBe(60);
+  });
+
+  it('uses the 23/23/23/15.5/15.5 weights when reach is present', () => {
+    const withReach = combineScores({
+      hookStrength: makeScore(100),
+      retentionRisk: makeScore(100),
+      timing: makeScore(0),
+      formatFit: makeScore(0),
+      reach: makeScore(100),
+    });
+    // 100*0.23 + 100*0.23 + 100*0.23 = 69
+    expect(withReach.overallScore).toBe(69);
+  });
+
+  it('preserves a null reach on the combined result', () => {
+    const result = combineScores({
+      hookStrength: makeScore(60),
+      retentionRisk: makeScore(60),
+      timing: makeScore(60),
+      formatFit: makeScore(60),
+      reach: null,
+    });
+    expect(result.reach).toBeNull();
   });
 });

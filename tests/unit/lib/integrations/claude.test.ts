@@ -86,6 +86,61 @@ describe('createClaudeReportClient', () => {
     expect(report.explanation).toBe('Fenced explanation');
   });
 
+  it('includes a Reach line in the prompt when input.scores.reach is provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        content: [{ text: JSON.stringify({ headline: 'h', explanation: 'e' }) }],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createClaudeReportClient('test-api-key');
+    await client.generateDiagnosticReport({
+      platform: 'tiktok',
+      postSummary: 'x',
+      scores: {
+        hookStrength: { value: 1, label: 'weak' },
+        retentionRisk: { value: 1, label: 'weak' },
+        timing: { value: 1, label: 'weak' },
+        formatFit: { value: 1, label: 'weak' },
+        reach: { value: 85, label: 'strong' },
+      },
+    });
+
+    const [, options] = fetchMock.mock.calls[0];
+    const body = JSON.parse(options.body as string);
+    expect(body.messages[0].content).toContain('Reach: 85 (strong)');
+  });
+
+  it('omits the Reach line entirely when input.scores.reach is not provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        content: [{ text: JSON.stringify({ headline: 'h', explanation: 'e' }) }],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createClaudeReportClient('test-api-key');
+    await client.generateDiagnosticReport({
+      platform: 'tiktok',
+      postSummary: 'x',
+      scores: {
+        hookStrength: { value: 1, label: 'weak' },
+        retentionRisk: { value: 1, label: 'weak' },
+        timing: { value: 1, label: 'weak' },
+        formatFit: { value: 1, label: 'weak' },
+      },
+    });
+
+    const [, options] = fetchMock.mock.calls[0];
+    const body = JSON.parse(options.body as string);
+    expect(body.messages[0].content).not.toContain('Reach:');
+  });
+
   it('throws a descriptive error when the response is not valid JSON', async () => {
     vi.stubGlobal(
       'fetch',

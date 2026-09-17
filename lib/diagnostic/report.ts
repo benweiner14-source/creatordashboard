@@ -2,6 +2,7 @@ import { scoreHookStrength, type HookStrengthInput } from './hook-strength';
 import { scoreRetentionRisk, type RetentionRiskInput } from './retention-risk';
 import { scoreTiming, type TimingInput } from './timing';
 import { scoreFormatFit, type FormatFitInput } from './format-fit';
+import { scoreReach } from './reach';
 import { combineScores, type CombinedScore } from './score';
 import type { ClaudeReportClient } from '@/lib/integrations/claude';
 import { linkGlossaryTerms, getGlossaryTerms, type GlossarySegment, type GlossaryTerm } from '@/lib/glossary';
@@ -16,6 +17,7 @@ export interface DiagnosticPostStats {
   // Only ever populated for TikTok — see lib/integrations/scraper.ts.
   shareCount?: number;
   saveCount?: number;
+  followerCount?: number;
 }
 
 export interface GenerateDiagnosticReportParams {
@@ -53,11 +55,17 @@ export async function generateDiagnosticReport(params: GenerateDiagnosticReportP
   const timingInput: TimingInput = { platform, publishedAt: postStats.publishedAt };
   const formatFitInput: FormatFitInput = { platform, durationSeconds: postStats.durationSeconds };
 
+  const reach =
+    postStats.followerCount && postStats.followerCount > 0
+      ? scoreReach({ viewCount: postStats.viewCount, followerCount: postStats.followerCount })
+      : null;
+
   const scores = combineScores({
     hookStrength: scoreHookStrength(hookStrengthInput),
     retentionRisk: scoreRetentionRisk(retentionRiskInput),
     timing: scoreTiming(timingInput),
     formatFit: scoreFormatFit(formatFitInput),
+    reach,
   });
 
   const generated = await params.claudeClient.generateDiagnosticReport({
@@ -68,6 +76,7 @@ export async function generateDiagnosticReport(params: GenerateDiagnosticReportP
       retentionRisk: { value: scores.retentionRisk.score, label: scores.retentionRisk.label },
       timing: { value: scores.timing.score, label: scores.timing.label },
       formatFit: { value: scores.formatFit.score, label: scores.formatFit.label },
+      ...(scores.reach ? { reach: { value: scores.reach.score, label: scores.reach.label } } : {}),
     },
   });
 

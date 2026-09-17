@@ -83,6 +83,13 @@ export async function handleDiagnosticRequest(
     if (youtubeId) {
       platform = 'youtube';
       const metadata = await deps.youtubeClient.getVideoMetadata(youtubeId);
+      let subscriberCount: number | null = null;
+      try {
+        subscriberCount = await deps.youtubeClient.getChannelSubscriberCount(metadata.channelId);
+      } catch (err) {
+        // Never let a follower-count lookup fail the whole diagnostic — spec §6.
+        console.error('YouTube subscriber-count lookup failed; omitting Reach:', err instanceof Error ? err.message : err);
+      }
       postStats = {
         captionOrTitle: metadata.title,
         publishedAt: metadata.publishedAt,
@@ -90,6 +97,7 @@ export async function handleDiagnosticRequest(
         viewCount: metadata.viewCount,
         likeCount: metadata.likeCount,
         commentCount: metadata.commentCount,
+        followerCount: subscriberCount ?? undefined,
       };
     } else {
       const detected = deps.scraperClient.detectPlatform(context.url);
@@ -108,6 +116,7 @@ export async function handleDiagnosticRequest(
         commentCount: post.commentCount,
         shareCount: post.shareCount,
         saveCount: post.saveCount,
+        followerCount: post.followerCount,
       };
     }
 

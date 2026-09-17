@@ -33,6 +33,7 @@ describe('createYouTubeClient', () => {
             description: 'A breakdown of my strategy',
             publishedAt: '2026-07-01T14:00:00Z',
             tags: ['creator', 'growth'],
+            channelId: 'UCabc123',
           },
           statistics: { viewCount: '15000', likeCount: '900', commentCount: '120' },
           contentDetails: { duration: 'PT4M32S' },
@@ -55,6 +56,7 @@ describe('createYouTubeClient', () => {
       likeCount: 900,
       commentCount: 120,
       tags: ['creator', 'growth'],
+      channelId: 'UCabc123',
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0][0])).toContain('videos');
@@ -176,6 +178,45 @@ describe('createYouTubeClient', () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ items: [] }) }));
       const client = createYouTubeClient('test-api-key');
       await expect(client.getChannelStats('nope')).rejects.toThrow(ChannelNotFoundError);
+    });
+  });
+
+  describe('getChannelSubscriberCount', () => {
+    it('returns the subscriber count for a channel ID', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ items: [{ statistics: { subscriberCount: '5400000' } }] }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createYouTubeClient('test-key');
+      const count = await client.getChannelSubscriberCount('UCabc123');
+
+      expect(count).toBe(5400000);
+      const requestedUrl = fetchMock.mock.calls[0][0].toString();
+      expect(requestedUrl).toContain('id=UCabc123');
+      expect(requestedUrl).toContain('part=statistics');
+    });
+
+    it('returns null when the channel has hidden its subscriber count', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ items: [{ statistics: { hiddenSubscriberCount: true } }] }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createYouTubeClient('test-key');
+      const count = await client.getChannelSubscriberCount('UCabc123');
+
+      expect(count).toBeNull();
+    });
+
+    it('throws ChannelNotFoundError when the channel ID does not resolve', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createYouTubeClient('test-key');
+      await expect(client.getChannelSubscriberCount('UCnonexistent')).rejects.toThrow(ChannelNotFoundError);
     });
   });
 });

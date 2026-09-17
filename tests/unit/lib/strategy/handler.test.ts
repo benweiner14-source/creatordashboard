@@ -72,6 +72,7 @@ describe('handleStrategyBreakdownRequest', () => {
         likeCount: 100,
         commentCount: 10,
         tags: [],
+        channelId: 'fake-channel-id',
       },
     ];
     const deps = makeDeps({ youtubeClient: createFakeYouTubeClient({}, uploads) });
@@ -172,6 +173,7 @@ describe('handleStrategyBreakdownRequest', () => {
         likeCount: 100,
         commentCount: 10,
         tags: [],
+        channelId: 'fake-channel-id',
       },
       {
         id: 'v2',
@@ -183,6 +185,7 @@ describe('handleStrategyBreakdownRequest', () => {
         likeCount: 50,
         commentCount: 5,
         tags: [],
+        channelId: 'fake-channel-id',
       },
     ];
     let savedTopPosts: Array<{ captionOrTitle: string; viewCount: number }> | undefined;
@@ -238,6 +241,7 @@ describe('handleStrategyBreakdownRequest', () => {
           likeCount: 100,
           commentCount: 10,
           tags: [],
+          channelId: 'fake-channel-id',
         },
       ]),
       saveStrategyBreakdown: async () => {

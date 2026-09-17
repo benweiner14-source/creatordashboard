@@ -279,7 +279,7 @@ describe('handleRefreshWatchlistEntry', () => {
 
   it('fetches and saves a snapshot for a never-fetched entry', async () => {
     const uploads: VideoMetadata[] = [
-      { id: 'v1', title: 'Video 1', description: '', publishedAt: '2026-09-09T12:00:00Z', durationSeconds: 300, viewCount: 2400, likeCount: 100, commentCount: 10, tags: [] },
+      { id: 'v1', title: 'Video 1', description: '', publishedAt: '2026-09-09T12:00:00Z', durationSeconds: 300, viewCount: 2400, likeCount: 100, commentCount: 10, tags: [], channelId: 'fake-channel-id' },
     ];
     const deps = makeDeps({ youtubeClient: createFakeYouTubeClient({}, uploads, { subscriberCount: 5000, totalViewCount: 100000, videoCount: 30 }) });
     const entryId = await addEntry(deps, 'https://www.youtube.com/@creator');

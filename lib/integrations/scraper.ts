@@ -13,6 +13,7 @@ export interface SocialPostMetadata {
   // docs/superpowers/specs/2026-08-13-diagnostic-benchmark-sources.md.
   shareCount?: number;
   saveCount?: number;
+  followerCount?: number; // best-effort; absent if unavailable for this platform/account
 }
 
 export interface ProfilePost {
@@ -112,6 +113,27 @@ function normalizeProfilePost(platform: 'tiktok' | 'instagram', item: Record<str
   };
 }
 
+async function fetchInstagramFollowerCount(ownerUsername: string, apiToken: string): Promise<number | undefined> {
+  try {
+    const runUrl = `https://api.apify.com/v2/acts/${APIFY_ACTORS.instagram}/run-sync-get-dataset-items?token=${apiToken}`;
+    const response = await fetch(runUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        resultsType: 'details',
+        directUrls: [`https://www.instagram.com/${encodeURIComponent(ownerUsername)}/`],
+      }),
+    });
+    if (!response.ok) return undefined;
+    const items = await response.json();
+    const followersCount = items[0]?.followersCount;
+    return typeof followersCount === 'number' ? followersCount : undefined;
+  } catch {
+    // Never let a failed follower-count lookup fail the whole diagnostic — see spec §2 / Global Constraints.
+    return undefined;
+  }
+}
+
 async function runApifyActorAndWait(params: {
   actorId: string;
   apiToken: string;
@@ -183,6 +205,13 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
       if (!item) {
         throw new Error(`Apify returned no data for ${url}`);
       }
+
+      let followerCount: number | undefined =
+        platform === 'tiktok' && item.authorMeta?.fans !== undefined ? Number(item.authorMeta.fans) : undefined;
+      if (platform === 'instagram' && item.ownerUsername) {
+        followerCount = await fetchInstagramFollowerCount(item.ownerUsername, apiToken);
+      }
+
       return {
         platform,
         id: String(item.id ?? item.videoId ?? item.shortCode ?? url),
@@ -194,6 +223,7 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
         commentCount: Number(item.commentCount ?? 0),
         shareCount: platform === 'tiktok' && item.shareCount !== undefined ? Number(item.shareCount) : undefined,
         saveCount: platform === 'tiktok' && item.collectCount !== undefined ? Number(item.collectCount) : undefined,
+        followerCount,
       };
     },
     async fetchProfilePosts(platform: 'tiktok' | 'instagram', handle: string): Promise<ProfilePost[]> {

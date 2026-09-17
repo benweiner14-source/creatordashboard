@@ -3,7 +3,8 @@ import type { YouTubeClient, VideoMetadata, ChannelStats } from '@/lib/integrati
 export function createFakeYouTubeClient(
   overrides: Partial<VideoMetadata> = {},
   channelUploads: VideoMetadata[] = [],
-  channelStats: ChannelStats = { subscriberCount: 1000, totalViewCount: 50000, videoCount: 20 }
+  channelStats: ChannelStats = { subscriberCount: 1000, totalViewCount: 50000, videoCount: 20 },
+  subscriberCount: number | null = 1000
 ): YouTubeClient {
   const metadata: VideoMetadata = {
     id: 'fake-video-id',
@@ -15,6 +16,7 @@ export function createFakeYouTubeClient(
     likeCount: 400,
     commentCount: 50,
     tags: ['tutorial'],
+    channelId: 'fake-channel-id',
     ...overrides,
   };
   return {
@@ -22,5 +24,6 @@ export function createFakeYouTubeClient(
     getVideoMetadata: async () => metadata,
     getChannelUploads: async () => channelUploads,
     getChannelStats: async () => channelStats,
+    getChannelSubscriberCount: async () => subscriberCount,
   };
 }

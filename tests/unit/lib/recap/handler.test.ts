@@ -75,7 +75,7 @@ describe('handleRecapRequest', () => {
       [
         {
           id: 'v1', title: 'YT this month', description: '', publishedAt: '2026-08-05T00:00:00Z',
-          durationSeconds: 60, viewCount: 3000, likeCount: 200, commentCount: 10, tags: [],
+          durationSeconds: 60, viewCount: 3000, likeCount: 200, commentCount: 10, tags: [], channelId: 'fake-channel-id',
         },
       ]
     );
