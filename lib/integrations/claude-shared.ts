@@ -2,7 +2,8 @@ const CLAUDE_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 
 export type ClaudeContentBlock =
   | { type: 'text'; text: string }
-  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } };
+  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+  | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg'; data: string } };
 
 /**
  * The <niche>/<target_goal> containment tags the LinkedIn clients wrap free
