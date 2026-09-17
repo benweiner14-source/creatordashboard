@@ -11,21 +11,32 @@ interface PeakWindow {
   endHour: number; // UTC hour, exclusive
 }
 
+// Calibrated 2026-09-17 against a real year of first-party post data (2K's
+// own gaming-brand accounts across TikTok/Instagram/YouTube, ~8,600 posts
+// with views>0), not the generic secondary-sourced guesses this replaced.
+// Methodology: bucketed by UTC day-of-week + 4-hour window (source
+// timestamps were US Eastern, converted to UTC accounting for DST), top 5%
+// of posts by views excluded per platform first to remove major-announcement
+// outliers (e.g. game-reveal trailers dropped at a fixed embargo time
+// regardless of "good" posting time — these dominated raw hour-of-day
+// medians before trimming), then the 3 highest-median day+window buckets
+// with a sample size of at least 25 posts were kept. See
+// docs/superpowers/specs/2026-08-13-diagnostic-benchmark-sources.md.
 const PEAK_WINDOWS: Record<TimingInput['platform'], PeakWindow[]> = {
   tiktok: [
-    { dayOfWeek: 2, startHour: 18, endHour: 22 },
-    { dayOfWeek: 4, startHour: 18, endHour: 22 },
-    { dayOfWeek: 6, startHour: 10, endHour: 14 },
+    { dayOfWeek: 3, startHour: 20, endHour: 24 },
+    { dayOfWeek: 3, startHour: 12, endHour: 16 },
+    { dayOfWeek: 1, startHour: 20, endHour: 24 },
   ],
   instagram: [
-    { dayOfWeek: 1, startHour: 17, endHour: 21 },
-    { dayOfWeek: 3, startHour: 17, endHour: 21 },
-    { dayOfWeek: 5, startHour: 11, endHour: 14 },
+    { dayOfWeek: 3, startHour: 0, endHour: 4 },
+    { dayOfWeek: 4, startHour: 16, endHour: 20 },
+    { dayOfWeek: 1, startHour: 20, endHour: 24 },
   ],
   youtube: [
-    { dayOfWeek: 5, startHour: 14, endHour: 18 },
-    { dayOfWeek: 6, startHour: 9, endHour: 12 },
-    { dayOfWeek: 0, startHour: 9, endHour: 12 },
+    { dayOfWeek: 2, startHour: 12, endHour: 16 },
+    { dayOfWeek: 3, startHour: 12, endHour: 16 },
+    { dayOfWeek: 3, startHour: 16, endHour: 20 },
   ],
 };
 
