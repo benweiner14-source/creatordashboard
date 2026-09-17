@@ -24,6 +24,8 @@ export interface GenerateDiagnosticReportParams {
   platform: 'youtube' | 'tiktok' | 'instagram';
   postStats: DiagnosticPostStats;
   claudeClient: ClaudeReportClient;
+  /** Injectable for tests — defaults to the real current time. */
+  now?: Date;
 }
 
 export interface DiagnosticReport {
@@ -31,10 +33,28 @@ export interface DiagnosticReport {
   headline: string;
   explanationSegments: GlossarySegment[];
   glossaryTerms: GlossaryTerm[];
+  confidenceCaveat: string | null;
+}
+
+// Not sourced research — a judgment call, like several other unsourced
+// thresholds in this app (see docs/superpowers/specs/2026-08-13-diagnostic-benchmark-sources.md).
+// A post this fresh hasn't accumulated a representative sample: early
+// engagers skew toward superfans, so the same raw numbers that would be a
+// reliable read on a mature post can be noise here. Deliberately a caveat,
+// not a blocker or a change to the actual scores — the creator asked for a
+// read on this specific post right now, and the scores are still the most
+// honest number available; only the interpretation needs the caveat.
+const MIN_RELIABLE_AGE_HOURS = 3;
+
+function computeConfidenceCaveat(publishedAt: string, now: Date): string | null {
+  const ageHours = (now.getTime() - new Date(publishedAt).getTime()) / (1000 * 60 * 60);
+  if (ageHours >= MIN_RELIABLE_AGE_HOURS) return null;
+  return `This post is less than ${MIN_RELIABLE_AGE_HOURS} hours old — early view/like counts can be misleading (skewed toward your most engaged followers). Treat these scores as a preliminary read, and consider re-running the diagnostic in a few hours for a more reliable picture.`;
 }
 
 export async function generateDiagnosticReport(params: GenerateDiagnosticReportParams): Promise<DiagnosticReport> {
   const { platform, postStats } = params;
+  const now = params.now ?? new Date();
 
   const hookStrengthInput: HookStrengthInput = {
     platform,
@@ -91,5 +111,6 @@ export async function generateDiagnosticReport(params: GenerateDiagnosticReportP
     headline: generated.headline,
     explanationSegments,
     glossaryTerms,
+    confidenceCaveat: computeConfidenceCaveat(postStats.publishedAt, now),
   };
 }

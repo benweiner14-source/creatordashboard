@@ -40,6 +40,30 @@ describe('DiagnosticReportPage', () => {
     expect(screen.getByRole('button', { name: 'hook rate' })).toBeInTheDocument();
   });
 
+  it('shows the confidence caveat when the report includes one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          diagnostic: {
+            report_json: {
+              headline: 'Too soon to tell',
+              scores: { overallScore: 50 },
+              explanationSegments: [{ type: 'text', value: 'Early days.' }],
+              confidenceCaveat: 'This post is less than 3 hours old — early view/like counts can be misleading.',
+            },
+          },
+        }),
+      })
+    );
+
+    render(<DiagnosticReportPage />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/less than 3 hours old/i)).toBeInTheDocument()
+    );
+  });
+
   it('shows an error message when the diagnostic is not found', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => ({ error: 'Diagnostic not found.' }) }));
     render(<DiagnosticReportPage />);

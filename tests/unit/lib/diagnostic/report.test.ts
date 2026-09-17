@@ -105,4 +105,45 @@ describe('generateDiagnosticReport', () => {
 
     expect(report.scores.reach).toBeNull();
   });
+
+  it('sets a confidenceCaveat when the post is less than 3 hours old', async () => {
+    const claudeClient = createFakeClaudeReportClient();
+    const now = new Date('2026-08-11T20:30:00Z'); // 1.5 hours after publishedAt
+    const report = await generateDiagnosticReport({
+      platform: 'tiktok',
+      postStats: {
+        captionOrTitle: 'Untitled',
+        publishedAt: '2026-08-11T19:00:00Z',
+        durationSeconds: 30,
+        viewCount: 2000,
+        likeCount: 150,
+        commentCount: 20,
+      },
+      claudeClient,
+      now,
+    });
+
+    expect(report.confidenceCaveat).not.toBeNull();
+    expect(report.confidenceCaveat).toContain('3 hours');
+  });
+
+  it('leaves confidenceCaveat null once the post is past the 3-hour threshold', async () => {
+    const claudeClient = createFakeClaudeReportClient();
+    const now = new Date('2026-08-11T23:00:00Z'); // 4 hours after publishedAt
+    const report = await generateDiagnosticReport({
+      platform: 'tiktok',
+      postStats: {
+        captionOrTitle: 'Untitled',
+        publishedAt: '2026-08-11T19:00:00Z',
+        durationSeconds: 30,
+        viewCount: 10000,
+        likeCount: 200,
+        commentCount: 100,
+      },
+      claudeClient,
+      now,
+    });
+
+    expect(report.confidenceCaveat).toBeNull();
+  });
 });

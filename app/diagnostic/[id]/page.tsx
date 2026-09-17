@@ -8,6 +8,7 @@ interface DiagnosticReportData {
   headline: string;
   scores: { overallScore: number };
   explanationSegments: Array<{ type: 'text' | 'term'; value: string }>;
+  confidenceCaveat?: string | null;
 }
 
 export default function DiagnosticReportPage() {
@@ -46,6 +47,9 @@ export default function DiagnosticReportPage() {
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
       <h1 className="text-2xl font-bold text-gray-900">{report.headline}</h1>
+      {report.confidenceCaveat && (
+        <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{report.confidenceCaveat}</p>
+      )}
       <p className="text-lg text-gray-700">Overall score: {report.scores.overallScore}</p>
       <div className="text-base leading-relaxed text-gray-800">
         <GlossaryText text={report.explanationSegments.map((s) => s.value).join('')} />
