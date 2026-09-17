@@ -13,6 +13,7 @@ export interface ReportGenerationInput {
     retentionRisk: ReportScoreSummary;
     timing: ReportScoreSummary;
     formatFit: ReportScoreSummary;
+    reach?: ReportScoreSummary;
   };
 }
 
@@ -46,7 +47,7 @@ export function createClaudeReportClient(apiKey: string, model = 'claude-sonnet-
         model,
         maxTokens: 512,
         system: DIAGNOSTIC_SYSTEM_PROMPT,
-        userContent: `Platform: ${input.platform}\nPost summary: ${input.postSummary}\nHook strength: ${input.scores.hookStrength.value} (${input.scores.hookStrength.label})\nRetention risk: ${input.scores.retentionRisk.value} (${input.scores.retentionRisk.label})\nTiming: ${input.scores.timing.value} (${input.scores.timing.label})\nFormat fit: ${input.scores.formatFit.value} (${input.scores.formatFit.label})\n\nRespond as JSON: {"headline": string, "explanation": string}`,
+        userContent: `Platform: ${input.platform}\nPost summary: ${input.postSummary}\nHook strength: ${input.scores.hookStrength.value} (${input.scores.hookStrength.label})\nRetention risk: ${input.scores.retentionRisk.value} (${input.scores.retentionRisk.label})\nTiming: ${input.scores.timing.value} (${input.scores.timing.label})\nFormat fit: ${input.scores.formatFit.value} (${input.scores.formatFit.label})${input.scores.reach ? `\nReach: ${input.scores.reach.value} (${input.scores.reach.label})` : ''}\n\nRespond as JSON: {"headline": string, "explanation": string}`,
       });
       return {
         headline: parsed.headline ?? 'Your diagnostic report',
