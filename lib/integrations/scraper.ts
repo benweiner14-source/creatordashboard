@@ -78,6 +78,21 @@ function profileUrlFor(platform: 'tiktok' | 'instagram', handle: string): string
     : `https://www.instagram.com/${cleanHandle}/`;
 }
 
+// clockworks/tiktok-scraper and apify~instagram-scraper each reject the
+// generic `startUrls` field other Apify actors accept — every field name
+// here is actor-specific, confirmed against each actor's own input schema.
+function buildPostInput(platform: 'tiktok' | 'instagram', url: string): Record<string, unknown> {
+  return platform === 'tiktok'
+    ? { postURLs: [url] }
+    : { resultsType: 'posts', directUrls: [url], resultsLimit: 1 };
+}
+
+function buildProfileInput(platform: 'tiktok' | 'instagram', handle: string): Record<string, unknown> {
+  return platform === 'tiktok'
+    ? { profiles: [handle.replace(/^@/, '')], resultsPerPage: PROFILE_SCRAPE_RESULTS_LIMIT }
+    : { resultsType: 'posts', directUrls: [profileUrlFor(platform, handle)], resultsLimit: PROFILE_SCRAPE_RESULTS_LIMIT };
+}
+
 function normalizeProfilePost(platform: 'tiktok' | 'instagram', item: Record<string, unknown>): ProfilePost {
   const authorMeta = item.authorMeta as Record<string, unknown> | undefined;
   const rawFollowerCount = platform === 'tiktok' ? authorMeta?.fans : item.followersCount;
@@ -158,7 +173,7 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
       const response = await fetch(runUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startUrls: [{ url }] }),
+        body: JSON.stringify(buildPostInput(platform, url)),
       });
       if (!response.ok) {
         throw new Error(`Apify scrape failed with status ${response.status}`);
@@ -189,10 +204,7 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
           const items = await runApifyActorAndWait({
             actorId,
             apiToken,
-            input: {
-              startUrls: [{ url: profileUrlFor(platform, handle) }],
-              resultsLimit: PROFILE_SCRAPE_RESULTS_LIMIT,
-            },
+            input: buildProfileInput(platform, handle),
             pollIntervalMs,
             maxPollAttempts,
             sleep,
