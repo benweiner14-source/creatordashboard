@@ -44,6 +44,7 @@ export async function POST(request: Request) {
               retention_risk_score: report.scores.retentionRisk.score,
               timing_score: report.scores.timing.score,
               format_fit_score: report.scores.formatFit.score,
+              reach_score: report.scores.reach?.score ?? null,
               overall_score: report.scores.overallScore,
               report_json: report,
             })

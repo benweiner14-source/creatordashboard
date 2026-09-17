@@ -42,6 +42,7 @@ export interface Database {
           retention_risk_score: number | null;
           timing_score: number | null;
           format_fit_score: number | null;
+          reach_score: number | null;
           overall_score: number | null;
           report_json: unknown | null;
           error_message: string | null;
@@ -57,6 +58,7 @@ export interface Database {
           retention_risk_score?: number | null;
           timing_score?: number | null;
           format_fit_score?: number | null;
+          reach_score?: number | null;
           overall_score?: number | null;
           report_json?: unknown | null;
           error_message?: string | null;

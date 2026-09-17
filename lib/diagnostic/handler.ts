@@ -83,6 +83,7 @@ export async function handleDiagnosticRequest(
     if (youtubeId) {
       platform = 'youtube';
       const metadata = await deps.youtubeClient.getVideoMetadata(youtubeId);
+      const subscriberCount = await deps.youtubeClient.getChannelSubscriberCount(metadata.channelId);
       postStats = {
         captionOrTitle: metadata.title,
         publishedAt: metadata.publishedAt,
@@ -90,6 +91,7 @@ export async function handleDiagnosticRequest(
         viewCount: metadata.viewCount,
         likeCount: metadata.likeCount,
         commentCount: metadata.commentCount,
+        followerCount: subscriberCount ?? undefined,
       };
     } else {
       const detected = deps.scraperClient.detectPlatform(context.url);
@@ -108,6 +110,7 @@ export async function handleDiagnosticRequest(
         commentCount: post.commentCount,
         shareCount: post.shareCount,
         saveCount: post.saveCount,
+        followerCount: post.followerCount,
       };
     }
 

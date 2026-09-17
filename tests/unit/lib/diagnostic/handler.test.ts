@@ -71,6 +71,46 @@ describe('handleDiagnosticRequest', () => {
     expect(shareHeavyScore).toBeGreaterThan(baselineScore);
   });
 
+  it('threads TikTok/Instagram followerCount through to the saved report', async () => {
+    const scraperClient = createFakeScraperClient({ followerCount: 5_400_000, viewCount: 34_000, likeCount: 500 });
+    let savedReport: any;
+    const deps = makeDeps({
+      scraperClient,
+      saveDiagnostic: async ({ report }) => {
+        savedReport = report;
+        return { id: 'diagnostic-1' };
+      },
+    });
+
+    await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.tiktok.com/@user/video/123',
+    });
+
+    expect(savedReport.scores.reach).not.toBeNull();
+  });
+
+  it('fetches YouTube subscriber count via channelId and threads it through', async () => {
+    const youtubeClient = createFakeYouTubeClient({ channelId: 'UCabc123', viewCount: 5_908_881 }, [], undefined, 496_000);
+    let savedReport: any;
+    const deps = makeDeps({
+      youtubeClient,
+      saveDiagnostic: async ({ report }) => {
+        savedReport = report;
+        return { id: 'diagnostic-1' };
+      },
+    });
+
+    await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/watch?v=abc123',
+    });
+
+    expect(savedReport.scores.reach).not.toBeNull();
+  });
+
   it('rejects an unsupported URL', async () => {
     const result = await handleDiagnosticRequest(makeDeps(), {
       profileId: 'profile-1',
