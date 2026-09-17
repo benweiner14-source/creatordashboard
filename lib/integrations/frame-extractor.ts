@@ -9,12 +9,23 @@ export interface FrameExtractorClient {
 
 const FRAME_EXTRACTOR_ACTOR_ID = 'automation-lab~video-thumbnail-frame-extractor';
 
-// First 5 seconds, sampled every half second — validated against a real video
-// during this feature's design (all 10/10 frames succeeded). Denser than
-// 1-second sampling roughly doubles the per-diagnostic Apify cost, but stays
-// well under the cost of TikTok's native full-video AI add-ons for any video
-// longer than ~36s — see design spec §5.
-export const HOOK_WINDOW_TIMESTAMPS_SECONDS = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5];
+// First 5 seconds, sampled once per second. Half-second sampling (10 frames)
+// was validated during this feature's design and worked, but sat too close to
+// the route's 60s Vercel ceiling — a timeout there leaves the row stranded at
+// 'pending'. Halving the frame count roughly halves both of the pipeline's
+// largest variable-cost steps: the per-frame Apify frame-extraction cost and
+// the Claude vision call's image-token cost and latency. 5 frames still covers
+// the whole hook window at 1s granularity — see design spec §5.
+export const HOOK_WINDOW_TIMESTAMPS_SECONDS = [0, 1, 2, 3, 4];
+
+// Always an api.apify.com key-value-store URL, but built with URL/searchParams
+// rather than string concatenation so a pre-existing query string on the
+// stored-file URL can never produce a malformed double-`?` URL.
+function withApifyToken(rawUrl: string, apiToken: string): string {
+  const url = new URL(rawUrl);
+  url.searchParams.set('token', apiToken);
+  return url.toString();
+}
 
 export function createApifyFrameExtractorClient(apiToken: string): FrameExtractorClient {
   return {
@@ -46,7 +57,7 @@ export function createApifyFrameExtractorClient(apiToken: string): FrameExtracto
         .filter((item) => item.status === 'succeeded')
         .map((item) => ({
           timestampSeconds: Number(item.timestampSeconds),
-          imageUrl: `${String(item.storedFileUrl)}?token=${apiToken}`,
+          imageUrl: withApifyToken(String(item.storedFileUrl), apiToken),
         }));
     },
   };

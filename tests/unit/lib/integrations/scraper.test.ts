@@ -391,7 +391,10 @@ describe('createApifyScraperClient', () => {
       const client = createApifyScraperClient('test-token');
       const video = await client.fetchVideoForAnalysis('tiktok', 'https://www.tiktok.com/@user/video/123');
 
-      expect(video.videoUrl).toBe('https://api.apify.com/v2/key-value-stores/abc/records/video-123.mp4?token=test-token');
+      expect(new URL(video.videoUrl).searchParams.get('token')).toBe('test-token');
+      expect(new URL(video.videoUrl).origin + new URL(video.videoUrl).pathname).toBe(
+        'https://api.apify.com/v2/key-value-stores/abc/records/video-123.mp4'
+      );
       expect(video.durationSeconds).toBe(50.534);
       expect(video.transcript).toBe('You can actually play GTA 6 early.');
 
@@ -401,7 +404,50 @@ describe('createApifyScraperClient', () => {
         shouldDownloadVideos: true,
         downloadSubtitlesOptions: 'TRANSCRIBE_ALL_VIDEOS',
       });
-      expect(sequencedFetch.mock.calls[1][0]).toContain('transcription-123.txt?token=test-token');
+      const transcriptUrl = new URL(sequencedFetch.mock.calls[1][0] as string);
+      expect(transcriptUrl.pathname).toContain('transcription-123.txt');
+      expect(transcriptUrl.searchParams.get('token')).toBe('test-token');
+    });
+
+    it('does not append the Apify token to the TikTok CDN fallback URL', async () => {
+      const cdnUrl = 'https://v16-webapp.tiktok.com/video/tos/useast/abc/?a=1988&br=3000&expire=123';
+      const scrapeResponse = {
+        ok: true,
+        status: 200,
+        json: async () => [{ videoMeta: { duration: 30, downloadAddr: cdnUrl } }],
+      };
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(scrapeResponse));
+
+      const client = createApifyScraperClient('test-token');
+      const video = await client.fetchVideoForAnalysis('tiktok', 'https://www.tiktok.com/@user/video/123');
+
+      // The token must never reach a third-party host's access logs, and the
+      // pre-existing query string must survive intact.
+      expect(video.videoUrl).toBe(cdnUrl);
+      expect(video.videoUrl).not.toContain('test-token');
+      expect(new URL(video.videoUrl).searchParams.get('a')).toBe('1988');
+    });
+
+    it('appends the token without a double-? when the Apify media URL already has a query string', async () => {
+      const scrapeResponse = {
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            mediaUrls: ['https://api.apify.com/v2/key-value-stores/abc/records/video-123.mp4?disableRedirect=true'],
+            videoMeta: { duration: 30 },
+          },
+        ],
+      };
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(scrapeResponse));
+
+      const client = createApifyScraperClient('test-token');
+      const video = await client.fetchVideoForAnalysis('tiktok', 'https://www.tiktok.com/@user/video/123');
+
+      expect(video.videoUrl.match(/\?/g)).toHaveLength(1);
+      const parsed = new URL(video.videoUrl);
+      expect(parsed.searchParams.get('token')).toBe('test-token');
+      expect(parsed.searchParams.get('disableRedirect')).toBe('true');
     });
 
     it('returns a null transcript (not throwing) when transcriptionLink is missing', async () => {

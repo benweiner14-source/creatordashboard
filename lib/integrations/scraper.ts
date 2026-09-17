@@ -161,10 +161,37 @@ function buildVideoDownloadInput(url: string): Record<string, unknown> {
   };
 }
 
+const APIFY_API_HOSTNAME = 'api.apify.com';
+
+// Adds the Apify token via URL/searchParams rather than string concatenation:
+// concatenating `?token=` onto a URL that already carries a query string
+// produces a malformed double-`?` URL.
+function withApifyToken(rawUrl: string, apiToken: string): string {
+  const url = new URL(rawUrl);
+  url.searchParams.set('token', apiToken);
+  return url.toString();
+}
+
+// The downloadable video URL is either an api.apify.com key-value-store URL
+// (mediaUrls[0], which needs the token to be readable) or TikTok's own CDN
+// (videoMeta.downloadAddr, which is already signed and publicly fetchable).
+// Only ever attach our Apify token to Apify's own host — appending it to a
+// third-party CDN URL would leak the token into that host's access logs.
+function withApifyTokenIfApifyHost(rawUrl: string, apiToken: string): string {
+  try {
+    const url = new URL(rawUrl);
+    if (url.hostname !== APIFY_API_HOSTNAME) return rawUrl;
+    url.searchParams.set('token', apiToken);
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
 async function fetchTranscript(transcriptionLink: string | undefined, apiToken: string): Promise<string | null> {
   if (!transcriptionLink) return null;
   try {
-    const response = await fetch(`${transcriptionLink}?token=${apiToken}`);
+    const response = await fetch(withApifyToken(transcriptionLink, apiToken));
     if (!response.ok) return null;
     const text = (await response.text()).trim();
     return text.length > 0 ? text : null;
@@ -314,7 +341,7 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
       }
       const transcript = await fetchTranscript(videoMeta.transcriptionLink, apiToken);
       return {
-        videoUrl: `${rawVideoUrl}?token=${apiToken}`,
+        videoUrl: withApifyTokenIfApifyHost(String(rawVideoUrl), apiToken),
         durationSeconds: Number(videoMeta.duration ?? 0),
         transcript,
       };
