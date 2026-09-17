@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { handleEnrichRequest, type EnrichHandlerDeps, type DiagnosticForEnrichment } from '@/lib/diagnostic/enrich-handler';
 import { PlatformNotSupportedError } from '@/lib/integrations/scraper';
+import { HOOK_WINDOW_TIMESTAMPS_SECONDS } from '@/lib/integrations/frame-extractor';
 
 function makeDeps(overrides: Partial<EnrichHandlerDeps> = {}): EnrichHandlerDeps {
   const diagnostic: DiagnosticForEnrichment = {
@@ -9,6 +10,8 @@ function makeDeps(overrides: Partial<EnrichHandlerDeps> = {}): EnrichHandlerDeps
     inputUrl: 'https://www.tiktok.com/@user/video/123',
     hookStrengthScore: 72,
     hookStrengthLabel: 'strong',
+    visualAudioStatus: null,
+    visualAudioNarrative: null,
   };
   return {
     hasActiveSubscription: async () => true,
@@ -70,6 +73,8 @@ describe('handleEnrichRequest', () => {
         inputUrl: 'https://www.instagram.com/reel/abc/',
         hookStrengthScore: 50,
         hookStrengthLabel: 'moderate',
+        visualAudioStatus: null,
+        visualAudioNarrative: null,
       }),
       scraperClient: { fetchVideoForAnalysis },
       saveEnrichment,
@@ -130,8 +135,121 @@ describe('handleEnrichRequest', () => {
     expect(result.status).toBe(500);
     expect(result.body.error).toBe('Something went wrong analyzing this video. Please try again.');
     expect(saveEnrichment).toHaveBeenCalledWith(
-      expect.objectContaining({ diagnosticId: 'diag-1', status: 'failed', error: 'Apify video download failed with status 500' })
+      expect.objectContaining({ diagnosticId: 'diag-1', status: 'failed' })
     );
+  });
+
+  it('persists a generic message, never the raw exception text, on a pipeline failure', async () => {
+    const saveEnrichment = vi.fn();
+    const deps = makeDeps({
+      scraperClient: {
+        fetchVideoForAnalysis: async () => {
+          throw new Error('Apify video download failed with status 500');
+        },
+      },
+      saveEnrichment,
+    });
+
+    await handleEnrichRequest(deps, { profileId: 'profile-1', diagnosticId: 'diag-1' });
+
+    const failedCall = saveEnrichment.mock.calls.find((call) => call[0].status === 'failed');
+    expect(failedCall).toBeDefined();
+    expect(failedCall![0].error).toBe('Something went wrong analyzing this video.');
+    expect(failedCall![0].error).not.toContain('Apify');
+  });
+
+  it('short-circuits with the stored narrative when an analysis already completed', async () => {
+    const saveEnrichment = vi.fn();
+    const fetchVideoForAnalysis = vi.fn();
+    const analyzeVisualAudio = vi.fn();
+    const deps = makeDeps({
+      getDiagnostic: async () => ({
+        profileId: 'profile-1',
+        platform: 'tiktok',
+        inputUrl: 'https://www.tiktok.com/@user/video/123',
+        hookStrengthScore: 72,
+        hookStrengthLabel: 'strong',
+        visualAudioStatus: 'complete',
+        visualAudioNarrative: 'An analysis we already paid for.',
+      }),
+      scraperClient: { fetchVideoForAnalysis },
+      visualAudioClient: { analyzeVisualAudio },
+      saveEnrichment,
+    });
+
+    const result = await handleEnrichRequest(deps, { profileId: 'profile-1', diagnosticId: 'diag-1' });
+
+    expect(result.status).toBe(200);
+    expect(result.body.narrative).toBe('An analysis we already paid for.');
+    expect(saveEnrichment).not.toHaveBeenCalled();
+    expect(fetchVideoForAnalysis).not.toHaveBeenCalled();
+    expect(analyzeVisualAudio).not.toHaveBeenCalled();
+  });
+
+  it('still requires ownership before serving an already-complete narrative', async () => {
+    const deps = makeDeps({
+      getDiagnostic: async () => ({
+        profileId: 'profile-1',
+        platform: 'tiktok',
+        inputUrl: 'https://www.tiktok.com/@user/video/123',
+        hookStrengthScore: 72,
+        hookStrengthLabel: 'strong',
+        visualAudioStatus: 'complete',
+        visualAudioNarrative: 'Somebody else’s analysis.',
+      }),
+    });
+
+    const result = await handleEnrichRequest(deps, { profileId: 'someone-else', diagnosticId: 'diag-1' });
+
+    expect(result.status).toBe(403);
+  });
+
+  it('re-runs the pipeline when a previous attempt is stuck at pending', async () => {
+    const saveEnrichment = vi.fn();
+    const deps = makeDeps({
+      getDiagnostic: async () => ({
+        profileId: 'profile-1',
+        platform: 'tiktok',
+        inputUrl: 'https://www.tiktok.com/@user/video/123',
+        hookStrengthScore: 72,
+        hookStrengthLabel: 'strong',
+        visualAudioStatus: 'pending',
+        visualAudioNarrative: null,
+      }),
+      saveEnrichment,
+    });
+
+    const result = await handleEnrichRequest(deps, { profileId: 'profile-1', diagnosticId: 'diag-1' });
+
+    expect(result.status).toBe(200);
+    expect(saveEnrichment).toHaveBeenCalledWith({ diagnosticId: 'diag-1', status: 'pending' });
+  });
+
+  it('saves a failed status instead of complete when Claude returns an empty narrative', async () => {
+    const saveEnrichment = vi.fn();
+    const deps = makeDeps({
+      visualAudioClient: { analyzeVisualAudio: async () => ({ narrative: '   ' }) },
+      saveEnrichment,
+    });
+
+    const result = await handleEnrichRequest(deps, { profileId: 'profile-1', diagnosticId: 'diag-1' });
+
+    expect(result.status).toBe(500);
+    expect(result.body.error).toContain("Couldn't generate an analysis");
+    expect(saveEnrichment).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'complete' }));
+    expect(saveEnrichment).toHaveBeenCalledWith(
+      expect.objectContaining({ diagnosticId: 'diag-1', status: 'failed' })
+    );
+  });
+
+  it('passes the hook-window timestamps to the frame extractor', async () => {
+    const extractFrames = vi.fn().mockResolvedValue([{ timestampSeconds: 0, imageUrl: 'https://example.com/f.jpg' }]);
+    const deps = makeDeps({ frameExtractorClient: { extractFrames } });
+
+    await handleEnrichRequest(deps, { profileId: 'profile-1', diagnosticId: 'diag-1' });
+
+    expect(extractFrames).toHaveBeenCalledWith(expect.any(String), HOOK_WINDOW_TIMESTAMPS_SECONDS);
+    expect(HOOK_WINDOW_TIMESTAMPS_SECONDS).toEqual([0, 1, 2, 3, 4]);
   });
 
   it('propagates PlatformNotSupportedError from fetchVideoForAnalysis as a clean failure, not a crash', async () => {

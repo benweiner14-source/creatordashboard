@@ -26,12 +26,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       {
         hasActiveSubscription: (profileId) => hasActiveSubscription(serviceClient, profileId),
         getDiagnostic: async (diagnosticId): Promise<DiagnosticForEnrichment | null> => {
-          const { data } = await serviceClient
+          const { data, error } = await serviceClient
             .from('diagnostics')
-            .select('profile_id, platform, input_url, report_json')
+            .select('profile_id, platform, input_url, status, report_json, visual_audio_status, visual_audio_narrative')
             .eq('id', diagnosticId)
             .maybeSingle();
+          // A transient DB error must not masquerade as "no such diagnostic":
+          // null here means 404, so only return it when the row genuinely
+          // isn't there. The route's catch turns this throw into a 500.
+          if (error) {
+            throw new Error(`Failed to load diagnostic: ${error.message}`);
+          }
           if (!data) return null;
+          // Without a complete base report there is no real Hook Strength score
+          // to hand Claude — extractHookStrength would silently fabricate a
+          // {0, 'weak'}. Nothing valid to enrich, so treat it as not found.
+          if (data.status !== 'complete') return null;
           const hookStrength = extractHookStrength(data.report_json);
           return {
             profileId: data.profile_id,
@@ -39,6 +49,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             inputUrl: data.input_url,
             hookStrengthScore: hookStrength.score,
             hookStrengthLabel: hookStrength.label,
+            visualAudioStatus: data.visual_audio_status ?? null,
+            visualAudioNarrative: data.visual_audio_narrative ?? null,
           };
         },
         scraperClient: createApifyScraperClient(process.env.APIFY_API_TOKEN ?? ''),
@@ -46,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         visualAudioClient: createClaudeVisualAudioClient(process.env.ANTHROPIC_API_KEY ?? ''),
         fetchImageAsBase64,
         saveEnrichment: async ({ diagnosticId, status, narrative, error }) => {
-          await serviceClient
+          const { error: writeError } = await serviceClient
             .from('diagnostics')
             .update({
               visual_audio_status: status,
@@ -54,6 +66,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
               visual_audio_error: error ?? null,
             })
             .eq('id', diagnosticId);
+          // A dropped write here means the user sees the narrative once in the
+          // optimistic response and never again — the row stays at 'pending'.
+          // Surface it instead (the route's catch turns it into a 500).
+          if (writeError) {
+            throw new Error(`Failed to save visual/audio enrichment: ${writeError.message}`);
+          }
         },
       },
       { profileId: user?.id ?? null, diagnosticId: id }
