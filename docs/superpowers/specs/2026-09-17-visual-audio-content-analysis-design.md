@@ -49,6 +49,8 @@ Two real-data findings shaped the design:
 
 Investigated and explicitly **not** built alongside this: fake/bot engagement detection (a false "this looks like bought engagement" call risks real reputational harm to a genuine creator, and organic content-type variance is statistically indistinguishable from fakery without labeled ground truth — recommended against, not attempted).
 
+**Closed (2026-09-18), tip-only, no feature built: native-editor-app algorithmic boost (CapCut/Edits).** Investigated two distinct claims. (1) TikTok favoring videos edited/exported via CapCut or its own native editor: no credible evidence — absent from TikTok's own disclosed ranking-signal list (Transparency Center), and the creator-community discussion of it is contradictory, unresolved anecdote with no controlled testing behind it. (2) Meta's Edits app boosting Instagram Reels reach: real, but not the mechanism initially assumed — Adam Mosseri confirmed directly (Threads, Aug 2025) that Edits gets "a little bit" of a reach boost, but as a deliberate, explicitly **temporary** adoption incentive to seed the app's usage, not because of any video-quality difference (no Meta source confirms Edits gets preferential encoding/bitrate). Either way, nothing here is buildable as a diagnostic signal: pulled real data from `apify~instagram-scraper` and confirmed there is no field anywhere identifying which app produced or published a post — there is nothing in a public post's metadata to detect. The only actionable form is a one-time creator-facing tip ("publish Reels directly through Meta's Edits app for a temporary reach boost"), not a scored feature, and even that tip needs a temporariness caveat since Meta itself has said the incentive won't last.
+
 ---
 
 ## 1. Data model
