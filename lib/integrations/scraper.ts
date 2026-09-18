@@ -29,6 +29,20 @@ export interface ProfilePost {
   permalink: string;
 }
 
+export interface FetchProfilePostsOptions {
+  /**
+   * Instagram's resultsType:"posts" scrape never includes followersCount on
+   * any item (confirmed live, 2026-09-18) -- unlike TikTok's authorMeta.fans,
+   * which is present on every item. Set this to fall back to the same extra
+   * resultsType:"details" call fetchPost already uses for a reliable
+   * Instagram follower count. Defaults to false/undefined: Strategy
+   * Breakdown and Recap Card, the other two callers of fetchProfilePosts,
+   * never read followerCount, so they don't pay for the extra call unless
+   * they opt in.
+   */
+  includeFollowerCount?: boolean;
+}
+
 export interface DownloadedVideo {
   videoUrl: string; // fetchable, includes the Apify token as a query param
   durationSeconds: number;
@@ -49,7 +63,11 @@ export interface ScraperClient {
    * single-post call because a profile crawl runs long enough to risk the
    * sync endpoint's response-timeout ceiling. See spec §2.1.
    */
-  fetchProfilePosts(platform: 'tiktok' | 'instagram', handle: string): Promise<ProfilePost[]>;
+  fetchProfilePosts(
+    platform: 'tiktok' | 'instagram',
+    handle: string,
+    options?: FetchProfilePostsOptions
+  ): Promise<ProfilePost[]>;
   /**
    * Downloads the real video file and (best-effort) transcribes it, for the
    * visual/audio enrichment pass — distinct from fetchPost, which never
@@ -293,7 +311,11 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
         followerCount,
       };
     },
-    async fetchProfilePosts(platform: 'tiktok' | 'instagram', handle: string): Promise<ProfilePost[]> {
+    async fetchProfilePosts(
+      platform: 'tiktok' | 'instagram',
+      handle: string,
+      options: FetchProfilePostsOptions = {}
+    ): Promise<ProfilePost[]> {
       const actorId = APIFY_ACTORS[platform];
       let lastError: unknown;
       for (let attempt = 0; attempt <= retryAttempts; attempt++) {
@@ -306,7 +328,15 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
             maxPollAttempts,
             sleep,
           });
-          return items.map((item) => normalizeProfilePost(platform, item as Record<string, unknown>));
+          const posts = items.map((item) => normalizeProfilePost(platform, item as Record<string, unknown>));
+
+          if (options.includeFollowerCount && platform === 'instagram' && posts.length > 0 && posts.every((post) => post.followerCount === undefined)) {
+            const followerCount = await fetchInstagramFollowerCount(handle.replace(/^@/, ''), apiToken);
+            if (followerCount !== undefined) {
+              return posts.map((post) => ({ ...post, followerCount }));
+            }
+          }
+          return posts;
         } catch (err) {
           lastError = err;
           if (attempt < retryAttempts) {

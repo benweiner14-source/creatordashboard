@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   handleAddWatchlistEntry,
   handleListWatchlist,
@@ -335,6 +335,30 @@ describe('handleRefreshWatchlistEntry', () => {
     expect(entry.videoCount).toBe(2);
     // 24000 views over 24h ranks above 6000 over 48h.
     expect(entry.topPosts.map((p) => Math.round(p.viewsPerHour))).toEqual([1000, 125]);
+  });
+
+  it('asks the scraper for a reliable follower count, since Instagram entries otherwise never get one', async () => {
+    const fetchProfilePosts = vi.fn().mockResolvedValue([
+      {
+        platform: 'instagram',
+        id: 'p1',
+        caption: 'A reel',
+        permalink: 'https://www.instagram.com/p/p1/',
+        publishedAt: '2026-09-09T12:00:00Z',
+        viewCount: 5000,
+        likeCount: 200,
+        commentCount: 10,
+        followerCount: 12000,
+      },
+    ]);
+    const deps = makeDeps({
+      scraperClient: { ...createFakeScraperClient(), fetchProfilePosts },
+    });
+    const entryId = await addEntry(deps, 'https://www.instagram.com/creator');
+
+    await handleRefreshWatchlistEntry(deps, { profileId: 'p1', ip: '203.0.113.1', entryId, now: new Date('2026-09-10T12:00:00Z') });
+
+    expect(fetchProfilePosts).toHaveBeenCalledWith('instagram', 'creator', { includeFollowerCount: true });
   });
 
   it('falls back to a null subscriber count when the scraper returns no follower count', async () => {

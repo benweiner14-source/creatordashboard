@@ -229,7 +229,7 @@ async function fetchChannelSnapshotInput(
     };
   }
 
-  const scraped = await deps.scraperClient.fetchProfilePosts(entry.platform, entry.handle);
+  const scraped = await deps.scraperClient.fetchProfilePosts(entry.platform, entry.handle, { includeFollowerCount: true });
   // Apify doesn't reliably expose a channel-level lifetime view total for
   // TikTok/Instagram the way YouTube's channels.list statistics does, so
   // totalViewCount/videoCount here are a sum over the fetched pool (up to 50

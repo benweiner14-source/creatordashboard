@@ -321,6 +321,99 @@ describe('createApifyScraperClient', () => {
         expect(posts[0].followerCount).toBe(8000);
       });
 
+      it('falls back to a details-scrape call for Instagram when includeFollowerCount is set and no item carried one', async () => {
+        // Confirmed live (2026-09-18): a resultsType:"posts" Instagram scrape
+        // never includes followersCount on any item, unlike TikTok's
+        // authorMeta.fans -- this is the fetchPost/fetchInstagramFollowerCount
+        // fallback, now also available to fetchProfilePosts callers who ask
+        // for it (Watchlist), without changing the default (cheaper) behavior
+        // for callers who don't (Strategy Breakdown, Recap Card).
+        const fetchMock = vi
+          .fn()
+          // start run
+          .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { id: 'run-1', defaultDatasetId: 'dataset-1' } }) })
+          // poll: succeeded
+          .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { status: 'SUCCEEDED' } }) })
+          // dataset items -- no followersCount on either item
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => [
+              { id: '1', caption: 'Post 1', timestamp: '2026-08-01T00:00:00Z', viewCount: 100, likesCount: 5, commentCount: 1, url: 'https://www.instagram.com/p/1/' },
+              { id: '2', caption: 'Post 2', timestamp: '2026-08-02T00:00:00Z', viewCount: 200, likesCount: 6, commentCount: 2, url: 'https://www.instagram.com/p/2/' },
+            ],
+          })
+          // the extra details-scrape fallback call
+          .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ followersCount: 55000 }] });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const client = createApifyScraperClient('test-token', { sleep: async () => {} });
+        const posts = await client.fetchProfilePosts('instagram', 'creator', { includeFollowerCount: true });
+
+        expect(posts[0].followerCount).toBe(55000);
+        expect(posts[1].followerCount).toBe(55000);
+        expect(String(fetchMock.mock.calls[3][1].body)).toContain('"resultsType":"details"');
+      });
+
+      it('does not make the extra details-scrape call when includeFollowerCount is not set', async () => {
+        const fetchMock = vi
+          .fn()
+          .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { id: 'run-1', defaultDatasetId: 'dataset-1' } }) })
+          .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { status: 'SUCCEEDED' } }) })
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => [{ id: '1', caption: 'Post 1', timestamp: '2026-08-01T00:00:00Z', viewCount: 100, likesCount: 5, commentCount: 1 }],
+          });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const client = createApifyScraperClient('test-token', { sleep: async () => {} });
+        const posts = await client.fetchProfilePosts('instagram', 'creator');
+
+        expect(posts[0].followerCount).toBeUndefined();
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+      });
+
+      it('does not make the extra details-scrape call for TikTok even with includeFollowerCount set, since authorMeta.fans is already reliable', async () => {
+        const fetchMock = vi
+          .fn()
+          .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { id: 'run-1', defaultDatasetId: 'dataset-1' } }) })
+          .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { status: 'SUCCEEDED' } }) })
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => [
+              { id: '1', text: 'Post', createTimeISO: '2026-08-01T00:00:00Z', playCount: 100, diggCount: 5, commentCount: 1, authorMeta: { fans: 42000 } },
+            ],
+          });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const client = createApifyScraperClient('test-token', { sleep: async () => {} });
+        const posts = await client.fetchProfilePosts('tiktok', 'creator', { includeFollowerCount: true });
+
+        expect(posts[0].followerCount).toBe(42000);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+      });
+
+      it('leaves followerCount undefined when the details-scrape fallback also fails', async () => {
+        const fetchMock = vi
+          .fn()
+          .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { id: 'run-1', defaultDatasetId: 'dataset-1' } }) })
+          .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { status: 'SUCCEEDED' } }) })
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => [{ id: '1', caption: 'Post 1', timestamp: '2026-08-01T00:00:00Z', viewCount: 100, likesCount: 5, commentCount: 1 }],
+          })
+          .mockResolvedValueOnce({ ok: false, status: 500 });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const client = createApifyScraperClient('test-token', { sleep: async () => {} });
+        const posts = await client.fetchProfilePosts('instagram', 'creator', { includeFollowerCount: true });
+
+        expect(posts[0].followerCount).toBeUndefined();
+      });
+
       it('leaves followerCount undefined when the actor run did not include one', async () => {
         const fetchMock = vi
           .fn()
