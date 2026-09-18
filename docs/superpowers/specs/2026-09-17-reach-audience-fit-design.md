@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-17
 **Classification:** Architectural (per `brainstorming`) — new scoring dimension, DB migration, new per-platform data fetching, rebalanced weighting. Reuses the existing 4-dimension diagnostic pipeline's shape.
-**Status:** Approved for planning. Decisions below were reached conversationally with the product owner (a 10+ year industry veteran), grounded against a real 20-post sample pulled live via Apify across 5 niches during this session's calibration exercise.
+**Status:** Approved for planning. Decisions below were reached conversationally with the product owner (a 10+ year industry veteran), grounded against a real 20-post sample pulled live via Apify across 5 niches during this session's calibration exercise. **Superseded in part on 2026-09-18:** the flat weak/moderate (0.1x) and moderate/strong (2.0x) boundary constants described in Decision 2 and implemented in Section (below) were replaced by five follower-count-tier-specific boundary pairs — see `docs/superpowers/specs/2026-09-18-reach-follower-band-thresholds-design.md`. Everything else in this spec (the dimension's existence, formula shape, weighting, missing-data handling, platform data-fetching) is unchanged and still current.
 
 ## What this is
 
