@@ -31,6 +31,8 @@ function makeDeps(overrides: Partial<WarroomCronDeps> = {}): { deps: WarroomCron
     discoverYoutube: async () => emptyResult(),
     discoverTikTok: async () => emptyResult(),
     discoverInstagram: async () => emptyResult(),
+    discoverTikTokBigAccounts: async () => emptyResult(),
+    discoverInstagramBigAccounts: async () => emptyResult(),
     insertAlert: async ({ post: p, severity }) => {
       inserted.push({ post: p, severity });
       return { inserted: true };
@@ -80,6 +82,32 @@ describe('runWarroomCron', () => {
     const { deps, inserted } = makeDeps({
       discoverYoutube: async () => ({ posts: [post()], errors: [] }),
       discoverTikTok: async () => { throw new Error('tiktok is down'); },
+    });
+    const result = await runWarroomCron(deps, NOW);
+    expect(result.inserted).toBe(1);
+    expect(inserted).toHaveLength(1);
+  });
+
+  it('includes posts discovered via the big-account TikTok and Instagram scrapers', async () => {
+    const { deps, inserted } = makeDeps({
+      discoverTikTokBigAccounts: async () => ({ posts: [post({ platform: 'tiktok', externalPostId: 'bt1', viewCount: 1_000_000 })], errors: [] }),
+      discoverInstagramBigAccounts: async () => ({
+        posts: [post({ platform: 'instagram', externalPostId: 'bi1', engagementCount: 20_000 })],
+        errors: [],
+      }),
+    });
+    const result = await runWarroomCron(deps, NOW);
+    expect(result.inserted).toBe(2);
+    const insertedIds = inserted.map((c) => c.post.externalPostId).sort();
+    expect(insertedIds).toEqual(['bi1', 'bt1']);
+  });
+
+  it('continues processing when a big-account discovery source rejects', async () => {
+    const { deps, inserted } = makeDeps({
+      discoverYoutube: async () => ({ posts: [post()], errors: [] }),
+      discoverTikTokBigAccounts: async () => {
+        throw new Error('tiktok big-account scrape is down');
+      },
     });
     const result = await runWarroomCron(deps, NOW);
     expect(result.inserted).toBe(1);

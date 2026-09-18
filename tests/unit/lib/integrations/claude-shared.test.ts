@@ -67,4 +67,31 @@ describe('requestClaudeJson', () => {
     const body = JSON.parse(options.body as string);
     expect(body.messages[0].content).toEqual(blocks);
   });
+
+  it('accepts a content-block array with an image block and forwards it verbatim', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: [{ text: '{"ok":true}' }] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const blocks = [
+      { type: 'text' as const, text: 'Look at this frame.' },
+      { type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/jpeg' as const, data: 'ZmFrZS1qcGVn' } },
+    ];
+
+    const result = await requestClaudeJson<{ ok: boolean }>({
+      apiKey: 'key',
+      model: 'claude-sonnet-5',
+      maxTokens: 100,
+      system: 'sys',
+      userContent: blocks,
+    });
+
+    expect(result).toEqual({ ok: true });
+    const [, options] = fetchMock.mock.calls[0];
+    const body = JSON.parse(options.body as string);
+    expect(body.messages[0].content).toEqual(blocks);
+  });
 });

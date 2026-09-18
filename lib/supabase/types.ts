@@ -47,6 +47,16 @@ export interface Database {
           report_json: unknown | null;
           error_message: string | null;
           created_at: string;
+          visual_audio_status: 'pending' | 'complete' | 'failed' | null;
+          visual_audio_narrative: string | null;
+          visual_audio_error: string | null;
+          visual_audio_is_episodic: boolean | null;
+          visual_audio_series_label: string | null;
+          comment_analysis_status: 'pending' | 'complete' | 'failed' | null;
+          comment_analysis_narrative: string | null;
+          comment_analysis_has_content_request: boolean | null;
+          comment_analysis_content_request_summary: string | null;
+          comment_analysis_error: string | null;
         };
         Insert: {
           id?: string;
@@ -63,6 +73,16 @@ export interface Database {
           report_json?: unknown | null;
           error_message?: string | null;
           created_at?: string;
+          visual_audio_status?: 'pending' | 'complete' | 'failed' | null;
+          visual_audio_narrative?: string | null;
+          visual_audio_error?: string | null;
+          visual_audio_is_episodic?: boolean | null;
+          visual_audio_series_label?: string | null;
+          comment_analysis_status?: 'pending' | 'complete' | 'failed' | null;
+          comment_analysis_narrative?: string | null;
+          comment_analysis_has_content_request?: boolean | null;
+          comment_analysis_content_request_summary?: string | null;
+          comment_analysis_error?: string | null;
         };
         Update: Partial<Database['public']['Tables']['diagnostics']['Insert']>;
         Relationships: [];

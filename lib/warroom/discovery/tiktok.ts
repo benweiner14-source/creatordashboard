@@ -1,4 +1,5 @@
 import type { DiscoveredPost, DiscoveryResult } from '../types';
+import { GTA6_BIG_ACCOUNTS_TIKTOK } from './big-accounts';
 
 // Same class of benign, non-failure markers the reference Social War Room
 // system's Health Check ignores (design spec §2/§4) — a "no results found"
@@ -80,6 +81,51 @@ export async function searchGta6TikToks(apifyToken: string): Promise<DiscoveryRe
     }
     const normalized = normalizeTikTokPost(item);
     if (normalized) posts.push(normalized);
+  }
+  return { posts, errors };
+}
+
+/**
+ * The reference Social War Room system's curated "big account" profile-scrape
+ * mode (design spec §2/§9 non-goal, now implemented as a fast-follow) — same
+ * actor as searchGta6TikToks, but scraping a known list of profiles directly
+ * instead of hashtag/keyword search. Every returned post is marked
+ * isBigAccount so scoring.ts applies the looser, reference-tuned threshold
+ * tier for known accounts.
+ */
+export async function searchGta6TikTokBigAccounts(apifyToken: string): Promise<DiscoveryResult> {
+  const url = new URL('https://api.apify.com/v2/acts/clockworks~tiktok-scraper/run-sync-get-dataset-items');
+  url.searchParams.set('token', apifyToken);
+  url.searchParams.set('timeout', '240');
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      profiles: GTA6_BIG_ACCOUNTS_TIKTOK.map((handle) => `https://www.tiktok.com/@${handle}`),
+      resultsType: 'posts',
+      maxItems: 45,
+      shouldDownloadVideos: false,
+      shouldDownloadCovers: false,
+      publishTime: 'LAST_24H',
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Apify TikTok scraper request failed with status ${response.status}: ${body.slice(0, 500)}`);
+  }
+  const rawItems = await response.json();
+  const items: RawTikTokItem[] = Array.isArray(rawItems) ? rawItems : [];
+
+  const posts: DiscoveredPost[] = [];
+  const errors: string[] = [];
+  for (const item of items) {
+    if (item.error) {
+      if (!BENIGN_ERRORS.has(item.error)) errors.push(item.error);
+      continue;
+    }
+    const normalized = normalizeTikTokPost(item);
+    if (normalized) posts.push({ ...normalized, isBigAccount: true });
   }
   return { posts, errors };
 }

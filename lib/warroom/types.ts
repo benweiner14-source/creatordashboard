@@ -9,6 +9,11 @@ export interface DiscoveredPost {
   viewCount: number;
   engagementCount: number;
   publishedAt: string; // ISO 8601
+  // Set by the curated-profile "big account" discovery clients
+  // (discovery/big-accounts.ts); absent/false for standard hashtag/keyword
+  // discovery. Scoring-input only, not a warroom_alerts column — dropped
+  // when the row is inserted (app/api/cron/warroom/route.ts).
+  isBigAccount?: boolean;
 }
 
 /**

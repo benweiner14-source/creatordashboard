@@ -250,6 +250,10 @@ function IdeasPageInner() {
 
         {state.status === 'ideasReady' && (
           <div className="flex flex-col gap-4">
+            <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+              Tip: publishing a Reel directly through Meta&apos;s Edits app currently gets a temporary reach boost,
+              per Instagram&apos;s Adam Mosseri (Aug 2025) — not guaranteed to last.
+            </p>
             {warroomContext && !contextConsumed ? (
               <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
                 You started from a War Room alert, but this week&apos;s ideas were already generated — new ideas are

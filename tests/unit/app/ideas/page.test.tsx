@@ -65,6 +65,40 @@ describe('IdeasPage', () => {
     expect(screen.getByText(/Bake a loaf in under 2 hours on camera/)).toBeInTheDocument();
   });
 
+  it('shows a one-time tip about Meta\'s Edits app above the idea list once ideas are ready', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          niche: 'home baking',
+          digest: {
+            id: 'digest-1',
+            weekStart: '2026-08-10',
+            contentIdeas: [
+              {
+                workingTitle: 'Sourdough Speedrun',
+                pitch: 'Bake a loaf in under 2 hours on camera',
+                medium: 'reel',
+                format: 'Speed Recap',
+                whyItsHotNow: 'Sourdough resurgence trending this week',
+                sourceUrl: 'https://example.com/a',
+                whyItRanksHere: 'High reach from trend-jacking',
+                kpiSignals: ['reach'],
+                reelDetails: { suggestedLengthSeconds: 60, style: 'talking-head' },
+                carouselDetails: null,
+              },
+            ],
+          },
+        }),
+      })
+    );
+    render(<IdeasPage />);
+    await waitFor(() => expect(screen.getByText('Sourdough Speedrun')).toBeInTheDocument());
+    expect(screen.getByText(/Meta's Edits app/)).toBeInTheDocument();
+    expect(screen.getByText(/temporary reach boost/i)).toBeInTheDocument();
+  });
+
   it('does not show a cached notice on plain bootstrap of an existing digest', async () => {
     vi.stubGlobal(
       'fetch',

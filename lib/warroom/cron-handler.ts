@@ -22,6 +22,8 @@ export interface WarroomCronDeps {
   discoverYoutube: () => Promise<DiscoveryResult>;
   discoverTikTok: () => Promise<DiscoveryResult>;
   discoverInstagram: () => Promise<DiscoveryResult>;
+  discoverTikTokBigAccounts: () => Promise<DiscoveryResult>;
+  discoverInstagramBigAccounts: () => Promise<DiscoveryResult>;
   insertAlert: (params: { post: DiscoveredPost; severity: WarroomSeverity; now: Date }) => Promise<{ inserted: boolean }>;
   pauseForBudget: (reason: string) => Promise<void>;
   getOptedInEmails: () => Promise<string[]>;
@@ -40,8 +42,10 @@ const SEVERITY_RANK: Record<WarroomSeverity, number> = { already_viral: 3, going
 /**
  * One pass (currently scheduled daily, not hourly as originally designed —
  * see the comment above app/api/cron/warroom/route.ts's maxDuration for
- * why): gate on pause/daily-cap, discover in parallel across all three
- * platforms, score, cap to the top WARROOM_PER_RUN_CAP alerts,
+ * why): gate on pause/daily-cap, discover in parallel across all five
+ * sources (hashtag/keyword discovery on all three platforms, plus the
+ * curated "big account" profile scrape on TikTok and Instagram), score,
+ * cap to the top WARROOM_PER_RUN_CAP alerts,
  * insert (relying on the DB's unique constraint for cross-run dedup), and
  * fan out opt-in email for the top two severities. See design spec §4.
  */
@@ -55,7 +59,13 @@ export async function runWarroomCron(deps: WarroomCronDeps, now: Date): Promise<
     return { skipped: 'daily_cap', inserted: 0 };
   }
 
-  const settled = await Promise.allSettled([deps.discoverYoutube(), deps.discoverTikTok(), deps.discoverInstagram()]);
+  const settled = await Promise.allSettled([
+    deps.discoverYoutube(),
+    deps.discoverTikTok(),
+    deps.discoverInstagram(),
+    deps.discoverTikTokBigAccounts(),
+    deps.discoverInstagramBigAccounts(),
+  ]);
 
   const allErrors: string[] = [];
   const allPosts: DiscoveredPost[] = [];

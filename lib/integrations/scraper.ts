@@ -29,6 +29,37 @@ export interface ProfilePost {
   permalink: string;
 }
 
+export interface FetchProfilePostsOptions {
+  /**
+   * Instagram's resultsType:"posts" scrape never includes followersCount on
+   * any item (confirmed live, 2026-09-18) -- unlike TikTok's authorMeta.fans,
+   * which is present on every item. Set this to fall back to the same extra
+   * resultsType:"details" call fetchPost already uses for a reliable
+   * Instagram follower count. Defaults to false/undefined: Strategy
+   * Breakdown and Recap Card, the other two callers of fetchProfilePosts,
+   * never read followerCount, so they don't pay for the extra call unless
+   * they opt in.
+   */
+  includeFollowerCount?: boolean;
+}
+
+export interface PostComment {
+  text: string;
+  likeCount: number;
+}
+
+export interface DownloadedVideo {
+  videoUrl: string; // fetchable, includes the Apify token as a query param
+  durationSeconds: number;
+  transcript: string | null; // best-effort; null if unavailable
+}
+
+export class PlatformNotSupportedError extends Error {
+  constructor(public readonly platform: string) {
+    super(`Visual/audio analysis is not yet available for ${platform}.`);
+  }
+}
+
 export interface ScraperClient {
   detectPlatform(url: string): 'tiktok' | 'instagram' | null;
   fetchPost(url: string): Promise<SocialPostMetadata>;
@@ -37,7 +68,28 @@ export interface ScraperClient {
    * single-post call because a profile crawl runs long enough to risk the
    * sync endpoint's response-timeout ceiling. See spec §2.1.
    */
-  fetchProfilePosts(platform: 'tiktok' | 'instagram', handle: string): Promise<ProfilePost[]>;
+  fetchProfilePosts(
+    platform: 'tiktok' | 'instagram',
+    handle: string,
+    options?: FetchProfilePostsOptions
+  ): Promise<ProfilePost[]>;
+  /**
+   * Downloads the real video file and (best-effort) transcribes it, for the
+   * visual/audio enrichment pass — distinct from fetchPost, which never
+   * downloads media. Instagram throws PlatformNotSupportedError until its own
+   * video-acquisition path is validated and built. See design spec §2.
+   */
+  fetchVideoForAnalysis(platform: 'tiktok' | 'instagram', url: string): Promise<DownloadedVideo>;
+  /**
+   * Real comment text + like counts for the comment-content analysis pass.
+   * Neither platform's actor reliably returns comments pre-sorted by
+   * popularity (confirmed live, 2026-09-18: TikTok's raw order roughly but
+   * not strictly clusters high-like comments first; Instagram's
+   * `latestComments` field is literally recency-ordered) -- callers get an
+   * explicit descending-by-likeCount sort, truncated to `limit`, regardless
+   * of platform.
+   */
+  fetchComments(platform: 'tiktok' | 'instagram', url: string, limit: number): Promise<PostComment[]>;
 }
 
 export function detectSocialPlatform(url: string): 'tiktok' | 'instagram' | null {
@@ -55,6 +107,13 @@ const APIFY_ACTORS: Record<'tiktok' | 'instagram', string> = {
   tiktok: 'clockworks~tiktok-scraper',
   instagram: 'apify~instagram-scraper',
 };
+
+// Same publisher as clockworks~tiktok-scraper, but the main scraper's
+// posts-type response never includes comment text (confirmed live,
+// 2026-09-18) -- this dedicated actor is the only way to get it for TikTok.
+// Instagram doesn't need an equivalent: apify~instagram-scraper's own
+// posts-type response already includes a latestComments array for free.
+const TIKTOK_COMMENTS_ACTOR = 'clockworks~tiktok-comments-scraper';
 
 // Bounds cost per creator regardless of how prolific they are — the
 // month-filter in lib/recap/aggregate.ts then narrows this down further.
@@ -131,6 +190,54 @@ async function fetchInstagramFollowerCount(ownerUsername: string, apiToken: stri
   } catch {
     // Never let a failed follower-count lookup fail the whole diagnostic — see spec §2 / Global Constraints.
     return undefined;
+  }
+}
+
+function buildVideoDownloadInput(url: string): Record<string, unknown> {
+  return {
+    postURLs: [url],
+    shouldDownloadVideos: true,
+    downloadSubtitlesOptions: 'TRANSCRIBE_ALL_VIDEOS',
+  };
+}
+
+const APIFY_API_HOSTNAME = 'api.apify.com';
+
+// Adds the Apify token via URL/searchParams rather than string concatenation:
+// concatenating `?token=` onto a URL that already carries a query string
+// produces a malformed double-`?` URL.
+function withApifyToken(rawUrl: string, apiToken: string): string {
+  const url = new URL(rawUrl);
+  url.searchParams.set('token', apiToken);
+  return url.toString();
+}
+
+// The downloadable video URL is either an api.apify.com key-value-store URL
+// (mediaUrls[0], which needs the token to be readable) or TikTok's own CDN
+// (videoMeta.downloadAddr, which is already signed and publicly fetchable).
+// Only ever attach our Apify token to Apify's own host — appending it to a
+// third-party CDN URL would leak the token into that host's access logs.
+function withApifyTokenIfApifyHost(rawUrl: string, apiToken: string): string {
+  try {
+    const url = new URL(rawUrl);
+    if (url.hostname !== APIFY_API_HOSTNAME) return rawUrl;
+    url.searchParams.set('token', apiToken);
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+async function fetchTranscript(transcriptionLink: string | undefined, apiToken: string): Promise<string | null> {
+  if (!transcriptionLink) return null;
+  try {
+    const response = await fetch(withApifyToken(transcriptionLink, apiToken));
+    if (!response.ok) return null;
+    const text = (await response.text()).trim();
+    return text.length > 0 ? text : null;
+  } catch {
+    // Never let a failed transcript fetch fail the whole enrichment — see design spec §7.
+    return null;
   }
 }
 
@@ -226,7 +333,11 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
         followerCount,
       };
     },
-    async fetchProfilePosts(platform: 'tiktok' | 'instagram', handle: string): Promise<ProfilePost[]> {
+    async fetchProfilePosts(
+      platform: 'tiktok' | 'instagram',
+      handle: string,
+      options: FetchProfilePostsOptions = {}
+    ): Promise<ProfilePost[]> {
       const actorId = APIFY_ACTORS[platform];
       let lastError: unknown;
       for (let attempt = 0; attempt <= retryAttempts; attempt++) {
@@ -239,7 +350,15 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
             maxPollAttempts,
             sleep,
           });
-          return items.map((item) => normalizeProfilePost(platform, item as Record<string, unknown>));
+          const posts = items.map((item) => normalizeProfilePost(platform, item as Record<string, unknown>));
+
+          if (options.includeFollowerCount && platform === 'instagram' && posts.length > 0 && posts.every((post) => post.followerCount === undefined)) {
+            const followerCount = await fetchInstagramFollowerCount(handle.replace(/^@/, ''), apiToken);
+            if (followerCount !== undefined) {
+              return posts.map((post) => ({ ...post, followerCount }));
+            }
+          }
+          return posts;
         } catch (err) {
           lastError = err;
           if (attempt < retryAttempts) {
@@ -248,6 +367,72 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
         }
       }
       throw lastError;
+    },
+    async fetchVideoForAnalysis(platform: 'tiktok' | 'instagram', url: string): Promise<DownloadedVideo> {
+      if (platform === 'instagram') {
+        throw new PlatformNotSupportedError('instagram');
+      }
+      const runUrl = `https://api.apify.com/v2/acts/${APIFY_ACTORS.tiktok}/run-sync-get-dataset-items?token=${apiToken}`;
+      const response = await fetch(runUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildVideoDownloadInput(url)),
+      });
+      if (!response.ok) {
+        throw new Error(`Apify video download failed with status ${response.status}`);
+      }
+      const items = await response.json();
+      const item = items[0];
+      if (!item) {
+        throw new Error(`Apify returned no data for ${url}`);
+      }
+      const videoMeta = item.videoMeta ?? {};
+      const rawVideoUrl = item.mediaUrls?.[0] ?? videoMeta.downloadAddr;
+      if (!rawVideoUrl) {
+        throw new Error(`No downloadable video found for ${url}`);
+      }
+      const transcript = await fetchTranscript(videoMeta.transcriptionLink, apiToken);
+      return {
+        videoUrl: withApifyTokenIfApifyHost(String(rawVideoUrl), apiToken),
+        durationSeconds: Number(videoMeta.duration ?? 0),
+        transcript,
+      };
+    },
+    async fetchComments(platform: 'tiktok' | 'instagram', url: string, limit: number): Promise<PostComment[]> {
+      const actorId = platform === 'tiktok' ? TIKTOK_COMMENTS_ACTOR : APIFY_ACTORS.instagram;
+      const runUrl = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${apiToken}`;
+      const response = await fetch(runUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          platform === 'tiktok'
+            ? { postURLs: [url], commentsPerPost: limit, maxRepliesPerComment: 0 }
+            : buildPostInput('instagram', url)
+        ),
+      });
+      if (!response.ok) {
+        throw new Error(`Apify comments scrape failed with status ${response.status}`);
+      }
+      const items = await response.json();
+      const rawComments: unknown[] =
+        platform === 'tiktok'
+          ? Array.isArray(items) ? items : []
+          : (items[0]?.latestComments ?? []);
+
+      const comments: PostComment[] = rawComments
+        .map((raw): PostComment | null => {
+          const item = raw as Record<string, unknown>;
+          const text = String(item.text ?? '').trim();
+          if (!text) return null;
+          const rawLikes = platform === 'tiktok' ? item.diggCount : item.likesCount;
+          return { text, likeCount: Number(rawLikes ?? 0) };
+        })
+        .filter((c): c is PostComment => c !== null);
+
+      // Neither actor reliably returns comments pre-sorted by popularity —
+      // see the ScraperClient interface doc comment.
+      comments.sort((a, b) => b.likeCount - a.likeCount);
+      return comments.slice(0, limit);
     },
   };
 }

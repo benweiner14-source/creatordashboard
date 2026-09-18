@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-17
 **Classification:** Architectural (per `brainstorming`) — new scoring dimension, DB migration, new per-platform data fetching, rebalanced weighting. Reuses the existing 4-dimension diagnostic pipeline's shape.
-**Status:** Approved for planning. Decisions below were reached conversationally with the product owner (a 10+ year industry veteran), grounded against a real 20-post sample pulled live via Apify across 5 niches during this session's calibration exercise.
+**Status:** Approved for planning. Decisions below were reached conversationally with the product owner (a 10+ year industry veteran), grounded against a real 20-post sample pulled live via Apify across 5 niches during this session's calibration exercise. **Superseded in part on 2026-09-18:** the flat weak/moderate (0.1x) and moderate/strong (2.0x) boundary constants described in Decision 2 and implemented in Section (below) were replaced by five follower-count-tier-specific boundary pairs — see `docs/superpowers/specs/2026-09-18-reach-follower-band-thresholds-design.md`. Everything else in this spec (the dimension's existence, formula shape, weighting, missing-data handling, platform data-fetching) is unchanged and still current.
 
 ## What this is
 
@@ -23,7 +23,7 @@ The formula and thresholds were derived by: (a) pulling 20 real TikTok posts acr
 
 ## Non-goals (explicitly deferred, do not fold into this build)
 
-- **V2: historical/percentile-based comparison** ("this is your best video in 3 months") — requires comparing a post against a specific account's own historical distribution, not a fixed ratio. The `diagnostics` table already accumulates per-profile history, so this becomes possible over time regardless; a bulk historical dataset (offered by the product owner, not yet provided) would accelerate it. Separate future brainstorm.
+- ~~**V2: historical/percentile-based comparison**~~ **Implemented as a fast-follow (2026-09-18), narrowly.** `lib/diagnostic/reach-history.ts`'s `describeReachRelativeToHistory` compares a post's Reach score against the same profile's last 20 prior Reach scores (count-based window; the bulk historical dataset mentioned here was never provided, so this launched with zero seed data and builds up organically) — but only as an **additional narrative reason appended to `scores.reach.reasons`**, never as a change to the numeric score/label. A purely self-referential score would have reintroduced the exact blind spot Reach exists to fix (a chronically-weak account never being told so, since everything looks normal relative to its own low bar) — the cross-account, follower-tier-calibrated score stays authoritative. Needs at least 3 prior scored diagnostics before saying anything; below that, no history reason is added.
 - **"Post too new to score reliably"** — discovered during calibration (a post 1 hour old scored as if mature) but is a pre-existing gap across all dimensions, not specific to Reach. Separate fix.
 - **Visual/audio content analysis** (on-screen text density, aspect-ratio/repurposed-broadcast detection, hook-content recognition) — a much larger, separate initiative, paused mid-brainstorm to do this calibration exercise and build Reach first. Resume separately.
 - **Comment-content analysis, fake-engagement/bot detection, trending-sound velocity, native-editor-app boost, episodic-content signal, Substack strategy-newsletter ingestion** — all surfaced during the calibration exercise as real, distinct ideas. Parked, not scoped here.

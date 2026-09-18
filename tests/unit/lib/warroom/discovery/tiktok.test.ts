@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { searchGta6TikToks, normalizeTikTokPost } from '@/lib/warroom/discovery/tiktok';
+import { searchGta6TikToks, searchGta6TikTokBigAccounts, normalizeTikTokPost } from '@/lib/warroom/discovery/tiktok';
+import { GTA6_BIG_ACCOUNTS_TIKTOK } from '@/lib/warroom/discovery/big-accounts';
 
 describe('normalizeTikTokPost', () => {
   it('maps a raw TikTok scraper item to a DiscoveredPost', () => {
@@ -88,5 +89,70 @@ describe('searchGta6TikToks', () => {
   it('returns no posts when a 200 response body is not an array', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ error: 'something' }) }));
     await expect(searchGta6TikToks('test-token')).resolves.toEqual({ posts: [], errors: [] });
+  });
+});
+
+describe('searchGta6TikTokBigAccounts', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('requests the curated profile list and marks every returned post isBigAccount', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init.body as string);
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: '1', playCount: 300_000, diggCount: 5000, commentCount: 100, createTime: 1757930400, authorMeta: { uniqueId: 'fubzy04' } },
+          ],
+        });
+      })
+    );
+
+    const result = await searchGta6TikTokBigAccounts('test-token');
+
+    expect(capturedBody?.profiles).toEqual(GTA6_BIG_ACCOUNTS_TIKTOK.map((handle) => `https://www.tiktok.com/@${handle}`));
+    expect(result.posts).toHaveLength(1);
+    expect(result.posts[0].isBigAccount).toBe(true);
+  });
+
+  it('skips benign error items without reporting them', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [{ error: 'not_found' }],
+      })
+    );
+
+    const result = await searchGta6TikTokBigAccounts('test-token');
+
+    expect(result.posts).toEqual([]);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('reports a non-benign error item without throwing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [{ error: 'Apify hard limit exceeded for this month' }] })
+    );
+
+    const result = await searchGta6TikTokBigAccounts('test-token');
+
+    expect(result.posts).toEqual([]);
+    expect(result.errors).toEqual(['Apify hard limit exceeded for this month']);
+  });
+
+  it('throws when the Apify request itself responds with a non-2xx status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => '' }));
+    await expect(searchGta6TikTokBigAccounts('test-token')).rejects.toThrow('status 500');
+  });
+
+  it('returns no posts when a 200 response body is not an array', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ error: 'something' }) }));
+    await expect(searchGta6TikTokBigAccounts('test-token')).resolves.toEqual({ posts: [], errors: [] });
   });
 });
