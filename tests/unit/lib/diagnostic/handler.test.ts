@@ -13,6 +13,7 @@ function makeDeps(overrides: Partial<Parameters<typeof handleDiagnosticRequest>[
     claudeClient: createFakeClaudeReportClient(),
     ipSalt: 'test-salt',
     saveDiagnostic: async () => ({ id: 'diagnostic-1' }),
+    getRecentReachScores: async () => [],
     ...overrides,
   };
 }
@@ -157,6 +158,64 @@ describe('handleDiagnosticRequest', () => {
 
     expect(result.status).toBe(200);
     expect(savedReport.scores.reach).toBeNull();
+  });
+
+  it('appends a per-account history reason when enough prior Reach scores exist', async () => {
+    const scraperClient = createFakeScraperClient({ followerCount: 5_400_000, viewCount: 34_000, likeCount: 500 });
+    let savedReport: any;
+    const deps = makeDeps({
+      scraperClient,
+      getRecentReachScores: async () => [10, 20, 30],
+      saveDiagnostic: async ({ report }) => {
+        savedReport = report;
+        return { id: 'diagnostic-1' };
+      },
+    });
+
+    await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.tiktok.com/@user/video/123',
+    });
+
+    expect(savedReport.scores.reach).not.toBeNull();
+    expect(savedReport.scores.reach.reasons.length).toBeGreaterThan(1);
+  });
+
+  it('does not append a history reason when there is not enough prior history', async () => {
+    const scraperClient = createFakeScraperClient({ followerCount: 5_400_000, viewCount: 34_000, likeCount: 500 });
+    let savedReport: any;
+    const deps = makeDeps({
+      scraperClient,
+      getRecentReachScores: async () => [10, 20], // below the minimum
+      saveDiagnostic: async ({ report }) => {
+        savedReport = report;
+        return { id: 'diagnostic-1' };
+      },
+    });
+
+    await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.tiktok.com/@user/video/123',
+    });
+
+    expect(savedReport.scores.reach.reasons.length).toBe(1);
+  });
+
+  it('never calls getRecentReachScores when Reach itself was omitted', async () => {
+    const youtubeClient = createFakeYouTubeClient({ channelId: 'UCabc123' }, [], undefined, null); // hidden subscriber count -> no Reach
+    const getRecentReachScores = vi.fn(async () => [10, 20, 30]);
+    const deps = makeDeps({ youtubeClient, getRecentReachScores });
+
+    const result = await handleDiagnosticRequest(deps, {
+      profileId: 'profile-1',
+      ip: '203.0.113.1',
+      url: 'https://www.youtube.com/watch?v=abc123',
+    });
+
+    expect(result.status).toBe(200);
+    expect(getRecentReachScores).not.toHaveBeenCalled();
   });
 
   it('rejects an unsupported URL', async () => {

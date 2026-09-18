@@ -4,6 +4,7 @@ import type { YouTubeClient } from '@/lib/integrations/youtube';
 import type { ScraperClient } from '@/lib/integrations/scraper';
 import type { ClaudeReportClient } from '@/lib/integrations/claude';
 import { generateDiagnosticReport, type DiagnosticReport } from '@/lib/diagnostic/report';
+import { describeReachRelativeToHistory } from '@/lib/diagnostic/reach-history';
 
 export interface DiagnosticHandlerDeps {
   rateLimitStore: RateLimitStore;
@@ -17,6 +18,14 @@ export interface DiagnosticHandlerDeps {
     inputUrl: string;
     report: DiagnosticReport;
   }) => Promise<{ id: string }>;
+  /**
+   * This profile's most recent prior Reach scores (0-100), most-recent-first,
+   * excluding the diagnostic currently being generated -- used only to add
+   * an extra narrative reason (reach-history.ts), never to change the
+   * numeric Reach score itself. Bounded to a small window (e.g. last 20) by
+   * the implementation, not by this handler.
+   */
+  getRecentReachScores: (profileId: string) => Promise<number[]>;
 }
 
 export interface DiagnosticRequestContext {
@@ -121,6 +130,15 @@ export async function handleDiagnosticRequest(
     }
 
     const report = await generateDiagnosticReport({ platform, postStats, claudeClient: deps.claudeClient });
+
+    if (report.scores.reach) {
+      const pastScores = await deps.getRecentReachScores(context.profileId);
+      const historyReason = describeReachRelativeToHistory(report.scores.reach.score, pastScores);
+      if (historyReason) {
+        report.scores.reach = { ...report.scores.reach, reasons: [...report.scores.reach.reasons, historyReason] };
+      }
+    }
+
     const saved = await deps.saveDiagnostic({ profileId: context.profileId, platform, inputUrl: context.url, report });
 
     return { status: 200, body: { id: saved.id, report } };
