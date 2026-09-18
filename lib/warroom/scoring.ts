@@ -12,10 +12,11 @@ function ageMinutes(publishedAt: string, now: Date): number {
 
 /**
  * Thresholds for TikTok/Instagram are the reference Social War Room
- * system's real, tuned "Standard" tier (see design spec §3) — this build
- * only does hashtag/keyword discovery, so the reference's separate "big
- * account" tier (for a curated list of known profiles) does not apply.
- * YouTube has no reference precedent and uses this codebase's own
+ * system's real, tuned "Standard" tier (see design spec §3) for
+ * hashtag/keyword-discovered posts, plus its "big account" tier (§2/§9
+ * non-goal, later implemented — discovery/big-accounts.ts) for posts from
+ * the curated known-profile list, marked via `post.isBigAccount`. YouTube
+ * has no reference precedent (neither tier) and uses this codebase's own
  * computeViewsPerHour, the same function Watchlist/Recap/Strategy use.
  *
  * A post older than 48 hours is dropped before any tier check runs, full
@@ -28,6 +29,15 @@ export function classifySeverity(post: DiscoveredPost, now: Date): WarroomSeveri
   if (ageMin > MAX_AGE_MINUTES) return null;
 
   if (post.platform === 'tiktok') {
+    if (post.isBigAccount) {
+      // The reference's big-account TikTok tier has no already_viral branch —
+      // a known account's raw numbers are less surprising, so it only ever
+      // reaches going_viral/heating_up, never the top tier, no matter how
+      // large. Reproduced verbatim, not a bug.
+      if ((post.viewCount >= 200_000 || post.engagementCount >= 10_000) && ageMin <= 120) return 'going_viral';
+      if ((post.viewCount >= 75_000 || post.engagementCount >= 2_000) && ageMin <= 240) return 'heating_up';
+      return null;
+    }
     if (post.viewCount >= 1_000_000 || post.engagementCount >= 20_000) return 'already_viral';
     if ((post.viewCount >= 300_000 || post.engagementCount >= 8_000) && ageMin <= 180) return 'going_viral';
     if ((post.viewCount >= 100_000 || post.engagementCount >= 2_000) && ageMin <= 240) return 'heating_up';
@@ -35,6 +45,16 @@ export function classifySeverity(post: DiscoveredPost, now: Date): WarroomSeveri
   }
 
   if (post.platform === 'instagram') {
+    if (post.isBigAccount) {
+      // Unlike the standard IG tier (engagement-only), the reference's
+      // big-account tier also accepts a view-count path — a known account's
+      // view count is trustworthy at a glance, so it's checked directly
+      // instead of only inferring reach from engagement.
+      if ((post.viewCount >= 500_000 || post.engagementCount >= 20_000) && ageMin <= 1440) return 'already_viral';
+      if ((post.viewCount >= 200_000 || post.engagementCount >= 8_000) && ageMin <= 120) return 'going_viral';
+      if ((post.viewCount >= 50_000 || post.engagementCount >= 2_000) && ageMin <= 240) return 'heating_up';
+      return null;
+    }
     if (post.engagementCount >= 15_000) return 'already_viral';
     if (post.engagementCount >= 6_000 && ageMin <= 120) return 'going_viral';
     if (post.engagementCount >= 2_500 && ageMin <= 180) return 'heating_up';

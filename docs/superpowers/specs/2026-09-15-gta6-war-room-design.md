@@ -18,7 +18,7 @@ A native, GTA6-only real-time content-opportunity feed for Creator Dashboard, mo
 6. **Content Ideas link: a link, not a trigger.** Each alert has a "Generate an idea from this" link into `/ideas`, carrying the alert's caption as context. Nothing generates automatically.
 7. **Gating: subscription-gated like Recap/Strategy/Ideas**, not Watchlist's sign-in-only-view pattern — sign-in AND an active subscription are both required to view `/warroom`.
 8. **Reactivation after an Apify-budget pause: manual for v1.** No equivalent of the reference system's separate hourly "Credit Monitor" auto-reactivation workflow.
-9. **Scope cut vs. the reference system: no curated "big account" profile-scraping tier.** The reference runs two parallel discovery modes — broad hashtag/keyword search, and separately scraping a curated list of ~60-70 known team/media accounts' profiles directly (with looser thresholds for those accounts). This build does hashtag/keyword discovery only; the "big account" threshold tier and its curated handle lists don't apply here.
+9. **Scope cut vs. the reference system (original build): no curated "big account" profile-scraping tier.** The reference runs two parallel discovery modes — broad hashtag/keyword search, and separately scraping a curated list of ~60-70 known team/media accounts' profiles directly (with looser thresholds for those accounts). The original build did hashtag/keyword discovery only. **Implemented as a fast-follow on 2026-09-18** — see the Non-goals section below for what changed and why.
 
 ## Why this needs new integration work, not reuse
 
@@ -29,7 +29,7 @@ The good news: a real, production-tested reference implementation exists — the
 ## Non-goals
 
 - **No Twitter/X integration** (decision 2).
-- **No curated "big account" profile-scraping tier** (decision 9) — hashtag/keyword discovery only. A future fast-follow could add one, mirroring Watchlist's suggested-creator seed list, but it's not part of this build.
+- ~~**No curated "big account" profile-scraping tier**~~ **Implemented as a fast-follow (2026-09-18).** `lib/warroom/discovery/big-accounts.ts` holds the curated TikTok/Instagram handle lists (verified live via Apify, not assumed from memory); `searchGta6TikTokBigAccounts`/`searchGta6InstagramBigAccounts` scrape them directly (same actors as the reference's own Profiles nodes); `classifySeverity` branches on the resulting `DiscoveredPost.isBigAccount` flag to apply the reference's looser, real, tuned "big account" threshold tier (§3 below) instead of the Standard tier. No YouTube big-account tier — the reference never had one either.
 - **No per-subscriber feed personalization** by GTA6 sub-focus (decision 4) — a v2 candidate.
 - **No automatic Content Ideas generation** from an alert (decision 6) — a link, not a trigger.
 - **No auto-reactivation** after a budget pause (decision 8) — manual only.
@@ -133,9 +133,11 @@ Both reuse the reference's benign-vs-real-error distinction directly in their er
 
 **Existing env var reuse**: both Apify calls use `process.env.APIFY_API_TOKEN`, the same variable `createApifyScraperClient` already reads for Recap Card/Strategy Breakdown — no new secret to configure. This does mean War Room's Apify spend lands on the same Apify account/bill as the existing scraper usage; §9 covers cost implications.
 
+**`lib/warroom/discovery/big-accounts.ts`** (added 2026-09-18) — the curated "big account" tier's handle lists (`GTA6_BIG_ACCOUNTS_TIKTOK`, `GTA6_BIG_ACCOUNTS_INSTAGRAM`), verified live via Apify at write-time rather than assumed from memory. `searchGta6TikTokBigAccounts`/`searchGta6InstagramBigAccounts` (added to `discovery/tiktok.ts`/`discovery/instagram.ts`) hit the same two actors with `profiles`/`directUrls` instead of hashtags — same normalize functions, same benign-error handling, with every returned post additionally marked `isBigAccount: true` on `DiscoveredPost` (a scoring-input-only field, not a `warroom_alerts` column — dropped at insert time) so §3's big-account tier applies instead of Standard.
+
 ## 3. Scoring (`lib/warroom/scoring.ts`)
 
-Pure function per post: `classifySeverity(post: DiscoveredPost, now: Date): 'heating_up' | 'going_viral' | 'already_viral' | null`. Thresholds, adapted from the reference's proven **Standard** tier (the only tier that applies — decision 9 cuts the "big account" tier):
+Pure function per post: `classifySeverity(post: DiscoveredPost, now: Date): 'heating_up' | 'going_viral' | 'already_viral' | null`. Thresholds, adapted from the reference's proven **Standard** tier (applies to hashtag/keyword-discovered posts):
 
 | Platform | Heating Up | Going Viral | Already Viral |
 |---|---|---|---|
@@ -144,6 +146,15 @@ Pure function per post: `classifySeverity(post: DiscoveredPost, now: Date): 'hea
 | YouTube (new) | viewsPerHour≥500, age<24h | viewsPerHour≥2,000, age<12h | viewsPerHour≥5,000 or views≥200K (no age limit) |
 
 TikTok and Instagram numbers are the reference system's real, tuned "Standard" thresholds, unchanged. YouTube has no reference precedent (the original system never covered YouTube) — these are new, designed using `computeViewsPerHour` from `lib/metrics.ts`, the same shared function Watchlist/Recap/Strategy already use for exactly this "reward a post that's accelerating, not just old-and-accumulated" purpose. All numbers here are explicitly starting points, not derived from real usage — consistent with the reference doc's own admission that its thresholds have been retuned multiple times since launch (§7 of the reference handoff doc).
+
+**Big account tier (fast-follow, 2026-09-18)** — applies when `post.isBigAccount` is set (i.e. it came from `discovery/big-accounts.ts`'s curated profile scrape, not hashtag/keyword search). Reproduces the reference's real, tuned "big account" tier verbatim — no YouTube row, since the reference never had one:
+
+| Platform | Heating Up | Going Viral | Already Viral |
+|---|---|---|---|
+| TikTok | views≥75K or eng≥2K, age≤240min | views≥200K or eng≥10K, age≤120min | *(none — the reference's big-account TikTok tier never reaches Already Viral)* |
+| Instagram | views≥50K or eng≥2K, age≤240min | views≥200K or eng≥8K, age≤120min | views≥500K or eng≥20K, age≤1440min (24h) |
+
+Note the Instagram big-account tier adds a view-count path the Standard Instagram tier doesn't have at all (Standard is engagement-only) — a known account's view count is trustworthy at a glance, unlike an arbitrary hashtag-discovered post's. Also note Already Viral's "age≤1440min" here is a real 24h cap, unlike Standard's true "no age limit" — reproduced from the reference as-is, not a typo.
 
 A post older than 48 hours is dropped before scoring, full stop, regardless of tier — this runs first, ahead of everything in the table above. "(no age limit)" in the table means that tier's numeric threshold carries no *additional* age condition beyond that universal 48h cutoff — an Already Viral-magnitude post discovered 3 days after publishing is still dropped by the 48h rule; it does not mean that tier is literally unbounded in age.
 
@@ -155,7 +166,7 @@ A pure `runWarroomCron(deps, now)` handler, same injected-deps shape as `runWeek
 
 1. **Pause check** — read `warroom_settings`; if `paused`, return immediately (no scraping attempted).
 2. **Daily cap check** — `select count(*) from warroom_alerts where detected_at >= <start of today>`; if ≥ `WARROOM_DAILY_ALERT_CAP = 30` (tunable), return immediately. Mirrors the reference's `Cap Reached?` gate, as a query instead of a Sheets read.
-3. **Parallel discovery** — `Promise.allSettled([discoverYoutube(), discoverTikTok(), discoverInstagram()])`. This replaces the reference's 14-input `Merge` node entirely: in real code, "merge the branches" is just collecting settled results, with no separate merge step. One platform's rejection doesn't affect the others' results.
+3. **Parallel discovery** — `Promise.allSettled([discoverYoutube(), discoverTikTok(), discoverInstagram(), discoverTikTokBigAccounts(), discoverInstagramBigAccounts()])` (the last two added 2026-09-18, alongside `discovery/big-accounts.ts`). This replaces the reference's 14-input `Merge` node entirely: in real code, "merge the branches" is just collecting settled results, with no separate merge step. One source's rejection doesn't affect the others' results.
 4. **Health check** — inspect the settled results' errors (both rejected promises and any Apify-dataset-level error items) for the budget-exhaustion pattern, reusing the reference's regex verbatim: `/hard limit exceeded|platform-feature-disabled|monthly usage/i`. On a match: `update warroom_settings set paused = true, paused_reason = ..., paused_at = now()`, send one operator email via the existing Resend integration (`lib/integrations/resend.ts`, already wired for the old weekly digest) to a new `WARROOM_OPERATOR_EMAIL` env var, and stop the run — there is no Slack channel in this product, so email is the operator-alert channel. A non-budget failure (a single actor erroring) is logged (`console.error`, visible in Vercel's function logs) and the run continues with whatever platforms succeeded — not worth paging over one bad scrape.
 5. **Normalize + score** — successful results run through §2's normalize functions, then §3's `classifySeverity`; anything scoring `null` (or older than 48h) is dropped.
 6. **Per-run cap + insert** — the surviving posts are capped to the top 5 per run (by severity, then by view/engagement count — mirrors the reference's `results.slice(0, 5)`, preventing one run from dumping dozens of alerts at once even on a day GTA6 news is unusually heavy), deduplicated in-memory within this run's own results, then each is inserted via `insert into warroom_alerts (...) values (...) on conflict (platform, external_post_id) do nothing` — Postgres handles cross-run dedup atomically; no separate "seen ids" query needed.

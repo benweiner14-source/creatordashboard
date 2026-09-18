@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { searchGta6InstagramPosts, normalizeInstagramPost } from '@/lib/warroom/discovery/instagram';
+import { searchGta6InstagramPosts, searchGta6InstagramBigAccounts, normalizeInstagramPost } from '@/lib/warroom/discovery/instagram';
+import { GTA6_BIG_ACCOUNTS_INSTAGRAM } from '@/lib/warroom/discovery/big-accounts';
 
 describe('normalizeInstagramPost', () => {
   it('maps a raw Instagram hashtag-scraper item to a DiscoveredPost', () => {
@@ -113,5 +114,63 @@ describe('searchGta6InstagramPosts', () => {
   it('returns no posts when a 200 response body is not an array', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ error: 'something' }) }));
     await expect(searchGta6InstagramPosts('test-token')).resolves.toEqual({ posts: [], errors: [] });
+  });
+});
+
+describe('searchGta6InstagramBigAccounts', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('requests the curated profile list and marks every returned post isBigAccount', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init.body as string);
+        return Promise.resolve({
+          ok: true,
+          json: async () => [{ shortCode: 'A', likesCount: 10000, commentsCount: 500, timestamp: '2026-09-15T10:00:00Z' }],
+        });
+      })
+    );
+
+    const result = await searchGta6InstagramBigAccounts('test-token');
+
+    expect(capturedBody?.directUrls).toEqual(GTA6_BIG_ACCOUNTS_INSTAGRAM.map((handle) => `https://www.instagram.com/${handle}/`));
+    expect(capturedBody?.resultsType).toBe('posts');
+    expect(result.posts).toHaveLength(1);
+    expect(result.posts[0].isBigAccount).toBe(true);
+  });
+
+  it('skips benign error items without reporting them', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [{ error: 'restricted_page' }] }));
+
+    const result = await searchGta6InstagramBigAccounts('test-token');
+
+    expect(result.posts).toEqual([]);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('reports a non-benign error item without throwing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [{ error: 'monthly usage limit reached' }] })
+    );
+
+    const result = await searchGta6InstagramBigAccounts('test-token');
+
+    expect(result.posts).toEqual([]);
+    expect(result.errors).toEqual(['monthly usage limit reached']);
+  });
+
+  it('throws when the Apify request itself responds with a non-2xx status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429, text: async () => '' }));
+    await expect(searchGta6InstagramBigAccounts('test-token')).rejects.toThrow('status 429');
+  });
+
+  it('returns no posts when a 200 response body is not an array', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ error: 'something' }) }));
+    await expect(searchGta6InstagramBigAccounts('test-token')).resolves.toEqual({ posts: [], errors: [] });
   });
 });

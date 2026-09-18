@@ -3,8 +3,8 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase/server';
 import { createResendEmailClient } from '@/lib/integrations/resend';
 import { hasActiveSubscription } from '@/lib/billing/entitlements';
 import { searchGta6Videos } from '@/lib/warroom/discovery/youtube';
-import { searchGta6TikToks } from '@/lib/warroom/discovery/tiktok';
-import { searchGta6InstagramPosts } from '@/lib/warroom/discovery/instagram';
+import { searchGta6TikToks, searchGta6TikTokBigAccounts } from '@/lib/warroom/discovery/tiktok';
+import { searchGta6InstagramPosts, searchGta6InstagramBigAccounts } from '@/lib/warroom/discovery/instagram';
 import { runWarroomCron } from '@/lib/warroom/cron-handler';
 import type { DiscoveredPost, WarroomSeverity } from '@/lib/warroom/types';
 
@@ -84,6 +84,8 @@ export async function GET(request: Request) {
       discoverYoutube: () => searchGta6Videos(youtubeApiKey, new Date(now.getTime() - 24 * 60 * 60 * 1000)),
       discoverTikTok: () => searchGta6TikToks(apifyToken),
       discoverInstagram: () => searchGta6InstagramPosts(apifyToken),
+      discoverTikTokBigAccounts: () => searchGta6TikTokBigAccounts(apifyToken),
+      discoverInstagramBigAccounts: () => searchGta6InstagramBigAccounts(apifyToken),
       insertAlert: async ({ post, severity, now: insertedAt }: { post: DiscoveredPost; severity: WarroomSeverity; now: Date }) => {
         const { data, error } = await serviceClient
           .from('warroom_alerts')

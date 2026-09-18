@@ -90,6 +90,82 @@ describe('classifySeverity — YouTube', () => {
   });
 });
 
+describe('classifySeverity — TikTok big account tier', () => {
+  it('classifies going_viral by the looser view threshold within the 120min window', () => {
+    // 200,000 views would not reach going_viral on the standard tier (needs 300,000)
+    expect(
+      classifySeverity(post({ isBigAccount: true, viewCount: 200_000, publishedAt: '2026-09-15T10:30:00Z' }), NOW)
+    ).toBe('going_viral');
+  });
+
+  it('does not classify going_viral once the 120min window has passed', () => {
+    expect(
+      classifySeverity(post({ isBigAccount: true, viewCount: 200_000, publishedAt: '2026-09-15T09:00:00Z' }), NOW)
+    ).not.toBe('going_viral');
+  });
+
+  it('classifies heating_up by the looser view threshold within the 240min window', () => {
+    expect(
+      classifySeverity(post({ isBigAccount: true, viewCount: 75_000, publishedAt: '2026-09-15T09:00:00Z' }), NOW)
+    ).toBe('heating_up');
+  });
+
+  it('never classifies already_viral — the reference tier has no already_viral branch for big TikTok accounts', () => {
+    expect(
+      classifySeverity(post({ isBigAccount: true, viewCount: 50_000_000, engagementCount: 50_000_000, publishedAt: '2026-09-15T11:59:00Z' }), NOW)
+    ).toBe('going_viral');
+  });
+
+  it('returns null for a big-account post below every threshold', () => {
+    expect(classifySeverity(post({ isBigAccount: true, viewCount: 100, engagementCount: 10 }), NOW)).toBeNull();
+  });
+});
+
+describe('classifySeverity — Instagram big account tier', () => {
+  it('classifies already_viral by the looser view threshold within the 24h window', () => {
+    // 500,000 views would not reach already_viral on the standard tier at all (IG standard has no view-based path)
+    expect(
+      classifySeverity(
+        post({ platform: 'instagram', isBigAccount: true, viewCount: 500_000, publishedAt: '2026-09-14T13:00:00Z' }),
+        NOW
+      )
+    ).toBe('already_viral');
+  });
+
+  it('does not classify already_viral once the 24h window has passed', () => {
+    expect(
+      classifySeverity(
+        post({ platform: 'instagram', isBigAccount: true, viewCount: 500_000, publishedAt: '2026-09-13T11:00:00Z' }),
+        NOW
+      )
+    ).not.toBe('already_viral');
+  });
+
+  it('classifies going_viral by the looser view threshold within the 120min window', () => {
+    expect(
+      classifySeverity(
+        post({ platform: 'instagram', isBigAccount: true, viewCount: 200_000, publishedAt: '2026-09-15T10:30:00Z' }),
+        NOW
+      )
+    ).toBe('going_viral');
+  });
+
+  it('classifies heating_up by the looser view threshold within the 240min window', () => {
+    expect(
+      classifySeverity(
+        post({ platform: 'instagram', isBigAccount: true, viewCount: 50_000, publishedAt: '2026-09-15T09:00:00Z' }),
+        NOW
+      )
+    ).toBe('heating_up');
+  });
+
+  it('returns null for a big-account post below every threshold', () => {
+    expect(
+      classifySeverity(post({ platform: 'instagram', isBigAccount: true, viewCount: 100, engagementCount: 10 }), NOW)
+    ).toBeNull();
+  });
+});
+
 describe('classifySeverity — global age cutoff', () => {
   it('returns null for a post older than 48 hours even at already_viral magnitude', () => {
     expect(
