@@ -47,10 +47,10 @@ export function scoreReach(input: ReachInput): ScoreResult {
 
   const reasons: string[] =
     score >= 70
-      ? ['Your views are several times your follower count, meaning this reached well beyond your existing audience.']
+      ? ["Your views are well above what's typical for an account your size, meaning this reached well beyond your existing audience."]
       : score >= 40
-        ? ['Your views are roughly in line with your follower count — a typical result for content that mostly reached your existing audience.']
-        : ['Your views are below what would be expected given your follower count, suggesting this post got limited distribution beyond your existing audience.'];
+        ? ["Your views are in the typical range for an account your size — a typical result for content that mostly reached your existing audience."]
+        : ["Your views are below what's typical for an account your size, suggesting this post got limited distribution beyond your existing audience."];
 
   return { score, label: labelForScore(score), reasons };
 }

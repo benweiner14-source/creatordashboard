@@ -38,6 +38,34 @@ describe('scoreReach', () => {
     });
   });
 
+  describe('reasons copy is tier-relative, not an absolute ratio claim', () => {
+    it('does not claim a specific multiple for a moderate score at the top of a tier range (80x reach, <10K tier)', () => {
+      // 80x reach is well inside the <10K tier's moderate band (2.372x-189.557x),
+      // but far from "roughly in line" with the follower count.
+      const followerCount = 5_000;
+      const result = scoreReach({ viewCount: 80 * followerCount, followerCount });
+      expect(result.label).toBe('moderate');
+      expect(result.reasons[0]).toContain('typical range for an account your size');
+      expect(result.reasons[0]).not.toMatch(/in line with your follower count/);
+    });
+
+    it('does not claim a specific multiple for a strong score under 1x reach (1M-10M tier)', () => {
+      // 0.567x reach is inside the 1M-10M tier's strong band (>= 0.555x),
+      // but it is less than the follower count, not "several times" it.
+      const followerCount = 3_000_000;
+      const result = scoreReach({ viewCount: Math.round(0.567 * followerCount), followerCount });
+      expect(result.label).toBe('strong');
+      expect(result.reasons[0]).toContain('well above what\'s typical for an account your size');
+      expect(result.reasons[0]).not.toMatch(/several times/);
+    });
+
+    it('weak reasons copy is also tier-relative', () => {
+      const result = scoreReach({ viewCount: 34_000, followerCount: 5_400_000 });
+      expect(result.label).toBe('weak');
+      expect(result.reasons[0]).toContain('below what\'s typical for an account your size');
+    });
+  });
+
   describe('per-tier boundaries', () => {
     it('scores exactly the <10K tier weak/moderate boundary (2.372x) as 40', () => {
       const followerCount = 9_999;
