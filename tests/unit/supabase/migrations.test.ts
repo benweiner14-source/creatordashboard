@@ -226,4 +226,11 @@ describe('supabase migrations', () => {
     expect(sql).toContain('visual_audio_narrative text');
     expect(sql).toContain('visual_audio_error text');
   });
+
+  it('includes a migration adding episodic-detection columns to diagnostics', () => {
+    const sql = readMigrationContaining('add_episodic_detection');
+    expect(sql).toContain('alter table public.diagnostics');
+    expect(sql).toContain('visual_audio_is_episodic boolean');
+    expect(sql).toContain('visual_audio_series_label text');
+  });
 });

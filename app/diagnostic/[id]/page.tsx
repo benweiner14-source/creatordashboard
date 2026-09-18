@@ -26,6 +26,8 @@ interface DiagnosticData {
   platform: 'youtube' | 'tiktok' | 'instagram';
   visualAudioStatus: 'pending' | 'complete' | 'failed' | null;
   visualAudioNarrative: string | null;
+  visualAudioIsEpisodic: boolean | null;
+  visualAudioSeriesLabel: string | null;
   report: DiagnosticReportData;
 }
 
@@ -51,6 +53,8 @@ export default function DiagnosticReportPage() {
           platform: data.diagnostic.platform,
           visualAudioStatus: data.diagnostic.visual_audio_status,
           visualAudioNarrative: data.diagnostic.visual_audio_narrative,
+          visualAudioIsEpisodic: data.diagnostic.visual_audio_is_episodic,
+          visualAudioSeriesLabel: data.diagnostic.visual_audio_series_label,
           report: data.diagnostic.report_json,
         });
       })
@@ -93,7 +97,15 @@ export default function DiagnosticReportPage() {
         return;
       }
       setDiagnostic((prev) =>
-        prev ? { ...prev, visualAudioStatus: 'complete', visualAudioNarrative: data.narrative } : prev
+        prev
+          ? {
+              ...prev,
+              visualAudioStatus: 'complete',
+              visualAudioNarrative: data.narrative,
+              visualAudioIsEpisodic: data.isEpisodic ?? null,
+              visualAudioSeriesLabel: data.seriesLabel ?? null,
+            }
+          : prev
       );
     } catch {
       setEnrichError('Something went wrong analyzing this video. Please try again.');
@@ -163,6 +175,11 @@ export default function DiagnosticReportPage() {
         <div className="rounded-lg bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
           <p className="mb-1 font-semibold">Your first 5 seconds, visually</p>
           <p>{diagnostic.visualAudioNarrative}</p>
+          {diagnostic.visualAudioIsEpisodic && (
+            <p className="mt-2 inline-block rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800">
+              📺 Part of a series{diagnostic.visualAudioSeriesLabel ? `: ${diagnostic.visualAudioSeriesLabel}` : ''}
+            </p>
+          )}
         </div>
       )}
 

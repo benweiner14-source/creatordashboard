@@ -50,6 +50,8 @@ export interface Database {
           visual_audio_status: 'pending' | 'complete' | 'failed' | null;
           visual_audio_narrative: string | null;
           visual_audio_error: string | null;
+          visual_audio_is_episodic: boolean | null;
+          visual_audio_series_label: string | null;
         };
         Insert: {
           id?: string;
@@ -69,6 +71,8 @@ export interface Database {
           visual_audio_status?: 'pending' | 'complete' | 'failed' | null;
           visual_audio_narrative?: string | null;
           visual_audio_error?: string | null;
+          visual_audio_is_episodic?: boolean | null;
+          visual_audio_series_label?: string | null;
         };
         Update: Partial<Database['public']['Tables']['diagnostics']['Insert']>;
         Relationships: [];

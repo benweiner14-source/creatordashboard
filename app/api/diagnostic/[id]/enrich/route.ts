@@ -28,7 +28,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         getDiagnostic: async (diagnosticId): Promise<DiagnosticForEnrichment | null> => {
           const { data, error } = await serviceClient
             .from('diagnostics')
-            .select('profile_id, platform, input_url, status, report_json, visual_audio_status, visual_audio_narrative')
+            .select(
+              'profile_id, platform, input_url, status, report_json, visual_audio_status, visual_audio_narrative, visual_audio_is_episodic, visual_audio_series_label'
+            )
             .eq('id', diagnosticId)
             .maybeSingle();
           // A transient DB error must not masquerade as "no such diagnostic":
@@ -51,19 +53,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             hookStrengthLabel: hookStrength.label,
             visualAudioStatus: data.visual_audio_status ?? null,
             visualAudioNarrative: data.visual_audio_narrative ?? null,
+            visualAudioIsEpisodic: data.visual_audio_is_episodic ?? null,
+            visualAudioSeriesLabel: data.visual_audio_series_label ?? null,
           };
         },
         scraperClient: createApifyScraperClient(process.env.APIFY_API_TOKEN ?? ''),
         frameExtractorClient: createApifyFrameExtractorClient(process.env.APIFY_API_TOKEN ?? ''),
         visualAudioClient: createClaudeVisualAudioClient(process.env.ANTHROPIC_API_KEY ?? ''),
         fetchImageAsBase64,
-        saveEnrichment: async ({ diagnosticId, status, narrative, error }) => {
+        saveEnrichment: async ({ diagnosticId, status, narrative, error, isEpisodic, seriesLabel }) => {
           const { error: writeError } = await serviceClient
             .from('diagnostics')
             .update({
               visual_audio_status: status,
               visual_audio_narrative: narrative ?? null,
               visual_audio_error: error ?? null,
+              visual_audio_is_episodic: isEpisodic ?? null,
+              visual_audio_series_label: seriesLabel ?? null,
             })
             .eq('id', diagnosticId);
           // A dropped write here means the user sees the narrative once in the

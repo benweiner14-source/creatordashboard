@@ -163,6 +163,71 @@ describe('DiagnosticReportPage', () => {
     expect(fetchMock.mock.calls[1][0]).toContain('/enrich');
   });
 
+  it('shows a series badge when the analysis detects episode framing', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            visual_audio_status: null,
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          narrative: 'A title card reads Episode 12.',
+          isEpisodic: true,
+          seriesLabel: 'Episode 12',
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    const button = await screen.findByRole('button', { name: /see how your first 5 seconds/i });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByText((_, el) => el?.textContent === '📺 Part of a series: Episode 12')).toBeInTheDocument());
+  });
+
+  it('does not show a series badge when the analysis does not detect episode framing', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            visual_audio_status: null,
+            visual_audio_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ narrative: 'A clear opening frame.', isEpisodic: false, seriesLabel: null }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    const button = await screen.findByRole('button', { name: /see how your first 5 seconds/i });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByText('A clear opening frame.')).toBeInTheDocument());
+    expect(screen.queryByText(/part of a series/i)).not.toBeInTheDocument();
+  });
+
   it('shows a retry option when the enrich call fails', async () => {
     const fetchMock = vi
       .fn()

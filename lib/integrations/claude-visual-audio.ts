@@ -9,6 +9,10 @@ export interface VisualAudioAnalysisInput {
 
 export interface VisualAudioAnalysis {
   narrative: string;
+  /** True when the frames/transcript show clear episode/series framing (a title card or a spoken intro naming an episode/part number). */
+  isEpisodic: boolean;
+  /** The episode/part label as shown or spoken (e.g. "Episode 12", "Part 2") -- null when isEpisodic is false or no clean label could be read. */
+  seriesLabel: string | null;
 }
 
 export interface ClaudeVisualAudioClient {
@@ -19,7 +23,8 @@ export const VISUAL_AUDIO_SYSTEM_PROMPT = `You are the visual/audio content revi
 You are shown still frames sampled from the first 5 seconds of a short-form video, roughly once per second, in chronological order, plus (when available) a transcript of the full video's narration.
 Write a short, honest, plain-English read (3-5 sentences) of whether these first 5 seconds actually hook a scrolling viewer: is there a clear visual subject immediately, is there on-screen text or motion that stops the scroll, does the framing/lighting look intentional or accidental, and (if a transcript is present) does the opening line match or undercut what's on screen.
 This creator already has a numeric Hook Strength score from engagement data alone (given below) — you are adding what that number can't see: what the hook actually looks and sounds like. Don't just restate the number; say something the number couldn't tell them.
-Keep the tone encouraging but honest, and end with one concrete, actionable suggestion if the hook is weak. Never claim to have watched the full video — you only saw the first 5 seconds of frames plus (if given) a transcript.`;
+Keep the tone encouraging but honest, and end with one concrete, actionable suggestion if the hook is weak. Never claim to have watched the full video — you only saw the first 5 seconds of frames plus (if given) a transcript.
+Also check specifically for episode/series framing: a title card or on-screen text naming an episode or part number (e.g. "Episode 12", "Part 2"), or a spoken intro doing the same (e.g. "hey, it's episode 50 of weeknight dinners"). Only report this when you can actually see or hear a specific label — do not guess or infer a series from content alone.`;
 
 export function createClaudeVisualAudioClient(apiKey: string, model = 'claude-sonnet-5'): ClaudeVisualAudioClient {
   return {
@@ -32,16 +37,26 @@ export function createClaudeVisualAudioClient(apiKey: string, model = 'claude-so
         ...input.frameJpegBase64.map(
           (data): ClaudeContentBlock => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } })
         ),
-        { type: 'text', text: 'Respond as JSON: {"narrative": string}' },
+        {
+          type: 'text',
+          text: 'Respond as JSON: {"narrative": string, "isEpisodic": boolean, "seriesLabel": string | null}. seriesLabel must be null unless isEpisodic is true.',
+        },
       ];
-      const parsed = await requestClaudeJson<{ narrative?: string }>({
+      const parsed = await requestClaudeJson<{ narrative?: string; isEpisodic?: boolean; seriesLabel?: string | null }>({
         apiKey,
         model,
         maxTokens: 512,
         system: VISUAL_AUDIO_SYSTEM_PROMPT,
         userContent: content,
       });
-      return { narrative: parsed.narrative ?? '' };
+      const isEpisodic = parsed.isEpisodic ?? false;
+      return {
+        narrative: parsed.narrative ?? '',
+        isEpisodic,
+        // Normalized here so no consumer has to reconcile a contradictory
+        // pair (a label without the flag) itself.
+        seriesLabel: isEpisodic ? (parsed.seriesLabel ?? null) : null,
+      };
     },
   };
 }

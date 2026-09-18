@@ -12,6 +12,8 @@ function makeDeps(overrides: Partial<EnrichHandlerDeps> = {}): EnrichHandlerDeps
     hookStrengthLabel: 'strong',
     visualAudioStatus: null,
     visualAudioNarrative: null,
+    visualAudioIsEpisodic: null,
+    visualAudioSeriesLabel: null,
   };
   return {
     hasActiveSubscription: async () => true,
@@ -30,7 +32,7 @@ function makeDeps(overrides: Partial<EnrichHandlerDeps> = {}): EnrichHandlerDeps
       ],
     },
     visualAudioClient: {
-      analyzeVisualAudio: async () => ({ narrative: 'A clear, encouraging read of the hook.' }),
+      analyzeVisualAudio: async () => ({ narrative: 'A clear, encouraging read of the hook.', isEpisodic: false, seriesLabel: null }),
     },
     fetchImageAsBase64: async () => 'ZmFrZS1mcmFtZQ==',
     saveEnrichment: async () => {},
@@ -75,6 +77,8 @@ describe('handleEnrichRequest', () => {
         hookStrengthLabel: 'moderate',
         visualAudioStatus: null,
         visualAudioNarrative: null,
+        visualAudioIsEpisodic: null,
+        visualAudioSeriesLabel: null,
       }),
       scraperClient: { fetchVideoForAnalysis },
       saveEnrichment,
@@ -100,7 +104,57 @@ describe('handleEnrichRequest', () => {
       diagnosticId: 'diag-1',
       status: 'complete',
       narrative: 'A clear, encouraging read of the hook.',
+      isEpisodic: false,
+      seriesLabel: null,
     });
+  });
+
+  it('threads isEpisodic/seriesLabel through to the save and the response body when Claude detects series framing', async () => {
+    const saveEnrichment = vi.fn();
+    const deps = makeDeps({
+      visualAudioClient: {
+        analyzeVisualAudio: async () => ({
+          narrative: 'A title card reads Episode 12.',
+          isEpisodic: true,
+          seriesLabel: 'Episode 12',
+        }),
+      },
+      saveEnrichment,
+    });
+
+    const result = await handleEnrichRequest(deps, { profileId: 'profile-1', diagnosticId: 'diag-1' });
+
+    expect(result.status).toBe(200);
+    expect(result.body.isEpisodic).toBe(true);
+    expect(result.body.seriesLabel).toBe('Episode 12');
+    expect(saveEnrichment).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'complete', isEpisodic: true, seriesLabel: 'Episode 12' })
+    );
+  });
+
+  it('short-circuits with the stored isEpisodic/seriesLabel when an analysis already completed', async () => {
+    const analyzeVisualAudio = vi.fn();
+    const deps = makeDeps({
+      getDiagnostic: async () => ({
+        profileId: 'profile-1',
+        platform: 'tiktok',
+        inputUrl: 'https://www.tiktok.com/@user/video/123',
+        hookStrengthScore: 72,
+        hookStrengthLabel: 'strong',
+        visualAudioStatus: 'complete',
+        visualAudioNarrative: 'An analysis we already paid for.',
+        visualAudioIsEpisodic: true,
+        visualAudioSeriesLabel: 'Part 2',
+      }),
+      visualAudioClient: { analyzeVisualAudio },
+    });
+
+    const result = await handleEnrichRequest(deps, { profileId: 'profile-1', diagnosticId: 'diag-1' });
+
+    expect(result.status).toBe(200);
+    expect(result.body.isEpisodic).toBe(true);
+    expect(result.body.seriesLabel).toBe('Part 2');
+    expect(analyzeVisualAudio).not.toHaveBeenCalled();
   });
 
   it('saves a failed status and returns a clear message when zero frames are extracted', async () => {
@@ -171,6 +225,8 @@ describe('handleEnrichRequest', () => {
         hookStrengthLabel: 'strong',
         visualAudioStatus: 'complete',
         visualAudioNarrative: 'An analysis we already paid for.',
+        visualAudioIsEpisodic: true,
+        visualAudioSeriesLabel: 'Episode 4',
       }),
       scraperClient: { fetchVideoForAnalysis },
       visualAudioClient: { analyzeVisualAudio },
@@ -196,6 +252,8 @@ describe('handleEnrichRequest', () => {
         hookStrengthLabel: 'strong',
         visualAudioStatus: 'complete',
         visualAudioNarrative: 'Somebody else’s analysis.',
+        visualAudioIsEpisodic: null,
+        visualAudioSeriesLabel: null,
       }),
     });
 
@@ -215,6 +273,8 @@ describe('handleEnrichRequest', () => {
         hookStrengthLabel: 'strong',
         visualAudioStatus: 'pending',
         visualAudioNarrative: null,
+        visualAudioIsEpisodic: null,
+        visualAudioSeriesLabel: null,
       }),
       saveEnrichment,
     });
@@ -228,7 +288,7 @@ describe('handleEnrichRequest', () => {
   it('saves a failed status instead of complete when Claude returns an empty narrative', async () => {
     const saveEnrichment = vi.fn();
     const deps = makeDeps({
-      visualAudioClient: { analyzeVisualAudio: async () => ({ narrative: '   ' }) },
+      visualAudioClient: { analyzeVisualAudio: async () => ({ narrative: '   ', isEpisodic: false, seriesLabel: null }) },
       saveEnrichment,
     });
 

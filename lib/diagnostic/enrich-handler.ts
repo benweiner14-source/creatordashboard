@@ -14,6 +14,8 @@ export interface DiagnosticForEnrichment {
   hookStrengthLabel: string;
   visualAudioStatus: 'pending' | 'complete' | 'failed' | null;
   visualAudioNarrative: string | null;
+  visualAudioIsEpisodic: boolean | null;
+  visualAudioSeriesLabel: string | null;
 }
 
 export interface EnrichHandlerDeps {
@@ -28,6 +30,8 @@ export interface EnrichHandlerDeps {
     status: 'pending' | 'complete' | 'failed';
     narrative?: string;
     error?: string;
+    isEpisodic?: boolean;
+    seriesLabel?: string | null;
   }) => Promise<void>;
 }
 
@@ -76,7 +80,14 @@ export async function handleEnrichRequest(
   // (so it can't be used to read someone else's narrative) but before the
   // 'pending' write (so it never clobbers a completed row's status).
   if (diagnostic.visualAudioStatus === 'complete') {
-    return { status: 200, body: { narrative: diagnostic.visualAudioNarrative } };
+    return {
+      status: 200,
+      body: {
+        narrative: diagnostic.visualAudioNarrative,
+        isEpisodic: diagnostic.visualAudioIsEpisodic,
+        seriesLabel: diagnostic.visualAudioSeriesLabel,
+      },
+    };
   }
 
   await deps.saveEnrichment({ diagnosticId: context.diagnosticId, status: 'pending' });
@@ -111,8 +122,10 @@ export async function handleEnrichRequest(
       diagnosticId: context.diagnosticId,
       status: 'complete',
       narrative: analysis.narrative,
+      isEpisodic: analysis.isEpisodic,
+      seriesLabel: analysis.seriesLabel,
     });
-    return { status: 200, body: { narrative: analysis.narrative } };
+    return { status: 200, body: { narrative: analysis.narrative, isEpisodic: analysis.isEpisodic, seriesLabel: analysis.seriesLabel } };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     // The raw exception text stays in the server logs only. visual_audio_error

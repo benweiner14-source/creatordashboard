@@ -97,4 +97,98 @@ describe('createClaudeVisualAudioClient', () => {
 
     expect(result.narrative).toBe('');
   });
+
+  it('asks Claude to look for episode/series framing and requests it in the response schema', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: [{ text: '{"narrative":"...","isEpisodic":false,"seriesLabel":null}' }] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createClaudeVisualAudioClient('test-key');
+    await client.analyzeVisualAudio({
+      platform: 'tiktok',
+      frameJpegBase64: ['ZmFrZQ=='],
+      transcript: null,
+      hookStrengthScore: { value: 50, label: 'moderate' },
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.system).toContain('episode');
+    const lastTextBlock = body.messages[0].content.at(-1).text as string;
+    expect(lastTextBlock).toContain('isEpisodic');
+    expect(lastTextBlock).toContain('seriesLabel');
+  });
+
+  it('surfaces isEpisodic and seriesLabel when Claude detects series framing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          content: [
+            {
+              text: '{"narrative":"A title card reads Episode 12.","isEpisodic":true,"seriesLabel":"Episode 12"}',
+            },
+          ],
+        }),
+      })
+    );
+
+    const client = createClaudeVisualAudioClient('test-key');
+    const result = await client.analyzeVisualAudio({
+      platform: 'tiktok',
+      frameJpegBase64: ['ZmFrZQ=='],
+      transcript: null,
+      hookStrengthScore: { value: 50, label: 'moderate' },
+    });
+
+    expect(result.isEpisodic).toBe(true);
+    expect(result.seriesLabel).toBe('Episode 12');
+  });
+
+  it('defaults isEpisodic to false and seriesLabel to null when the response omits them', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ content: [{ text: '{"narrative":"..."}' }] }) })
+    );
+
+    const client = createClaudeVisualAudioClient('test-key');
+    const result = await client.analyzeVisualAudio({
+      platform: 'tiktok',
+      frameJpegBase64: ['ZmFrZQ=='],
+      transcript: null,
+      hookStrengthScore: { value: 50, label: 'moderate' },
+    });
+
+    expect(result.isEpisodic).toBe(false);
+    expect(result.seriesLabel).toBeNull();
+  });
+
+  it('nulls out seriesLabel when isEpisodic is false, even if Claude sends a stray label', async () => {
+    // A defensive normalization: a label without the episodic flag is a
+    // contradiction Claude shouldn't produce, but the consumer (the report
+    // page) should never have to reconcile the two fields itself.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ content: [{ text: '{"narrative":"...","isEpisodic":false,"seriesLabel":"Episode 3"}' }] }),
+      })
+    );
+
+    const client = createClaudeVisualAudioClient('test-key');
+    const result = await client.analyzeVisualAudio({
+      platform: 'tiktok',
+      frameJpegBase64: ['ZmFrZQ=='],
+      transcript: null,
+      hookStrengthScore: { value: 50, label: 'moderate' },
+    });
+
+    expect(result.isEpisodic).toBe(false);
+    expect(result.seriesLabel).toBeNull();
+  });
 });
