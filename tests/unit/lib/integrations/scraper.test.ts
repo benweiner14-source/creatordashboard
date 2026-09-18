@@ -578,4 +578,132 @@ describe('createApifyScraperClient', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });
+
+  describe('fetchComments', () => {
+    it('fetches TikTok comments via the dedicated comments actor, sorted by like count descending', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          { text: 'Best use of Ai', diggCount: 26061 },
+          { text: 'GTA needs a movie', diggCount: 41752 },
+          { text: 'meh', diggCount: 3 },
+        ],
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createApifyScraperClient('test-token');
+      const comments = await client.fetchComments('tiktok', 'https://www.tiktok.com/@user/video/123', 15);
+
+      expect(comments).toEqual([
+        { text: 'GTA needs a movie', likeCount: 41752 },
+        { text: 'Best use of Ai', likeCount: 26061 },
+        { text: 'meh', likeCount: 3 },
+      ]);
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/acts/clockworks~tiktok-comments-scraper/');
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+      expect(body.postURLs).toEqual(['https://www.tiktok.com/@user/video/123']);
+      expect(body.commentsPerPost).toBe(15);
+      expect(body.maxRepliesPerComment).toBe(0);
+    });
+
+    it('fetches Instagram comments from the same posts-scrape actor fetchPost already uses, sorted by like count descending', async () => {
+      // latestComments is named for recency, not popularity -- confirmed live
+      // (2026-09-18) that Instagram returns it in chronological order, not
+      // sorted by likesCount, so this must re-sort explicitly rather than
+      // trusting the actor's own order.
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            shortCode: 'ABC',
+            latestComments: [
+              { text: 'meh', likesCount: 0 },
+              { text: 'Amazing!', likesCount: 33 },
+              { text: 'nice', likesCount: 1 },
+            ],
+          },
+        ],
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createApifyScraperClient('test-token');
+      const comments = await client.fetchComments('instagram', 'https://www.instagram.com/p/ABC/', 15);
+
+      expect(comments).toEqual([
+        { text: 'Amazing!', likeCount: 33 },
+        { text: 'nice', likeCount: 1 },
+        { text: 'meh', likeCount: 0 },
+      ]);
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/acts/apify~instagram-scraper/');
+    });
+
+    it('truncates to the requested limit after sorting', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          { text: 'a', diggCount: 1 },
+          { text: 'b', diggCount: 5 },
+          { text: 'c', diggCount: 3 },
+        ],
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createApifyScraperClient('test-token');
+      const comments = await client.fetchComments('tiktok', 'https://www.tiktok.com/@user/video/123', 2);
+
+      expect(comments).toEqual([
+        { text: 'b', likeCount: 5 },
+        { text: 'c', likeCount: 3 },
+      ]);
+    });
+
+    it('returns an empty array when the post has no comments', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [] }));
+
+      const client = createApifyScraperClient('test-token');
+      const comments = await client.fetchComments('tiktok', 'https://www.tiktok.com/@user/video/123', 15);
+
+      expect(comments).toEqual([]);
+    });
+
+    it('returns an empty array for an Instagram post with no latestComments field', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [{ shortCode: 'ABC' }] })
+      );
+
+      const client = createApifyScraperClient('test-token');
+      const comments = await client.fetchComments('instagram', 'https://www.instagram.com/p/ABC/', 15);
+
+      expect(comments).toEqual([]);
+    });
+
+    it('skips comments with empty/missing text', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          { text: '', diggCount: 100 },
+          { diggCount: 50 },
+          { text: 'real comment', diggCount: 10 },
+        ],
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createApifyScraperClient('test-token');
+      const comments = await client.fetchComments('tiktok', 'https://www.tiktok.com/@user/video/123', 15);
+
+      expect(comments).toEqual([{ text: 'real comment', likeCount: 10 }]);
+    });
+
+    it('throws when the Apify request itself responds with a non-2xx status', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+      const client = createApifyScraperClient('test-token');
+      await expect(client.fetchComments('tiktok', 'https://www.tiktok.com/@user/video/123', 15)).rejects.toThrow();
+    });
+  });
 });

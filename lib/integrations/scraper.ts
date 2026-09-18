@@ -43,6 +43,11 @@ export interface FetchProfilePostsOptions {
   includeFollowerCount?: boolean;
 }
 
+export interface PostComment {
+  text: string;
+  likeCount: number;
+}
+
 export interface DownloadedVideo {
   videoUrl: string; // fetchable, includes the Apify token as a query param
   durationSeconds: number;
@@ -75,6 +80,16 @@ export interface ScraperClient {
    * video-acquisition path is validated and built. See design spec §2.
    */
   fetchVideoForAnalysis(platform: 'tiktok' | 'instagram', url: string): Promise<DownloadedVideo>;
+  /**
+   * Real comment text + like counts for the comment-content analysis pass.
+   * Neither platform's actor reliably returns comments pre-sorted by
+   * popularity (confirmed live, 2026-09-18: TikTok's raw order roughly but
+   * not strictly clusters high-like comments first; Instagram's
+   * `latestComments` field is literally recency-ordered) -- callers get an
+   * explicit descending-by-likeCount sort, truncated to `limit`, regardless
+   * of platform.
+   */
+  fetchComments(platform: 'tiktok' | 'instagram', url: string, limit: number): Promise<PostComment[]>;
 }
 
 export function detectSocialPlatform(url: string): 'tiktok' | 'instagram' | null {
@@ -92,6 +107,13 @@ const APIFY_ACTORS: Record<'tiktok' | 'instagram', string> = {
   tiktok: 'clockworks~tiktok-scraper',
   instagram: 'apify~instagram-scraper',
 };
+
+// Same publisher as clockworks~tiktok-scraper, but the main scraper's
+// posts-type response never includes comment text (confirmed live,
+// 2026-09-18) -- this dedicated actor is the only way to get it for TikTok.
+// Instagram doesn't need an equivalent: apify~instagram-scraper's own
+// posts-type response already includes a latestComments array for free.
+const TIKTOK_COMMENTS_ACTOR = 'clockworks~tiktok-comments-scraper';
 
 // Bounds cost per creator regardless of how prolific they are — the
 // month-filter in lib/recap/aggregate.ts then narrows this down further.
@@ -375,6 +397,42 @@ export function createApifyScraperClient(apiToken: string, options: ApifyScraper
         durationSeconds: Number(videoMeta.duration ?? 0),
         transcript,
       };
+    },
+    async fetchComments(platform: 'tiktok' | 'instagram', url: string, limit: number): Promise<PostComment[]> {
+      const actorId = platform === 'tiktok' ? TIKTOK_COMMENTS_ACTOR : APIFY_ACTORS.instagram;
+      const runUrl = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${apiToken}`;
+      const response = await fetch(runUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          platform === 'tiktok'
+            ? { postURLs: [url], commentsPerPost: limit, maxRepliesPerComment: 0 }
+            : buildPostInput('instagram', url)
+        ),
+      });
+      if (!response.ok) {
+        throw new Error(`Apify comments scrape failed with status ${response.status}`);
+      }
+      const items = await response.json();
+      const rawComments: unknown[] =
+        platform === 'tiktok'
+          ? Array.isArray(items) ? items : []
+          : (items[0]?.latestComments ?? []);
+
+      const comments: PostComment[] = rawComments
+        .map((raw): PostComment | null => {
+          const item = raw as Record<string, unknown>;
+          const text = String(item.text ?? '').trim();
+          if (!text) return null;
+          const rawLikes = platform === 'tiktok' ? item.diggCount : item.likesCount;
+          return { text, likeCount: Number(rawLikes ?? 0) };
+        })
+        .filter((c): c is PostComment => c !== null);
+
+      // Neither actor reliably returns comments pre-sorted by popularity —
+      // see the ScraperClient interface doc comment.
+      comments.sort((a, b) => b.likeCount - a.likeCount);
+      return comments.slice(0, limit);
     },
   };
 }

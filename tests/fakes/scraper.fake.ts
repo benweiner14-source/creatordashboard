@@ -1,10 +1,11 @@
-import type { ScraperClient, SocialPostMetadata, ProfilePost, DownloadedVideo } from '@/lib/integrations/scraper';
+import type { ScraperClient, SocialPostMetadata, ProfilePost, DownloadedVideo, PostComment } from '@/lib/integrations/scraper';
 import { detectSocialPlatform, PlatformNotSupportedError } from '@/lib/integrations/scraper';
 
 export function createFakeScraperClient(
   overrides: Partial<SocialPostMetadata> = {},
   profilePosts: ProfilePost[] = [],
-  downloadedVideo: Partial<DownloadedVideo> = {}
+  downloadedVideo: Partial<DownloadedVideo> = {},
+  comments: PostComment[] = []
 ): ScraperClient {
   const metadata: SocialPostMetadata = {
     platform: 'tiktok',
@@ -33,5 +34,6 @@ export function createFakeScraperClient(
       }
       return video;
     },
+    fetchComments: async () => comments,
   };
 }
