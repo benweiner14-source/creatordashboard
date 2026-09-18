@@ -28,6 +28,10 @@ interface DiagnosticData {
   visualAudioNarrative: string | null;
   visualAudioIsEpisodic: boolean | null;
   visualAudioSeriesLabel: string | null;
+  commentAnalysisStatus: 'pending' | 'complete' | 'failed' | null;
+  commentAnalysisNarrative: string | null;
+  commentAnalysisHasContentRequest: boolean | null;
+  commentAnalysisContentRequestSummary: string | null;
   report: DiagnosticReportData;
 }
 
@@ -38,6 +42,9 @@ export default function DiagnosticReportPage() {
   const [enriching, setEnriching] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
   const [enrichBlocked, setEnrichBlocked] = useState<EnrichBlocked | null>(null);
+  const [analyzingComments, setAnalyzingComments] = useState(false);
+  const [commentAnalysisError, setCommentAnalysisError] = useState<string | null>(null);
+  const [commentAnalysisBlocked, setCommentAnalysisBlocked] = useState<EnrichBlocked | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +62,10 @@ export default function DiagnosticReportPage() {
           visualAudioNarrative: data.diagnostic.visual_audio_narrative,
           visualAudioIsEpisodic: data.diagnostic.visual_audio_is_episodic,
           visualAudioSeriesLabel: data.diagnostic.visual_audio_series_label,
+          commentAnalysisStatus: data.diagnostic.comment_analysis_status,
+          commentAnalysisNarrative: data.diagnostic.comment_analysis_narrative,
+          commentAnalysisHasContentRequest: data.diagnostic.comment_analysis_has_content_request,
+          commentAnalysisContentRequestSummary: data.diagnostic.comment_analysis_content_request_summary,
           report: data.diagnostic.report_json,
         });
       })
@@ -112,6 +123,48 @@ export default function DiagnosticReportPage() {
       setDiagnostic((prev) => (prev ? { ...prev, visualAudioStatus: 'failed' } : prev));
     } finally {
       setEnriching(false);
+    }
+  }
+
+  async function handleAnalyzeComments() {
+    setAnalyzingComments(true);
+    setCommentAnalysisError(null);
+    setCommentAnalysisBlocked(null);
+    try {
+      const res = await fetch(`/api/diagnostic/${params.id}/comments`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 402) {
+          setCommentAnalysisBlocked({
+            message: data.error ?? 'Comment Analysis requires an active subscription.',
+            upgradeUrl: data.upgradeUrl,
+          });
+          return;
+        }
+        if (res.status === 401) {
+          setCommentAnalysisBlocked({ message: 'Your session has expired. Please sign in again to run this analysis.' });
+          return;
+        }
+        setCommentAnalysisError(data.error ?? 'Something went wrong analyzing these comments. Please try again.');
+        setDiagnostic((prev) => (prev ? { ...prev, commentAnalysisStatus: 'failed' } : prev));
+        return;
+      }
+      setDiagnostic((prev) =>
+        prev
+          ? {
+              ...prev,
+              commentAnalysisStatus: 'complete',
+              commentAnalysisNarrative: data.narrative,
+              commentAnalysisHasContentRequest: data.hasContentRequest ?? null,
+              commentAnalysisContentRequestSummary: data.contentRequestSummary ?? null,
+            }
+          : prev
+      );
+    } catch {
+      setCommentAnalysisError('Something went wrong analyzing these comments. Please try again.');
+      setDiagnostic((prev) => (prev ? { ...prev, commentAnalysisStatus: 'failed' } : prev));
+    } finally {
+      setAnalyzingComments(false);
     }
   }
 
@@ -187,6 +240,55 @@ export default function DiagnosticReportPage() {
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
           <p>{enrichError ?? "Couldn't analyze this video."}</p>
           <button type="button" onClick={handleEnrich} disabled={enriching} className="mt-2 font-medium underline">
+            Try again
+          </button>
+        </div>
+      )}
+
+      {diagnostic.platform !== 'youtube' &&
+        !commentAnalysisBlocked &&
+        (!diagnostic.commentAnalysisStatus || diagnostic.commentAnalysisStatus === 'pending') && (
+          <button
+            type="button"
+            onClick={handleAnalyzeComments}
+            disabled={analyzingComments}
+            className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {analyzingComments
+              ? 'Reading your top comments…'
+              : diagnostic.commentAnalysisStatus === 'pending'
+                ? 'Analysis may have been interrupted — try again'
+                : 'See what your audience is actually saying'}
+          </button>
+        )}
+
+      {commentAnalysisBlocked && (
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>{commentAnalysisBlocked.message}</p>
+          {commentAnalysisBlocked.upgradeUrl && (
+            <a href={commentAnalysisBlocked.upgradeUrl} className="mt-2 inline-block font-medium underline">
+              Upgrade to unlock this analysis
+            </a>
+          )}
+        </div>
+      )}
+
+      {diagnostic.commentAnalysisStatus === 'complete' && diagnostic.commentAnalysisNarrative && (
+        <div className="rounded-lg bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          <p className="mb-1 font-semibold">What your audience is saying</p>
+          <p>{diagnostic.commentAnalysisNarrative}</p>
+          {diagnostic.commentAnalysisHasContentRequest && diagnostic.commentAnalysisContentRequestSummary && (
+            <p className="mt-2 inline-block rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800">
+              💡 Content idea from comments: {diagnostic.commentAnalysisContentRequestSummary}
+            </p>
+          )}
+        </div>
+      )}
+
+      {diagnostic.commentAnalysisStatus === 'failed' && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p>{commentAnalysisError ?? "Couldn't analyze these comments."}</p>
+          <button type="button" onClick={handleAnalyzeComments} disabled={analyzingComments} className="mt-2 font-medium underline">
             Try again
           </button>
         </div>

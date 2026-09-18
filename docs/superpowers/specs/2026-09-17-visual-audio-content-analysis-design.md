@@ -41,6 +41,14 @@ Rather than designing this pipeline on paper, each stage was proven against a re
 - **Retry-with-backoff inside the enrichment request itself.** Given the tight 60-second budget (§6), a slow step should fail fast and surface a clear "try again" error rather than retry and risk blowing the budget entirely silently.
 - **UI redesign beyond a single new narrative block** — the existing report page (`app/diagnostic/[id]/page.tsx`) gains one new section; no new page, no per-frame gallery UI.
 
+**Fast-follow (2026-09-18): comment-content analysis built as a standalone sibling feature.** Investigated as "comment-content analysis signal" — the question was whether a post's actual comments (not just comment *count*, which the existing scorer already uses) carry a signal worth surfacing. Unlike episodic detection, this didn't fold into the existing Visual & Audio pipeline: it needs no video/frames at all, works identically for TikTok and Instagram (no Instagram/YouTube acquisition gap to work around), and reads from a different Apify actor (`clockworks~tiktok-comments-scraper` for TikTok; Instagram's existing `apify~instagram-scraper` posts-call already returns `latestComments` for free). Built as its own opt-in, paid, per-diagnostic pass (`POST /api/diagnostic/[id]/comments`, `lib/diagnostic/comment-analysis-handler.ts`), mirroring this spec's architecture (pending/complete/failed status column, idempotency short-circuit, generic-error persistence) rather than extending `enrich-handler.ts`.
+
+Two real-data findings shaped the design:
+- **Neither actor's native comment ordering can be trusted to reflect popularity.** Verified live: Instagram's `latestComments` is chronological (its name notwithstanding), and TikTok's raw order roughly-but-not-strictly clusters high-like comments first. `fetchComments` (`lib/integrations/scraper.ts`) explicitly re-sorts by `likeCount` descending before truncating, rather than trusting either actor's default order.
+- **Structured output over narrative-only, same rationale as `isEpisodic`.** Alongside a short narrative, the response includes `hasContentRequest: boolean` / `contentRequestSummary: string | null` — whether a comment makes a specific, concrete request for future content (e.g. "you should do a pac-man island loot only challenge"), not a vague "more please". This makes the signal queryable/actionable (e.g. feeding Content Ideas later) instead of prose a human has to parse.
+
+Investigated and explicitly **not** built alongside this: fake/bot engagement detection (a false "this looks like bought engagement" call risks real reputational harm to a genuine creator, and organic content-type variance is statistically indistinguishable from fakery without labeled ground truth — recommended against, not attempted).
+
 ---
 
 ## 1. Data model

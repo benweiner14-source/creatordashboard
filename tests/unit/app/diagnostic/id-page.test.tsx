@@ -386,4 +386,248 @@ describe('DiagnosticReportPage', () => {
     await waitFor(() => expect(screen.getByText(/not available for youtube yet/i)).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
   });
+
+  it('shows the comment-analysis button for a tiktok diagnostic with no status yet', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            comment_analysis_status: null,
+            comment_analysis_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+    );
+
+    render(<DiagnosticReportPage />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /see what your audience is actually saying/i })).toBeInTheDocument()
+    );
+  });
+
+  it('shows the comment-analysis button for an instagram diagnostic too', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          diagnostic: {
+            platform: 'instagram',
+            comment_analysis_status: null,
+            comment_analysis_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+    );
+
+    render(<DiagnosticReportPage />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /see what your audience is actually saying/i })).toBeInTheDocument()
+    );
+  });
+
+  it('does not show the comment-analysis button for a youtube diagnostic', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          diagnostic: {
+            platform: 'youtube',
+            comment_analysis_status: null,
+            comment_analysis_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+    );
+
+    render(<DiagnosticReportPage />);
+
+    await waitFor(() => expect(screen.getByText('Strong hook')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /see what your audience is actually saying/i })).not.toBeInTheDocument();
+  });
+
+  it('clicking the comment-analysis button shows the narrative on success', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            comment_analysis_status: null,
+            comment_analysis_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ narrative: 'Your audience loves this.', hasContentRequest: false, contentRequestSummary: null }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    const button = await screen.findByRole('button', { name: /see what your audience is actually saying/i });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByText('Your audience loves this.')).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toContain('/comments');
+  });
+
+  it('shows a content-idea badge when the analysis finds a specific audience request', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            comment_analysis_status: null,
+            comment_analysis_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          narrative: 'Several viewers are asking for a follow-up.',
+          hasContentRequest: true,
+          contentRequestSummary: 'A pac-man island loot-only challenge video',
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    const button = await screen.findByRole('button', { name: /see what your audience is actually saying/i });
+    fireEvent.click(button);
+
+    await waitFor(() =>
+      expect(screen.getByText(/content idea from comments: a pac-man island loot-only challenge video/i)).toBeInTheDocument()
+    );
+  });
+
+  it('does not show a content-idea badge when no request was detected', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            comment_analysis_status: null,
+            comment_analysis_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ narrative: 'Your audience loves this.', hasContentRequest: false, contentRequestSummary: null }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    const button = await screen.findByRole('button', { name: /see what your audience is actually saying/i });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByText('Your audience loves this.')).toBeInTheDocument());
+    expect(screen.queryByText(/content idea from comments/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a retry option when the comment-analysis call fails', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            comment_analysis_status: null,
+            comment_analysis_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: "Couldn't generate an analysis for these comments. Please try again." }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    const button = await screen.findByRole('button', { name: /see what your audience is actually saying/i });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByText(/couldn't generate an analysis/i)).toBeInTheDocument());
+    const tryAgainButtons = screen.getAllByRole('button', { name: /try again/i });
+    expect(tryAgainButtons.length).toBeGreaterThan(0);
+  });
+
+  it('shows an upgrade link and no retry button when the comment-analysis call returns 402', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          diagnostic: {
+            platform: 'tiktok',
+            comment_analysis_status: null,
+            comment_analysis_narrative: null,
+            report_json: {
+              headline: 'Strong hook',
+              scores: { overallScore: 72 },
+              explanationSegments: [{ type: 'text', value: 'Good job.' }],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 402,
+        json: async () => ({
+          error: 'Comment Analysis requires an active subscription.',
+          upgradeUrl: '/billing',
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<DiagnosticReportPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /see what your audience is actually saying/i }));
+
+    await waitFor(() => expect(screen.getByText(/requires an active subscription/i)).toBeInTheDocument());
+    const upgradeLink = screen.getByRole('link', { name: /upgrade to unlock this analysis/i });
+    expect(upgradeLink).toHaveAttribute('href', '/billing');
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
 });
