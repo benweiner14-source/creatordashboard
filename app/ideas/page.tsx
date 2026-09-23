@@ -15,12 +15,90 @@ const MEDIUM_LABELS: Record<ContentIdea['medium'], string> = {
   both: 'Reel + Carousel',
 };
 
+const NICHE_PRESETS = [
+  'Roleplay',
+  'Heists & Comedy Montages',
+  'Speedrunning',
+  'Mod Showcases',
+  'Guides & Tips',
+  'Lore & Leak Theories',
+  'Trailer Breakdowns & Reactions',
+  'Release-Date Speculation',
+] as const;
+
+// These don't need actual GTA6 gameplay to exist, so they still have a real,
+// current angle before the game ships — unlike e.g. "Guides & Tips", which
+// genuinely has nothing honest to say about a game that isn't out yet.
+const PRE_LAUNCH_FRIENDLY_NICHES = new Set<string>([
+  'Lore & Leak Theories',
+  'Trailer Breakdowns & Reactions',
+  'Release-Date Speculation',
+]);
+
+const MAX_NICHE_SELECTIONS = 3;
+
+/** Inverse of composeNiche: splits a saved niche string back into known preset chips plus leftover "Other" text. */
+function parseNicheIntoChips(niche: string): { selectedChips: string[]; otherText: string } {
+  const parts = niche
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const selectedChips: string[] = [];
+  const leftovers: string[] = [];
+  for (const part of parts) {
+    const match = NICHE_PRESETS.find((preset) => preset.toLowerCase() === part.toLowerCase());
+    if (match && !selectedChips.includes(match)) {
+      selectedChips.push(match);
+    } else {
+      leftovers.push(part);
+    }
+  }
+  return { selectedChips, otherText: leftovers.join(', ') };
+}
+
+function composeNiche(selectedChips: string[], otherText: string): string {
+  const trimmedOther = otherText.trim();
+  return [...selectedChips, ...(trimmedOther ? [trimmedOther] : [])].join(', ');
+}
+
 function IdeasPageInner() {
   const [state, dispatch] = useReducer(ideasPageReducer, createInitialIdeasPageState());
   const searchParams = useSearchParams();
   const warroomContext = searchParams.get('context');
   const stillWorkingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [contextConsumed, setContextConsumed] = useState(false);
+  const [selectedChips, setSelectedChips] = useState<string[]>([]);
+  const [otherSelected, setOtherSelected] = useState(false);
+  const [otherText, setOtherText] = useState('');
+
+  function initializeChipsFromNiche(niche: string) {
+    const parsed = parseNicheIntoChips(niche);
+    setSelectedChips(parsed.selectedChips);
+    setOtherText(parsed.otherText);
+    setOtherSelected(parsed.otherText.length > 0);
+  }
+
+  const selectionCount = selectedChips.length + (otherSelected ? 1 : 0);
+
+  function toggleChip(chip: string) {
+    const isSelected = selectedChips.includes(chip);
+    if (!isSelected && selectionCount >= MAX_NICHE_SELECTIONS) return;
+    const nextChips = isSelected ? selectedChips.filter((c) => c !== chip) : [...selectedChips, chip];
+    setSelectedChips(nextChips);
+    dispatch({ type: 'NICHE_CHANGED', value: composeNiche(nextChips, otherSelected ? otherText : '') });
+  }
+
+  function toggleOther() {
+    if (!otherSelected && selectionCount >= MAX_NICHE_SELECTIONS) return;
+    const next = !otherSelected;
+    setOtherSelected(next);
+    dispatch({ type: 'NICHE_CHANGED', value: composeNiche(selectedChips, next ? otherText : '') });
+  }
+
+  function handleOtherTextChange(value: string) {
+    setOtherText(value);
+    dispatch({ type: 'NICHE_CHANGED', value: composeNiche(selectedChips, value) });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +119,7 @@ function IdeasPageInner() {
           dispatch({ type: 'BOOTSTRAP_FAILED' });
           return;
         }
+        initializeChipsFromNiche(data.niche ?? '');
         dispatch({
           type: 'BOOTSTRAPPED',
           niche: data.niche ?? '',
@@ -181,18 +260,63 @@ function IdeasPageInner() {
         <p className="text-gray-600">Set your GTA 6 focus once, then get a ranked shortlist of Reel and carousel concepts for the week.</p>
 
         <div className="flex flex-col gap-3">
-          <label htmlFor="ideas-niche" className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-            Your GTA 6 focus
-            <input
-              id="ideas-niche"
-              type="text"
-              value={state.niche}
-              onChange={(e) => dispatch({ type: 'NICHE_CHANGED', value: e.target.value })}
-              placeholder="e.g. GTA RP, speedrunning, comedy skits, mod showcases, lore theories"
-              disabled={state.status === 'generating' || state.status === 'ideasReady'}
-              className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
-            />
-          </label>
+          <p className="text-sm font-medium text-gray-700">Your GTA 6 focus (pick up to {MAX_NICHE_SELECTIONS})</p>
+          <div className="flex flex-wrap gap-2">
+            {NICHE_PRESETS.map((preset) => {
+              const isSelected = selectedChips.includes(preset);
+              const disabled =
+                state.status === 'generating' ||
+                state.status === 'ideasReady' ||
+                (!isSelected && selectionCount >= MAX_NICHE_SELECTIONS);
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => toggleChip(preset)}
+                  disabled={disabled}
+                  aria-pressed={isSelected}
+                  className={`rounded-full border px-4 py-2 text-sm font-medium disabled:opacity-50 ${
+                    isSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-300 text-gray-700'
+                  }`}
+                >
+                  {preset}
+                  {PRE_LAUNCH_FRIENDLY_NICHES.has(preset) ? ' 🔥' : ''}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={toggleOther}
+              disabled={
+                state.status === 'generating' ||
+                state.status === 'ideasReady' ||
+                (!otherSelected && selectionCount >= MAX_NICHE_SELECTIONS)
+              }
+              aria-pressed={otherSelected}
+              className={`rounded-full border px-4 py-2 text-sm font-medium disabled:opacity-50 ${
+                otherSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-300 text-gray-700'
+              }`}
+            >
+              Other
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">🔥 = works great before GTA 6 launches</p>
+
+          {otherSelected && (
+            <label htmlFor="ideas-niche-other" className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Describe your own focus
+              <input
+                id="ideas-niche-other"
+                type="text"
+                value={otherText}
+                onChange={(e) => handleOtherTextChange(e.target.value)}
+                placeholder="e.g. car meet builds, cosplay, fan-made trailers"
+                disabled={state.status === 'generating' || state.status === 'ideasReady'}
+                className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
+              />
+            </label>
+          )}
+
           {isNicheEditingState(state) && (
             <button
               type="button"
@@ -205,7 +329,10 @@ function IdeasPageInner() {
           {state.status === 'ideasReady' && (
             <button
               type="button"
-              onClick={() => dispatch({ type: 'EDIT_NICHE' })}
+              onClick={() => {
+                initializeChipsFromNiche(state.niche);
+                dispatch({ type: 'EDIT_NICHE' });
+              }}
               className="self-start text-sm text-indigo-700 underline"
             >
               Edit niche

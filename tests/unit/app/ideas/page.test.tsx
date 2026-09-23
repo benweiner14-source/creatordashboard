@@ -28,7 +28,8 @@ describe('IdeasPage', () => {
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: null, digest: null }) })
     );
     render(<IdeasPage />);
-    await waitFor(() => expect(screen.getByLabelText(/your gta 6 focus/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/pick up to/i)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /^lore & leak theories/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /get this week's ideas/i })).not.toBeInTheDocument();
   });
 
@@ -370,7 +371,8 @@ describe('IdeasPage', () => {
 
     // While the POST /api/ideas request is still pending, state.status === 'generating'.
     await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
-    expect(screen.getByLabelText(/your gta 6 focus/i)).toHaveValue('home baking');
+    // 'home baking' doesn't match any preset chip, so it round-trips through the "Other" field.
+    expect(screen.getByLabelText(/describe your own focus/i)).toHaveValue('home baking');
 
     resolveGenerate({
       ok: true,
@@ -411,8 +413,9 @@ describe('IdeasPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(<IdeasPage />);
-    await waitFor(() => screen.getByLabelText(/your gta 6 focus/i));
-    fireEvent.change(screen.getByLabelText(/your gta 6 focus/i), { target: { value: 'home baking' } });
+    await waitFor(() => screen.getByText(/pick up to/i));
+    fireEvent.click(screen.getByRole('button', { name: /^other$/i }));
+    fireEvent.change(screen.getByLabelText(/describe your own focus/i), { target: { value: 'home baking' } });
     fireEvent.click(screen.getByRole('button', { name: /save niche/i }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: /get this week's ideas/i })).toBeInTheDocument());
@@ -420,5 +423,81 @@ describe('IdeasPage', () => {
       '/api/ideas/niche',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ niche: 'home baking' }) })
     );
+  });
+
+  it('composes multiple selected chips into a comma-joined niche string', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ niche: null, digest: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByText(/pick up to/i));
+    fireEvent.click(screen.getByRole('button', { name: /^roleplay$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^speedrunning$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save niche/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/ideas/niche',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ niche: 'Roleplay, Speedrunning' }) })
+      )
+    );
+  });
+
+  it('caps chip selection at 3 and disables the rest', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: null, digest: null }) }));
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByText(/pick up to/i));
+
+    fireEvent.click(screen.getByRole('button', { name: /^roleplay$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^speedrunning$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^mod showcases$/i }));
+
+    const fourthChip = screen.getByRole('button', { name: /^guides & tips$/i });
+    expect(fourthChip).toBeDisabled();
+    fireEvent.click(fourthChip);
+    expect(fourthChip).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('deselecting a chip frees up a slot for another selection', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: null, digest: null }) }));
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByText(/pick up to/i));
+
+    fireEvent.click(screen.getByRole('button', { name: /^roleplay$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^speedrunning$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^mod showcases$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^roleplay$/i })); // deselect
+
+    const fourthChip = screen.getByRole('button', { name: /^guides & tips$/i });
+    expect(fourthChip).not.toBeDisabled();
+  });
+
+  it('flags pre-launch-friendly focuses with the 🔥 marker', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ niche: null, digest: null }) }));
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByText(/pick up to/i));
+
+    expect(screen.getByRole('button', { name: /release-date speculation 🔥/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^guides & tips$/i })).toBeInTheDocument();
+  });
+
+  it('re-parses a previously saved niche back into its matching chips when editing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ niche: 'Roleplay, Speedrunning, a custom thing', digest: null }),
+      })
+    );
+    render(<IdeasPage />);
+    await waitFor(() => screen.getByText(/pick up to/i));
+
+    expect(screen.getByRole('button', { name: /^roleplay$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^speedrunning$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^other$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText(/describe your own focus/i)).toHaveValue('a custom thing');
   });
 });
