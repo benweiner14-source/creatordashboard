@@ -12,7 +12,10 @@ export async function GET(request: Request) {
     {
       exchangeCodeForSession: (c) => supabase.auth.exchangeCodeForSession(c),
       hasVerifiedMfaFactor: async () => {
-        const { data } = await supabase.auth.mfa.listFactors();
+        const { data, error } = await supabase.auth.mfa.listFactors();
+        if (error) {
+          console.error('MFA factor lookup failed; treating as no factors:', error);
+        }
         return (data?.totp ?? []).some((factor) => factor.status === 'verified');
       },
     },

@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { isSafeRelativePath } from '@/lib/auth/callback';
 
 export default function MfaChallengePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get('next') ?? '/home';
+  const rawNext = searchParams.get('next');
+  const next = rawNext && isSafeRelativePath(rawNext) ? rawNext : '/home';
   const [code, setCode] = useState('');
   const [factorId, setFactorId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
