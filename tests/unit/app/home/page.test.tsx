@@ -74,6 +74,35 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'August recap' })).toBeInTheDocument();
   });
 
+  it('names the recap month from the calendar-month key regardless of the viewer timezone', async () => {
+    // Finding I3 regression: recap.month is a calendar-month key
+    // ('2026-08-01' means "the August 2026 recap"), not a point-in-time
+    // timestamp. A viewer timezone behind UTC (like America/Los_Angeles)
+    // must not shift it back to "July recap" — the month is always read
+    // back in UTC, independent of `timezone`.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () =>
+          homeResponse({
+            timezone: 'America/Los_Angeles',
+            recap: {
+              id: 'card-1',
+              month: '2026-08-01',
+              totals: { views: 142000, likes: 4000, comments: 300, postCount: 5 },
+              platformData: { youtube: { views: 100000, likes: 3000, comments: 200, postCount: 3 } },
+              topPost: { platform: 'youtube', captionOrTitle: '3 Editing Tricks I Wish I Knew Sooner', viewCount: 38000, permalink: 'https://example.com' },
+              generatedAt: '2026-08-01T00:00:00Z',
+            },
+          }),
+      })
+    );
+    render(<HomePage />);
+    await waitFor(() => expect(screen.getByText('142K')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'August recap' })).toBeInTheDocument();
+  });
+
   it('shows a "set your niche" prompt when no niche is set', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => homeResponse() }));
     render(<HomePage />);

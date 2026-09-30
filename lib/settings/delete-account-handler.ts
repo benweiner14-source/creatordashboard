@@ -43,7 +43,18 @@ export async function handleDeleteAccountRequest(
     return { status: 429, body: { error: 'Too many attempts. Please wait and try again.' } };
   }
 
-  const activeSubscriptionId = await deps.getActiveStripeSubscriptionId(context.profileId);
+  let activeSubscriptionId: string | null;
+  try {
+    activeSubscriptionId = await deps.getActiveStripeSubscriptionId(context.profileId);
+  } catch {
+    // A failed lookup is NOT the same as "no active subscription" — treating
+    // it that way would let deletion proceed (and Stripe keep billing) with
+    // no local record left to reconcile against once the scheduled-deletion
+    // cron cascade-deletes this profile's subscriptions row 14 days later.
+    // Fail the whole request closed here, matching the
+    // cancelStripeSubscription failure path just below. See design spec §8.
+    return { status: 500, body: { error: 'Something went wrong checking your subscription. Please try again.' } };
+  }
   if (activeSubscriptionId) {
     try {
       await deps.cancelStripeSubscription(activeSubscriptionId);

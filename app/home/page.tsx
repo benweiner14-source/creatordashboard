@@ -146,7 +146,13 @@ function RecapCard({ recap, timezone }: { recap: HomeData['recap']; timezone: st
   }
 
   const platformEntries = RECAP_PLATFORM_ORDER.filter((p) => recap.platformData[p]);
-  const monthName = formatDateInTimezone(recap.month, timezone, { month: 'long' });
+  // recap.month is a calendar-month key (e.g. '2026-08-01' meaning "the
+  // August 2026 recap"), not a point-in-time timestamp — it must always be
+  // read back as the month it names, so this is formatted in UTC regardless
+  // of the viewer's `timezone` (unlike every other timestamp on this page).
+  // Running it through the viewer's timezone would shift it backward a day
+  // for any negative UTC offset, misnaming the month entirely.
+  const monthName = formatDateInTimezone(recap.month, 'UTC', { month: 'long' });
 
   return (
     <HomeCard ariaLabelledBy="recap-heading">

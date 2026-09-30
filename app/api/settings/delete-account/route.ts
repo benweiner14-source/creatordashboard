@@ -16,11 +16,18 @@ export async function POST() {
     {
       rateLimitStore: createSupabaseRateLimitStore(serviceClient),
       getActiveStripeSubscriptionId: async (profileId) => {
-        const { data } = await serviceClient
+        const { data, error } = await serviceClient
           .from('subscriptions')
           .select('stripe_subscription_id, status')
           .eq('profile_id', profileId)
           .maybeSingle();
+        if (error) {
+          // Do NOT treat this like "no active subscription" — that would let
+          // deletion proceed (and Stripe billing continue) with nothing left
+          // to reconcile against once the profile is cascade-deleted. Throw
+          // so handleDeleteAccountRequest fails the whole request closed.
+          throw new Error(`Failed to look up active subscription: ${error.message}`);
+        }
         if (!data || !data.stripe_subscription_id) return null;
         return data.status === 'active' || data.status === 'past_due' ? data.stripe_subscription_id : null;
       },

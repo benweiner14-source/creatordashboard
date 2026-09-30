@@ -120,6 +120,26 @@ describe('AppNav', () => {
     }
   });
 
+  it('shows a "deletion canceled" banner when the session response says so', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ email: 'jordan@example.com', justCancelledDeletion: true }),
+      })
+    );
+    render(<AppNav />);
+    await waitFor(() => expect(screen.getByText('jordan@example.com')).toBeInTheDocument());
+    expect(screen.getByText('Your account deletion was canceled.')).toBeInTheDocument();
+  });
+
+  it('does not show the "deletion canceled" banner when the session response omits it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+    render(<AppNav />);
+    await waitFor(() => expect(screen.getByText('jordan@example.com')).toBeInTheDocument());
+    expect(screen.queryByText('Your account deletion was canceled.')).not.toBeInTheDocument();
+  });
+
   it('includes a War Room link right after Home', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
     render(<AppNav />);

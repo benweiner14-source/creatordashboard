@@ -70,6 +70,25 @@ describe('handleDeleteAccountRequest', () => {
     expect(signOut).not.toHaveBeenCalled();
   });
 
+  it('blocks the whole request if the active-subscription lookup fails, without scheduling anything', async () => {
+    const scheduleDeletion = vi.fn();
+    const signOut = vi.fn();
+    const cancelStripeSubscription = vi.fn();
+    const deps = makeDeps({
+      getActiveStripeSubscriptionId: vi.fn().mockRejectedValue(new Error('DB is down')),
+      cancelStripeSubscription,
+      scheduleDeletion,
+      signOut,
+    });
+
+    const result = await handleDeleteAccountRequest(deps, { profileId: 'profile-1' });
+
+    expect(result.status).toBe(500);
+    expect(cancelStripeSubscription).not.toHaveBeenCalled();
+    expect(scheduleDeletion).not.toHaveBeenCalled();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
   it('rate-limits repeated deletion requests', async () => {
     const store = createInMemoryRateLimitStore();
     const deps = makeDeps({ rateLimitStore: store });

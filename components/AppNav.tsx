@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Banner } from '@/components/Banner';
 
 const NAV_LINKS = [
   { href: '/home', label: 'Home' },
@@ -20,6 +21,13 @@ export function AppNav() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Mirrors app/settings/page.tsx's own justCancelledDeletion state: a
+  // one-time notice for the current page load, not persisted anywhere, so
+  // it naturally goes away on the next navigation or reload. AppNav mounts
+  // on every authenticated page (not just Settings), so this is the only
+  // place a user who signs back in anywhere else learns that their pending
+  // account deletion was just auto-cancelled.
+  const [justCancelledDeletion, setJustCancelledDeletion] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +35,11 @@ export function AppNav() {
       .then(async (res) => {
         if (cancelled || !res.ok) return;
         const data = await res.json();
-        if (!cancelled) setEmail(data.email ?? null);
+        if (cancelled) return;
+        setEmail(data.email ?? null);
+        if (data.justCancelledDeletion) {
+          setJustCancelledDeletion(true);
+        }
       })
       .catch(() => {});
     return () => {
@@ -50,6 +62,13 @@ export function AppNav() {
 
   return (
     <div className="relative">
+      {justCancelledDeletion && (
+        <div className="px-2 pt-4 sm:px-4">
+          <Banner variant="positive" label="Welcome back">
+            Your account deletion was canceled.
+          </Banner>
+        </div>
+      )}
       <nav aria-label="Primary" className="flex items-center justify-between gap-6 px-2 py-4 sm:px-4">
         <Link href="/home" className="flex items-center gap-2 text-base font-bold text-gray-900">
           <span aria-hidden="true" className="h-6 w-6 rounded-lg bg-[linear-gradient(135deg,#4338ca,#7c3aed)]" />

@@ -24,11 +24,11 @@ test('dashboard home renders both sections and nav links work', async ({ page })
       contentType: 'application/json',
       body: JSON.stringify({
         email: 'jordan@example.com',
-        // Non-UTC on purpose: 2026-08-01T00:00:00Z is July 31, 5pm in Los
-        // Angeles (UTC-7, DST), so this fixture actually exercises
-        // timezone-aware month formatting rather than merely avoiding
-        // `undefined` (which would silently fall back to the host's local
-        // zone and could pass by accident).
+        // Non-UTC on purpose: America/Los_Angeles (UTC-7/-8) is behind UTC,
+        // so if recap.month were ever reinterpreted through this timezone
+        // instead of being read as a calendar-month key, '2026-08-01' would
+        // shift back to July and the heading below would read "July recap".
+        // Asserting "August recap" here is what pins that down.
         timezone: 'America/Los_Angeles',
         diagnostic: null,
         recap: {
@@ -59,11 +59,13 @@ test('dashboard home renders both sections and nav links work', async ({ page })
 
   await expect(page.getByText('Welcome back, Jordan.')).toBeVisible();
   await expect(page.getByText('142K')).toBeVisible();
-  // recap.month is '2026-08-01' (Aug 1 UTC midnight), which in the fixture's
-  // America/Los_Angeles timezone is still July 31, 5pm — rendering "July
-  // recap" here (not "August recap") proves the page formats in the saved
-  // timezone rather than UTC or the host's local zone.
-  await expect(page.getByRole('heading', { name: 'July recap' })).toBeVisible();
+  // recap.month ('2026-08-01') is a calendar-month key naming the August
+  // 2026 recap, not a point-in-time timestamp. The fixture's timezone is
+  // America/Los_Angeles (UTC-7/-8) specifically to prove the heading stays
+  // "August recap" — i.e. that this field is always read back in UTC —
+  // rather than being reinterpreted through the viewer's timezone, which
+  // would shift it backward to "July recap" for any negative UTC offset.
+  await expect(page.getByRole('heading', { name: 'August recap' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Get my ideas' })).toBeVisible();
 
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
