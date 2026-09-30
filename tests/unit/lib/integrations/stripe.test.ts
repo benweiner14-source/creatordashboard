@@ -59,4 +59,28 @@ describe('createStripeClient', () => {
     const client = createStripeClient('sk_test_123');
     await expect(client.createCustomer({ email: 'creator@example.com' })).rejects.toThrow('Your card was declined.');
   });
+
+  describe('cancelSubscription', () => {
+    it('sends a DELETE request to the subscription endpoint', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'sub_1', status: 'canceled' }) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const client = createStripeClient('sk_test_123');
+      await client.cancelSubscription('sub_1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.stripe.com/v1/subscriptions/sub_1',
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('throws with the Stripe error message on failure', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: { message: 'No such subscription' } }) })
+      );
+      const client = createStripeClient('sk_test_123');
+      await expect(client.cancelSubscription('sub_bad')).rejects.toThrow('No such subscription');
+    });
+  });
 });

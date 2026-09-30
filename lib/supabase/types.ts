@@ -16,6 +16,7 @@ export interface Database {
           warroom_email_opt_in: boolean;
           timezone: string;
           locale: string;
+          scheduled_deletion_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -32,6 +33,7 @@ export interface Database {
           warroom_email_opt_in?: boolean;
           timezone?: string;
           locale?: string;
+          scheduled_deletion_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;

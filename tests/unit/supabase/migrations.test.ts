@@ -252,4 +252,9 @@ describe('supabase migrations', () => {
     expect(sql).toContain('insert into public.notification_preferences');
     expect(sql).toContain('digest_email_opt_in');
   });
+
+  it('includes a migration adding scheduled_deletion_at to profiles', () => {
+    const sql = readMigrationContaining('add_scheduled_deletion_to_profiles');
+    expect(sql).toContain('add column scheduled_deletion_at timestamptz');
+  });
 });
