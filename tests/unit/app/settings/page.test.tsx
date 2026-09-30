@@ -96,4 +96,25 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/'));
     expect(fetchMock).toHaveBeenLastCalledWith('/api/auth/sign-out', { method: 'POST' });
   });
+
+  it('saves the display name on blur', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const input = await screen.findByLabelText('Display name');
+    fireEvent.change(input, { target: { value: 'Jordan' } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/settings/profile',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ displayName: 'Jordan' }) })
+      )
+    );
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+  });
 });

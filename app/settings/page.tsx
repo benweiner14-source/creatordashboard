@@ -40,6 +40,7 @@ export default function SettingsPage() {
 
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+  const [displayNameSaved, setDisplayNameSaved] = useState(false);
   const [twoFactor, setTwoFactor] = useState(false);
   const [notifOn, setNotifOn] = useState<Record<NotifKey, boolean>>({
     recap: true,
@@ -207,9 +208,22 @@ export default function SettingsPage() {
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
+              onBlur={async () => {
+                if (!displayName.trim()) return;
+                const res = await fetch('/api/settings/profile', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ displayName }),
+                });
+                if (res.ok) {
+                  setDisplayNameSaved(true);
+                  setTimeout(() => setDisplayNameSaved(false), 1700);
+                }
+              }}
               maxLength={60}
               className="rounded-[10px] border border-[#d8d8e0] px-[14px] py-[10px] font-normal text-gray-900"
             />
+            {displayNameSaved && <span className="text-xs text-[#047857]">Saved</span>}
           </label>
           <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-gray-700">
             Email
