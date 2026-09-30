@@ -10,6 +10,7 @@ export interface Database {
           youtube_channel_handle: string | null;
           tiktok_handle: string | null;
           instagram_handle: string | null;
+          // deprecated: superseded by notification_preferences.new_content_ideas_ready (see 2026-09-30-settings-backend-design.md §6)
           digest_email_opt_in: boolean;
           digest_last_sent_at: string | null;
           warroom_email_opt_in: boolean;
@@ -25,6 +26,7 @@ export interface Database {
           youtube_channel_handle?: string | null;
           tiktok_handle?: string | null;
           instagram_handle?: string | null;
+          // deprecated: superseded by notification_preferences.new_content_ideas_ready (see 2026-09-30-settings-backend-design.md §6)
           digest_email_opt_in?: boolean;
           digest_last_sent_at?: string | null;
           warroom_email_opt_in?: boolean;

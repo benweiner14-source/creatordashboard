@@ -53,8 +53,8 @@ export async function GET(request: Request) {
       getOptedInCandidates: async (limit) => {
         const { data, error } = await serviceClient
           .from('profiles')
-          .select('id, niche')
-          .eq('digest_email_opt_in', true)
+          .select('id, niche, notification_preferences!inner(new_content_ideas_ready)')
+          .eq('notification_preferences.new_content_ideas_ready', true)
           .not('niche', 'is', null)
           .order('digest_last_sent_at', { ascending: true, nullsFirst: true })
           .limit(limit);
