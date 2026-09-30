@@ -239,4 +239,17 @@ describe('supabase migrations', () => {
     expect(sql).toContain("add column timezone text not null default 'UTC'");
     expect(sql).toContain("add column locale text not null default 'en-US'");
   });
+
+  it('includes a notification_preferences table migration with a backfill from digest_email_opt_in', () => {
+    const sql = readMigrationContaining('create_notification_preferences');
+    expect(sql).toContain('create table public.notification_preferences');
+    expect(sql).toContain('profile_id uuid primary key references public.profiles(id) on delete cascade');
+    expect(sql).toContain('weekly_recap_ready boolean not null default true');
+    expect(sql).toContain('new_content_ideas_ready boolean not null default true');
+    expect(sql).toContain('diagnostic_finished boolean not null default true');
+    expect(sql).toContain('product_marketing boolean not null default false');
+    expect(sql).toContain('payment_billing_alerts boolean not null default true');
+    expect(sql).toContain('insert into public.notification_preferences');
+    expect(sql).toContain('digest_email_opt_in');
+  });
 });

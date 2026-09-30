@@ -191,6 +191,28 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['subscriptions']['Insert']>;
         Relationships: [];
       };
+      notification_preferences: {
+        Row: {
+          profile_id: string;
+          weekly_recap_ready: boolean;
+          new_content_ideas_ready: boolean;
+          diagnostic_finished: boolean;
+          product_marketing: boolean;
+          payment_billing_alerts: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          weekly_recap_ready?: boolean;
+          new_content_ideas_ready?: boolean;
+          diagnostic_finished?: boolean;
+          product_marketing?: boolean;
+          payment_billing_alerts?: boolean;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['notification_preferences']['Insert']>;
+        Relationships: [];
+      };
       strategy_breakdowns: {
         Row: {
           id: string;
