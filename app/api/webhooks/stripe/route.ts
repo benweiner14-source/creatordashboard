@@ -41,11 +41,23 @@ export async function POST(request: Request) {
     const { data: userData, error: userError } = await serviceClient.auth.admin.getUserById(sub.profile_id);
     if (userError || !userData?.user?.email) return;
 
-    await emailClient.sendEmail({
-      to: userData.user.email,
-      subject: "We couldn't process your last payment",
-      html: '<p>We were unable to process your last payment for Creator Dashboard. Please update your card in Billing to keep your subscription active.</p>',
-    });
+    // The subscription status has already been written to the DB by the
+    // time we get here, so a Resend failure must not bubble up into the
+    // outer handler's try/catch — that would return a 500 and cause Stripe
+    // to retry the whole event, even though the DB write already succeeded.
+    // On retry the pre-update status read would already reflect 'past_due',
+    // shouldSendPastDueAlert would return false, and the alert would be
+    // silently dropped for good. Instead we log and swallow so the failure
+    // is at least visible to an operator.
+    try {
+      await emailClient.sendEmail({
+        to: userData.user.email,
+        subject: "We couldn't process your last payment",
+        html: '<p>We were unable to process your last payment for Creator Dashboard. Please update your card in Billing to keep your subscription active.</p>',
+      });
+    } catch (err) {
+      console.error('Failed to send past-due payment alert:', err);
+    }
   }
 
   try {
