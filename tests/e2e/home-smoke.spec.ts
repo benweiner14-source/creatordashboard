@@ -24,6 +24,12 @@ test('dashboard home renders both sections and nav links work', async ({ page })
       contentType: 'application/json',
       body: JSON.stringify({
         email: 'jordan@example.com',
+        // Non-UTC on purpose: 2026-08-01T00:00:00Z is July 31, 5pm in Los
+        // Angeles (UTC-7, DST), so this fixture actually exercises
+        // timezone-aware month formatting rather than merely avoiding
+        // `undefined` (which would silently fall back to the host's local
+        // zone and could pass by accident).
+        timezone: 'America/Los_Angeles',
         diagnostic: null,
         recap: {
           id: 'card-1',
@@ -53,6 +59,11 @@ test('dashboard home renders both sections and nav links work', async ({ page })
 
   await expect(page.getByText('Welcome back, Jordan.')).toBeVisible();
   await expect(page.getByText('142K')).toBeVisible();
+  // recap.month is '2026-08-01' (Aug 1 UTC midnight), which in the fixture's
+  // America/Los_Angeles timezone is still July 31, 5pm — rendering "July
+  // recap" here (not "August recap") proves the page formats in the saved
+  // timezone rather than UTC or the host's local zone.
+  await expect(page.getByRole('heading', { name: 'July recap' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Get my ideas' })).toBeVisible();
 
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();

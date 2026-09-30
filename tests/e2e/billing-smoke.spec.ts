@@ -34,7 +34,15 @@ test('a subscribed visitor on /billing sees their renewal date and can open the 
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ status: 'active', currentPeriodEnd: '2026-09-19T00:00:00Z', cancelAtPeriodEnd: false }),
+      body: JSON.stringify({
+        status: 'active',
+        currentPeriodEnd: '2026-09-19T00:00:00Z',
+        cancelAtPeriodEnd: false,
+        // Non-UTC on purpose: 2026-09-19T00:00:00Z is Sept 18, 5pm in Los
+        // Angeles (UTC-7, DST), so this fixture actually exercises
+        // timezone-aware formatting rather than merely avoiding `undefined`.
+        timezone: 'America/Los_Angeles',
+      }),
     })
   );
   await page.route('**/api/billing/portal', (route) =>
@@ -46,7 +54,10 @@ test('a subscribed visitor on /billing sees their renewal date and can open the 
 
   await page.goto('/billing');
 
-  await expect(page.getByText(/you're subscribed — renews/i)).toBeVisible();
+  // Renders "September 18", not "September 19" — proves the page formats
+  // in the fixture's America/Los_Angeles timezone, not UTC or the host's
+  // local zone.
+  await expect(page.getByText(/you're subscribed — renews September 18/i)).toBeVisible();
   await page.getByRole('button', { name: /manage plan/i }).click();
   await page.waitForURL('https://billing.stripe.com/session/xyz');
 });
