@@ -156,6 +156,20 @@ describe('DiagnosticInputPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/still working/i);
   });
 
+  it('rejects a well-formed but unsupported-platform URL immediately, with no network call and no sign-in prompt', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DiagnosticInputPage />);
+    fireEvent.change(screen.getByLabelText(/paste a youtube, tiktok, or instagram link/i), {
+      target: { value: 'https://example.com/whatever' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /get my report/i }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('not a supported YouTube, TikTok, or Instagram URL');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+  });
+
   it('lands directly in the sign-in prompt with a notice when returning from an expired magic link', () => {
     mockSearchParams = new URLSearchParams(
       'url=' + encodeURIComponent('https://www.tiktok.com/@user/video/123') + '&authError=expired'

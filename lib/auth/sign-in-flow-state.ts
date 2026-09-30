@@ -31,6 +31,24 @@ export function isValidUrlFormat(url: string): boolean {
   return url.trim().length > 0;
 }
 
+export const UNSUPPORTED_PLATFORM_ERROR = 'That link is not a supported YouTube, TikTok, or Instagram URL.';
+
+/**
+ * Mirrors the platform hostnames lib/integrations/scraper.ts and
+ * lib/integrations/youtube.ts already recognize server-side, so a
+ * well-formed but unsupported link (e.g. a plain website) is rejected here
+ * instead of only after a full sign-in-by-email round trip -- the server's
+ * own check runs post-auth and previously was the only place this was caught.
+ */
+export function detectSupportedPlatformUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === 'youtu.be' || hostname.includes('youtube.com') || hostname.includes('tiktok.com') || hostname.includes('instagram.com');
+  } catch {
+    return false;
+  }
+}
+
 export function createInitialSignInFlowState(params: { url?: string; authError?: string } = {}): SignInFlowState {
   const url = params.url ?? '';
   if (params.authError === 'expired' && url) {
@@ -55,6 +73,9 @@ export function signInFlowReducer(state: SignInFlowState, event: SignInFlowEvent
     case 'SUBMIT_DIAGNOSTIC':
       if (state.status !== 'idle' && state.status !== 'diagnosticError') return state;
       if (!isValidUrlFormat(state.url)) return state;
+      if (!detectSupportedPlatformUrl(state.url)) {
+        return { status: 'diagnosticError', url: state.url, error: UNSUPPORTED_PLATFORM_ERROR };
+      }
       return { status: 'submittingDiagnostic', url: state.url, stillWorking: false };
 
     case 'DIAGNOSTIC_STILL_WORKING':
