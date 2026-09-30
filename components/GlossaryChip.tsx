@@ -28,7 +28,11 @@ export function GlossaryChip({ term, children }: GlossaryChipProps) {
         <span
           id={`glossary-${term.slug}`}
           role="tooltip"
-          className="absolute z-10 mt-2 w-64 rounded-lg border border-gray-200 bg-white p-3 text-sm shadow-lg"
+          // Centered under the trigger (not flush-left) and capped to the
+          // viewport width, minus gutters, so it can't push the page into
+          // horizontal scroll regardless of where the glossed term falls in
+          // the surrounding text — see GlossaryChip.test.tsx.
+          className="absolute left-1/2 z-10 mt-2 w-64 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg border border-gray-200 bg-white p-3 text-sm shadow-lg"
         >
           <span className="block font-semibold text-gray-900">{term.term}</span>
           <span className="mt-1 block text-gray-700">{term.definition}</span>
