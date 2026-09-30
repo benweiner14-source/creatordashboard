@@ -53,11 +53,8 @@ export default function SettingsPage() {
   });
   const [timezone, setTimezone] = useState('(GMT-08:00) Pacific Time');
   const [language, setLanguage] = useState('English (US)');
-  const [platformConnected, setPlatformConnected] = useState<Record<Platform, boolean>>({
-    youtube: false,
-    tiktok: false,
-    instagram: false,
-  });
+  const [platforms, setPlatforms] = useState<{ tiktok: boolean; instagram: boolean; youtube: boolean } | null>(null);
+  const [youtubeHandle, setYoutubeHandle] = useState('');
   const [deleteArmed, setDeleteArmed] = useState(false);
 
   useEffect(() => {
@@ -94,6 +91,29 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (state.status !== 'loaded') return;
+    fetch('/api/settings/platforms')
+      .then((res) => res.json())
+      .then((data) => setPlatforms({ tiktok: Boolean(data.tiktok), instagram: Boolean(data.instagram), youtube: Boolean(data.youtube) }))
+      .catch(() => {});
+  }, [state.status]);
+
+  async function disconnectPlatform(platform: 'tiktok' | 'instagram') {
+    const res = await fetch(`/api/oauth/${platform}/disconnect`, { method: 'POST' });
+    if (res.ok) {
+      setPlatforms((prev) => (prev ? { ...prev, [platform]: false } : prev));
+    }
+  }
+
+  async function saveYoutubeHandle(handle: string) {
+    await fetch('/api/settings/platforms/youtube', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ handle: handle.trim() || null }),
+    });
+  }
 
   async function submitMagicLink(magicLinkEmail: string) {
     try {
@@ -192,8 +212,8 @@ export default function SettingsPage() {
         </div>
 
         <Banner variant="info" label="Preview">
-          This page previews the redesigned Settings screen. Profile details, password, two-factor, connected
-          platforms, notifications, and locale aren&apos;t saved yet. Billing and sign out work normally.
+          This page previews the redesigned Settings screen. Password, two-factor, notifications, and locale aren&apos;t
+          saved yet. Profile details, connected platforms, billing, and sign out work normally.
         </Banner>
 
         <section id="profile" className="flex scroll-mt-16 flex-col gap-[18px] rounded-2xl border border-[#e8e8ee] bg-white p-6">
@@ -334,7 +354,33 @@ export default function SettingsPage() {
         <section id="platforms" className="flex scroll-mt-16 flex-col gap-4 rounded-2xl border border-[#e8e8ee] bg-white p-6">
           <div className="font-mono text-[11px] uppercase tracking-[.16em] text-gray-500">Connected platforms</div>
           {(['youtube', 'tiktok', 'instagram'] as const).map((platform) => {
-            const connected = platformConnected[platform];
+            const connected = platforms?.[platform] ?? false;
+            if (platform === 'youtube') {
+              return (
+                <div
+                  key={platform}
+                  className="flex items-center justify-between gap-3.5 rounded-xl border border-[#eeeef2] bg-[#fafafb] px-4 py-3.5"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <PlatformBadge platform={platform} />
+                    <label className="flex min-w-0 flex-col gap-0.5 text-sm font-semibold text-gray-700">
+                      YouTube handle
+                      <input
+                        type="text"
+                        defaultValue={youtubeHandle}
+                        onChange={(e) => setYoutubeHandle(e.target.value)}
+                        onBlur={(e) => saveYoutubeHandle(e.target.value)}
+                        placeholder="@channel"
+                        className="rounded-md border border-[#d8d8e0] px-2 py-1 text-sm font-normal text-gray-900"
+                      />
+                    </label>
+                  </div>
+                  <span className={`font-mono text-[11px] tracking-[.04em] ${connected ? 'text-[#047857]' : 'text-gray-500'}`}>
+                    {connected ? 'Connected' : 'Not connected'}
+                  </span>
+                </div>
+              );
+            }
             return (
               <div
                 key={platform}
@@ -349,15 +395,22 @@ export default function SettingsPage() {
                     </span>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setPlatformConnected((prev) => ({ ...prev, [platform]: !prev[platform] }))}
-                  className={`flex-none whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold ${
-                    connected ? 'border border-[#d8d8e0] text-[#6d28d9]' : 'bg-brand text-white'
-                  }`}
-                >
-                  {connected ? 'Disconnect' : 'Connect'}
-                </button>
+                {connected ? (
+                  <button
+                    type="button"
+                    onClick={() => disconnectPlatform(platform)}
+                    className="flex-none whitespace-nowrap rounded-full border border-[#d8d8e0] px-4 py-2 text-[13px] font-semibold text-[#6d28d9]"
+                  >
+                    Disconnect
+                  </button>
+                ) : (
+                  <a
+                    href={`/api/oauth/${platform}/authorize`}
+                    className="flex-none whitespace-nowrap rounded-full bg-brand px-4 py-2 text-[13px] font-semibold text-white"
+                  >
+                    Connect
+                  </a>
+                )}
               </div>
             );
           })}

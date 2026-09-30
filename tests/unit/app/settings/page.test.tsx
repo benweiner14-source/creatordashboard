@@ -59,14 +59,64 @@ describe('SettingsPage', () => {
     expect(screen.getByText(/not yet enforced at sign-in/i)).toBeInTheDocument();
   });
 
-  it('toggles a platform connection locally', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200, json: async () => ({ email: 'creator@example.com' }) }));
-    render(<SettingsPage />);
-    await waitFor(() => screen.getByText('Connected platforms'));
+  it('loads real connection status and disconnects a connected platform for real', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: true, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
 
-    const connectButtons = screen.getAllByRole('button', { name: /^connect$/i });
-    fireEvent.click(connectButtons[0]);
-    expect(screen.getAllByRole('button', { name: /^disconnect$/i }).length).toBeGreaterThan(0);
+    render(<SettingsPage />);
+    await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /^disconnect$/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/oauth/tiktok/disconnect', { method: 'POST' })
+    );
+    // instagram and youtube already read "Not connected"; tiktok joining them
+    // after a real disconnect brings the count to three.
+    await waitFor(() => expect(screen.getAllByText('Not connected')).toHaveLength(3));
+  });
+
+  it('links Connect to the real OAuth authorize endpoint', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url === '/api/session') return Promise.resolve({ status: 200, json: async () => ({ email: 'creator@example.com' }) });
+        return Promise.resolve({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) });
+      })
+    );
+
+    render(<SettingsPage />);
+    await waitFor(() => expect(screen.getAllByText('Not connected').length).toBeGreaterThan(0));
+
+    const connectLinks = screen.getAllByRole('link', { name: /^connect$/i });
+    expect(connectLinks[0]).toHaveAttribute('href', expect.stringMatching(/^\/api\/oauth\/(tiktok|instagram)\/authorize$/));
+  });
+
+  it('saves a YouTube handle', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const input = await screen.findByLabelText(/youtube handle/i);
+    fireEvent.change(input, { target: { value: '@creator' } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/settings/platforms/youtube',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ handle: '@creator' }) })
+      )
+    );
   });
 
   it('arms and cancels the delete-account confirmation without deleting anything', async () => {
@@ -87,6 +137,7 @@ describe('SettingsPage', () => {
       .fn()
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
       .mockResolvedValueOnce({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -103,6 +154,7 @@ describe('SettingsPage', () => {
       .fn()
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -124,7 +176,8 @@ describe('SettingsPage', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
-      .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: 'Jordan' }) });
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: 'Jordan' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<SettingsPage />);
@@ -140,6 +193,7 @@ describe('SettingsPage', () => {
       .fn()
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'confirmationSent' }) });
     vi.stubGlobal('fetch', fetchMock);
 
