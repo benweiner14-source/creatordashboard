@@ -34,9 +34,17 @@ export async function GET() {
 
   const result = await handleGetProfile(
     {
-      getDisplayName: async (profileId) => {
-        const { data } = await serviceClient.from('profiles').select('display_name').eq('id', profileId).single();
-        return data?.display_name ?? null;
+      getProfile: async (profileId) => {
+        const { data } = await serviceClient
+          .from('profiles')
+          .select('display_name, timezone, locale')
+          .eq('id', profileId)
+          .single();
+        return {
+          displayName: data?.display_name ?? null,
+          timezone: data?.timezone ?? null,
+          locale: data?.locale ?? null,
+        };
       },
     },
     { profileId: user?.id ?? null }

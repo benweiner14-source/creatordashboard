@@ -12,8 +12,18 @@ export interface UpdateProfileResult {
   body: Record<string, unknown>;
 }
 
+export interface ProfileRecord {
+  displayName: string | null;
+  timezone: string | null;
+  locale: string | null;
+}
+
 export interface GetProfileDeps {
-  getDisplayName: (profileId: string) => Promise<string | null>;
+  // A single dep returning all three fields in one query, mirroring the
+  // route's single `select('display_name, timezone, locale')` call — see
+  // finding I2 in the final whole-branch review: Settings never loaded the
+  // saved timezone/locale, so the page always showed the hardcoded defaults.
+  getProfile: (profileId: string) => Promise<ProfileRecord>;
 }
 
 export interface GetProfileContext {
@@ -54,6 +64,6 @@ export async function handleGetProfile(
   if (!context.profileId) {
     return { status: 401, body: { error: 'You must be signed in.' } };
   }
-  const displayName = await deps.getDisplayName(context.profileId);
-  return { status: 200, body: { displayName } };
+  const profile = await deps.getProfile(context.profileId);
+  return { status: 200, body: { displayName: profile.displayName, timezone: profile.timezone, locale: profile.locale } };
 }

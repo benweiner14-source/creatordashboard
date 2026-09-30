@@ -116,12 +116,12 @@ describe('SettingsPage', () => {
     expect(connectLinks[0]).toHaveAttribute('href', expect.stringMatching(/^\/api\/oauth\/(tiktok|instagram)\/authorize$/));
   });
 
-  it('saves a YouTube handle', async () => {
+  it('saves a YouTube handle and updates the connected badge without a reload', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false, youtubeHandle: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ recap: true, ideas: true, diagnostic: true, product: false, billing: true }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
@@ -129,6 +129,7 @@ describe('SettingsPage', () => {
 
     render(<SettingsPage />);
     const input = await screen.findByLabelText(/youtube handle/i);
+    expect(screen.getAllByText('Not connected').length).toBeGreaterThan(0);
     fireEvent.change(input, { target: { value: '@creator' } });
     fireEvent.blur(input);
 
@@ -137,6 +138,48 @@ describe('SettingsPage', () => {
         '/api/settings/platforms/youtube',
         expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ handle: '@creator' }) })
       )
+    );
+    // The connected badge for YouTube flips to "Connected" right away, with
+    // no separate reload of /api/settings/platforms.
+    await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument());
+  });
+
+  it('renders the real loaded YouTube handle (not blank) when a handle is already connected', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/session') return Promise.resolve({ status: 200, json: async () => ({ email: 'creator@example.com' }) });
+      if (url === '/api/settings/platforms') {
+        return Promise.resolve({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: true, youtubeHandle: '@existingcreator' }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const input = (await screen.findByLabelText(/youtube handle/i)) as HTMLInputElement;
+    await waitFor(() => expect(input.value).toBe('@existingcreator'));
+  });
+
+  it('does not fire a save PATCH when the YouTube handle input is blurred with no change', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/session') return Promise.resolve({ status: 200, json: async () => ({ email: 'creator@example.com' }) });
+      if (url === '/api/settings/platforms') {
+        return Promise.resolve({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: true, youtubeHandle: '@existingcreator' }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const input = (await screen.findByLabelText(/youtube handle/i)) as HTMLInputElement;
+    await waitFor(() => expect(input.value).toBe('@existingcreator'));
+
+    fireEvent.blur(input);
+
+    // Give any errant async save a chance to fire, then confirm it didn't.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/settings/platforms/youtube',
+      expect.anything()
     );
   });
 
@@ -274,6 +317,56 @@ describe('SettingsPage', () => {
         expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ weeklyRecapReady: true }) })
       )
     );
+  });
+
+  it('loads the real saved timezone and locale on bootstrap, not the hardcoded defaults', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/session') return Promise.resolve({ status: 200, json: async () => ({ email: 'creator@example.com' }) });
+      if (url === '/api/settings/profile') {
+        return Promise.resolve({ status: 200, json: async () => ({ displayName: null, timezone: 'Europe/London', locale: 'de-DE' }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const timezoneSelect = (await screen.findByLabelText(/^timezone$/i)) as HTMLSelectElement;
+    const languageSelect = (await screen.findByLabelText(/^language$/i)) as HTMLSelectElement;
+
+    await waitFor(() => expect(timezoneSelect.value).toBe('Europe/London'));
+    expect(languageSelect.value).toBe('de-DE');
+  });
+
+  it('shows UTC as a selectable timezone, for a fresh signup whose saved default is UTC', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/session') return Promise.resolve({ status: 200, json: async () => ({ email: 'creator@example.com' }) });
+      if (url === '/api/settings/profile') {
+        return Promise.resolve({ status: 200, json: async () => ({ displayName: null, timezone: 'UTC', locale: 'en-US' }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const timezoneSelect = (await screen.findByLabelText(/^timezone$/i)) as HTMLSelectElement;
+    await waitFor(() => expect(timezoneSelect.value).toBe('UTC'));
+  });
+
+  it('does not fire the email PATCH or show a confirmation when the email field is blurred with no change', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/session') return Promise.resolve({ status: 200, json: async () => ({ email: 'creator@example.com' }) });
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const input = await screen.findByLabelText(/^email$/i);
+    await waitFor(() => expect(input).toHaveValue('creator@example.com'));
+    fireEvent.blur(input);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/settings/email', expect.anything());
+    expect(screen.queryByText(/check your new inbox/i)).not.toBeInTheDocument();
   });
 
   it('saves the timezone on change', async () => {

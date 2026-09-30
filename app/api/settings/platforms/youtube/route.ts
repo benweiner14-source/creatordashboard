@@ -19,7 +19,11 @@ export async function PATCH(request: Request) {
         }
       },
     },
-    { profileId: user?.id ?? null, handle: typeof body.handle === 'string' || body.handle === null ? body.handle : null }
+    // Pass the raw parsed value through untouched (including `undefined` for
+    // a missing key) so handleUpdateYoutubeHandle can tell a genuine
+    // disconnect (explicit null/'') apart from a missing/malformed field,
+    // which it now rejects with 400 instead of silently disconnecting.
+    { profileId: user?.id ?? null, handle: body.handle }
   );
 
   return NextResponse.json(result.body, { status: result.status });

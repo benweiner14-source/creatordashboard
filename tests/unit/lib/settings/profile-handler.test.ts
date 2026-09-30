@@ -37,7 +37,7 @@ describe('handleUpdateProfile', () => {
 
 function makeGetDeps(overrides: Partial<GetProfileDeps> = {}): GetProfileDeps {
   return {
-    getDisplayName: vi.fn().mockResolvedValue(null),
+    getProfile: vi.fn().mockResolvedValue({ displayName: null, timezone: null, locale: null }),
     ...overrides,
   };
 }
@@ -49,17 +49,30 @@ describe('handleGetProfile', () => {
   });
 
   it('returns 200 with displayName when signed in', async () => {
-    const getDisplayName = vi.fn().mockResolvedValue('Jordan');
-    const result = await handleGetProfile(makeGetDeps({ getDisplayName }), { profileId: 'profile-1' });
+    const getProfile = vi.fn().mockResolvedValue({ displayName: 'Jordan', timezone: null, locale: null });
+    const result = await handleGetProfile(makeGetDeps({ getProfile }), { profileId: 'profile-1' });
     expect(result.status).toBe(200);
     expect(result.body.displayName).toBe('Jordan');
-    expect(getDisplayName).toHaveBeenCalledWith('profile-1');
+    expect(getProfile).toHaveBeenCalledWith('profile-1');
   });
 
   it('returns 200 with null displayName when no display name is set', async () => {
-    const getDisplayName = vi.fn().mockResolvedValue(null);
-    const result = await handleGetProfile(makeGetDeps({ getDisplayName }), { profileId: 'profile-1' });
+    const getProfile = vi.fn().mockResolvedValue({ displayName: null, timezone: null, locale: null });
+    const result = await handleGetProfile(makeGetDeps({ getProfile }), { profileId: 'profile-1' });
     expect(result.status).toBe(200);
     expect(result.body.displayName).toBeNull();
+  });
+
+  it('returns the saved timezone and locale alongside displayName', async () => {
+    const getProfile = vi.fn().mockResolvedValue({ displayName: 'Jordan', timezone: 'Europe/London', locale: 'en-GB' });
+    const result = await handleGetProfile(makeGetDeps({ getProfile }), { profileId: 'profile-1' });
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ displayName: 'Jordan', timezone: 'Europe/London', locale: 'en-GB' });
+  });
+
+  it('returns null timezone/locale when the profile has none set', async () => {
+    const getProfile = vi.fn().mockResolvedValue({ displayName: null, timezone: null, locale: null });
+    const result = await handleGetProfile(makeGetDeps({ getProfile }), { profileId: 'profile-1' });
+    expect(result.body).toEqual({ displayName: null, timezone: null, locale: null });
   });
 });

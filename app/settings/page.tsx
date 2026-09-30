@@ -48,6 +48,10 @@ export default function SettingsPage() {
 
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+  // The email last confirmed by the server (loaded from /api/session), so an
+  // onBlur with no real edit can be told apart from an actual change and
+  // skip firing the real Supabase email-change + confirmation-email flow.
+  const [lastKnownEmail, setLastKnownEmail] = useState('');
   const [displayNameSaved, setDisplayNameSaved] = useState(false);
   const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -66,6 +70,11 @@ export default function SettingsPage() {
   const [language, setLanguage] = useState('en-US');
   const [platforms, setPlatforms] = useState<{ tiktok: boolean; instagram: boolean; youtube: boolean } | null>(null);
   const [youtubeHandle, setYoutubeHandle] = useState('');
+  // The handle as last saved on the server (or null if never set), so a blur
+  // with no real edit can be skipped instead of firing a save that would
+  // otherwise trim an unedited, still-loading value down to null. See
+  // finding I1 in the final whole-branch review.
+  const [savedYoutubeHandle, setSavedYoutubeHandle] = useState<string | null>(null);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [scheduledDeletionAt, setScheduledDeletionAt] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -88,6 +97,7 @@ export default function SettingsPage() {
         }
         setDisplayName(data.email.split('@')[0]);
         setEmail(data.email);
+        setLastKnownEmail(data.email);
         if (data.justCancelledDeletion) {
           setJustCancelledDeletion(true);
         }
@@ -97,6 +107,12 @@ export default function SettingsPage() {
           .then((profileData) => {
             if (typeof profileData.displayName === 'string' && profileData.displayName.length > 0) {
               setDisplayName(profileData.displayName);
+            }
+            if (typeof profileData.timezone === 'string' && profileData.timezone.length > 0) {
+              setTimezone(profileData.timezone);
+            }
+            if (typeof profileData.locale === 'string' && profileData.locale.length > 0) {
+              setLanguage(profileData.locale);
             }
           })
           .catch(() => {});
@@ -113,7 +129,12 @@ export default function SettingsPage() {
     if (state.status !== 'loaded') return;
     fetch('/api/settings/platforms')
       .then((res) => res.json())
-      .then((data) => setPlatforms({ tiktok: Boolean(data.tiktok), instagram: Boolean(data.instagram), youtube: Boolean(data.youtube) }))
+      .then((data) => {
+        setPlatforms({ tiktok: Boolean(data.tiktok), instagram: Boolean(data.instagram), youtube: Boolean(data.youtube) });
+        const handle = typeof data.youtubeHandle === 'string' ? data.youtubeHandle : null;
+        setYoutubeHandle(handle ?? '');
+        setSavedYoutubeHandle(handle);
+      })
       .catch(() => {});
   }, [state.status]);
 
@@ -183,11 +204,23 @@ export default function SettingsPage() {
   }
 
   async function saveYoutubeHandle(handle: string) {
-    await fetch('/api/settings/platforms/youtube', {
+    const trimmed = handle.trim();
+    const normalized = trimmed.length > 0 ? trimmed : null;
+    // Nothing actually changed (including the common "tab through an
+    // untouched field" case) — skip the network call entirely so a blank
+    // blur can never silently wipe a real saved handle. See finding I1 in
+    // the final whole-branch review.
+    if (normalized === savedYoutubeHandle) return;
+    const res = await fetch('/api/settings/platforms/youtube', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ handle: handle.trim() || null }),
+      body: JSON.stringify({ handle: normalized }),
     });
+    if (res.ok) {
+      setSavedYoutubeHandle(normalized);
+      setYoutubeHandle(normalized ?? '');
+      setPlatforms((prev) => (prev ? { ...prev, youtube: Boolean(normalized) } : prev));
+    }
   }
 
   async function submitMagicLink(magicLinkEmail: string) {
@@ -342,7 +375,11 @@ export default function SettingsPage() {
                 setEmailError(null);
               }}
               onBlur={async () => {
-                if (!email.trim()) return;
+                const trimmed = email.trim();
+                // No real edit (e.g. just tabbing through the field) — skip
+                // the real Supabase email-change + confirmation-email flow.
+                // See finding M1 in the final whole-branch review.
+                if (!trimmed || trimmed === lastKnownEmail) return;
                 const res = await fetch('/api/settings/email', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -494,7 +531,7 @@ export default function SettingsPage() {
                       YouTube handle
                       <input
                         type="text"
-                        defaultValue={youtubeHandle}
+                        value={youtubeHandle}
                         onChange={(e) => setYoutubeHandle(e.target.value)}
                         onBlur={(e) => saveYoutubeHandle(e.target.value)}
                         placeholder="@channel"
@@ -587,6 +624,7 @@ export default function SettingsPage() {
               }}
               className="rounded-[10px] border border-[#d8d8e0] px-[14px] py-[10px] font-normal text-gray-900"
             >
+              <option value="UTC">(GMT+00:00) UTC</option>
               <option value="America/Los_Angeles">(GMT-08:00) Pacific Time</option>
               <option value="America/New_York">(GMT-05:00) Eastern Time</option>
               <option value="Europe/London">(GMT+00:00) London</option>
