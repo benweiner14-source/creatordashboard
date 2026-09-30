@@ -292,11 +292,6 @@ export default function SettingsPage() {
           <h1 className="font-heading text-[34px] font-bold leading-[1.05] text-gray-900">Settings</h1>
         </div>
 
-        <Banner variant="info" label="Preview">
-          This page previews the redesigned Settings screen. Password isn&apos;t available yet. Profile details, two-factor
-          authentication, connected platforms, notifications, locale, billing, and sign out work normally.
-        </Banner>
-
         <section id="profile" className="flex scroll-mt-16 flex-col gap-[18px] rounded-2xl border border-[#e8e8ee] bg-white p-6">
           <div className="font-mono text-[11px] uppercase tracking-[.16em] text-gray-500">Profile</div>
           <div className="flex items-center gap-4">
