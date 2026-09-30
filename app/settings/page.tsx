@@ -41,6 +41,8 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [displayNameSaved, setDisplayNameSaved] = useState(false);
+  const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [twoFactor, setTwoFactor] = useState(false);
   const [notifOn, setNotifOn] = useState<Record<NotifKey, boolean>>({
     recap: true,
@@ -238,9 +240,35 @@ export default function SettingsPage() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setEmailConfirmationSent(false);
+                setEmailError(null);
+              }}
+              onBlur={async () => {
+                if (!email.trim()) return;
+                const res = await fetch('/api/settings/email', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                  setEmailError(data.error ?? 'Something went wrong.');
+                  return;
+                }
+                setEmailConfirmationSent(true);
+              }}
               className="rounded-[10px] border border-[#d8d8e0] px-[14px] py-[10px] font-normal text-gray-900"
             />
+            {emailConfirmationSent && (
+              <span className="text-xs text-[#047857]">Check your new inbox to confirm the change.</span>
+            )}
+            {emailError && (
+              <span role="alert" className="text-xs text-[#b91c1c]">
+                {emailError}
+              </span>
+            )}
           </label>
         </section>
 

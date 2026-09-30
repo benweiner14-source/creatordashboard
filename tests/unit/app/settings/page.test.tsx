@@ -134,4 +134,24 @@ describe('SettingsPage', () => {
       expect((input as HTMLInputElement).value).toBe('Jordan');
     });
   });
+
+  it('shows a confirmation message after changing the email', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'confirmationSent' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const input = await screen.findByLabelText(/^email$/i);
+    fireEvent.change(input, { target: { value: 'new@example.com' } });
+    fireEvent.blur(input);
+
+    expect(await screen.findByText(/check your new inbox/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/settings/email',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ email: 'new@example.com' }) })
+    );
+  });
 });
