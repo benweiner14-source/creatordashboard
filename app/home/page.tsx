@@ -1,23 +1,22 @@
 // app/home/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useReducer } from 'react';
 import Link from 'next/link';
 import { AppNav } from '@/components/AppNav';
 import { HomeCard } from '@/components/HomeCard';
 import { PlatformBadge, type BadgePlatform } from '@/components/PlatformBadge';
+import { SignInPrompt } from '@/components/SignInPrompt';
 import { formatCompactNumber } from '@/lib/home/format';
 import { deriveDisplayNameFromEmail } from '@/lib/home/display-name';
+import { homePageReducer, createInitialHomePageState } from '@/lib/home/page-state';
 import type { HomeData } from '@/lib/home/types';
 import type { RecapPlatform } from '@/lib/recap/types';
 
 const RECAP_PLATFORM_ORDER: RecapPlatform[] = ['youtube', 'tiktok', 'instagram'];
 
 export default function HomePage() {
-  const router = useRouter();
-  const [data, setData] = useState<HomeData | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [state, dispatch] = useReducer(homePageReducer, createInitialHomePageState());
 
   useEffect(() => {
     let cancelled = false;
@@ -25,28 +24,78 @@ export default function HomePage() {
       .then(async (res) => {
         if (cancelled) return;
         if (res.status === 401) {
-          // replace(), not push(): Back from '/' would otherwise return to
-          // /home, which 401s and redirects again — a back-button trap.
-          router.replace('/');
+          dispatch({ type: 'BOOTSTRAP_UNAUTHORIZED' });
           return;
         }
         const json = await res.json();
         if (cancelled) return;
         if (json.error) {
-          setLoadFailed(true);
+          dispatch({ type: 'BOOTSTRAP_FAILED' });
           return;
         }
-        setData(json as HomeData);
+        dispatch({ type: 'BOOTSTRAPPED', data: json as HomeData });
       })
       .catch(() => {
-        if (!cancelled) setLoadFailed(true);
+        if (!cancelled) dispatch({ type: 'BOOTSTRAP_FAILED' });
       });
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, []);
 
-  if (loadFailed) {
+  async function submitMagicLink(email: string) {
+    try {
+      const response = await fetch('/api/auth/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, redirectPath: '/home' }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        dispatch({ type: 'MAGIC_LINK_FAILED', error: data.error ?? 'Something went wrong. Please try again.' });
+        return;
+      }
+      dispatch({ type: 'MAGIC_LINK_SENT' });
+    } catch {
+      dispatch({ type: 'MAGIC_LINK_FAILED', error: "We couldn't reach the server. Check your connection and try again." });
+    }
+  }
+
+  if (state.status === 'loading') {
+    return <p>Loading…</p>;
+  }
+
+  if (
+    state.status === 'needsSignIn' ||
+    state.status === 'submittingMagicLink' ||
+    state.status === 'checkEmail' ||
+    state.status === 'magicLinkError'
+  ) {
+    return (
+      <main className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
+        <h1 className="text-2xl font-bold text-gray-900">Creator Dashboard</h1>
+        <SignInPrompt
+          state={state}
+          introCopy="Sign in with a one-time email link to see your dashboard."
+          returnCopy="Click it to continue and we'll bring you right back here."
+          onEmailChange={(email) => dispatch({ type: 'EMAIL_CHANGED', email })}
+          onSubmitEmail={() => {
+            const { email } = state;
+            dispatch({ type: 'SUBMIT_EMAIL' });
+            void submitMagicLink(email);
+          }}
+          onResend={() => {
+            const { email } = state;
+            dispatch({ type: 'RESEND_EMAIL' });
+            void submitMagicLink(email);
+          }}
+          onRetryEmail={() => dispatch({ type: 'RETRY_EMAIL' })}
+        />
+      </main>
+    );
+  }
+
+  if (state.status === 'bootstrapFailed') {
     // Keep the nav mounted so a failed bootstrap isn't a dead end — the user
     // can still reach the other tools or sign out from here.
     return (
@@ -57,10 +106,7 @@ export default function HomePage() {
     );
   }
 
-  if (!data) {
-    return <p>Loading…</p>;
-  }
-
+  const { data } = state;
   const displayName = deriveDisplayNameFromEmail(data.email);
 
   return (
