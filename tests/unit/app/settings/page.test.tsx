@@ -47,16 +47,33 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent("couldn't load your settings"));
   });
 
-  it('toggles two-factor authentication locally without claiming it is enforced', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200, json: async () => ({ email: 'creator@example.com' }) }));
-    render(<SettingsPage />);
-    await waitFor(() => screen.getByRole('switch', { name: 'Two-factor authentication' }));
+  it('enrolls and verifies two-factor authentication for real', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/session') return Promise.resolve({ status: 200, json: async () => ({ email: 'creator@example.com' }) });
+      if (url === '/api/settings/platforms') return Promise.resolve({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) });
+      if (url === '/api/settings/mfa/factors') return Promise.resolve({ ok: true, json: async () => ({ factorId: null }) });
+      if (url === '/api/settings/mfa/enroll') {
+        return Promise.resolve({ ok: true, json: async () => ({ factorId: 'factor-1', qrCode: '<svg></svg>', secret: 'ABC123' }) });
+      }
+      if (url === '/api/settings/mfa/verify') return Promise.resolve({ ok: true, json: async () => ({ ok: true }) });
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
-    const toggle = screen.getByRole('switch', { name: 'Two-factor authentication' });
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByText(/not yet enforced at sign-in/i)).toBeInTheDocument();
+    render(<SettingsPage />);
+    fireEvent.click(await screen.findByRole('switch', { name: 'Two-factor authentication' }));
+
+    await waitFor(() => expect(screen.getByLabelText(/verification code/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/verification code/i), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/settings/mfa/verify',
+        expect.objectContaining({ body: JSON.stringify({ factorId: 'factor-1', code: '123456' }) })
+      )
+    );
+    expect(await screen.findByRole('switch', { name: 'Two-factor authentication' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('loads real connection status and disconnects a connected platform for real', async () => {
@@ -65,6 +82,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: true, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -103,6 +121,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -138,6 +157,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
       .mockResolvedValueOnce({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -155,6 +175,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -177,7 +198,8 @@ describe('SettingsPage', () => {
       .fn()
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: 'Jordan' }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<SettingsPage />);
@@ -194,6 +216,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'confirmationSent' }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -213,7 +236,9 @@ describe('SettingsPage', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 

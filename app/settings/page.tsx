@@ -43,7 +43,10 @@ export default function SettingsPage() {
   const [displayNameSaved, setDisplayNameSaved] = useState(false);
   const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
-  const [twoFactor, setTwoFactor] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaEnrolling, setMfaEnrolling] = useState<{ factorId: string; qrCode: string; secret: string } | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaError, setMfaError] = useState<string | null>(null);
   const [notifOn, setNotifOn] = useState<Record<NotifKey, boolean>>({
     recap: true,
     ideas: true,
@@ -99,6 +102,55 @@ export default function SettingsPage() {
       .then((data) => setPlatforms({ tiktok: Boolean(data.tiktok), instagram: Boolean(data.instagram), youtube: Boolean(data.youtube) }))
       .catch(() => {});
   }, [state.status]);
+
+  useEffect(() => {
+    if (state.status !== 'loaded') return;
+    fetch('/api/settings/mfa/factors')
+      .then((res) => res.json())
+      .then((data) => setMfaFactorId(data.factorId ?? null))
+      .catch(() => {});
+  }, [state.status]);
+
+  async function startMfaEnroll() {
+    const res = await fetch('/api/settings/mfa/enroll', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) setMfaEnrolling(data);
+  }
+
+  async function confirmMfaEnroll() {
+    if (!mfaEnrolling) return;
+    setMfaError(null);
+    const res = await fetch('/api/settings/mfa/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ factorId: mfaEnrolling.factorId, code: mfaCode }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setMfaError(data.error ?? 'Something went wrong.');
+      return;
+    }
+    setMfaFactorId(mfaEnrolling.factorId);
+    setMfaEnrolling(null);
+    setMfaCode('');
+  }
+
+  async function disableMfa() {
+    if (!mfaFactorId) return;
+    setMfaError(null);
+    const res = await fetch('/api/settings/mfa/disable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ factorId: mfaFactorId, code: mfaCode }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setMfaError(data.error ?? 'Something went wrong.');
+      return;
+    }
+    setMfaFactorId(null);
+    setMfaCode('');
+  }
 
   async function disconnectPlatform(platform: 'tiktok' | 'instagram') {
     const res = await fetch(`/api/oauth/${platform}/disconnect`, { method: 'POST' });
@@ -212,8 +264,8 @@ export default function SettingsPage() {
         </div>
 
         <Banner variant="info" label="Preview">
-          This page previews the redesigned Settings screen. Password, two-factor, and notifications aren&apos;t saved yet.
-          Profile details, connected platforms, locale, billing, and sign out work normally.
+          This page previews the redesigned Settings screen. Password and notifications aren&apos;t saved yet. Profile
+          details, two-factor authentication, connected platforms, locale, billing, and sign out work normally.
         </Banner>
 
         <section id="profile" className="flex scroll-mt-16 flex-col gap-[18px] rounded-2xl border border-[#e8e8ee] bg-white p-6">
@@ -325,11 +377,62 @@ export default function SettingsPage() {
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="text-sm font-semibold text-gray-700">Two-factor authentication</span>
               <span className="text-[13px] leading-[1.45] text-gray-500">
-                {twoFactor ? 'On in this preview — not yet enforced at sign-in.' : 'Add a second step at sign-in.'}
+                {mfaFactorId ? 'Enabled — codes via your authenticator app.' : 'Add a second step at sign-in.'}
               </span>
             </div>
-            <Switch checked={twoFactor} onChange={() => setTwoFactor((v) => !v)} label="Two-factor authentication" />
+            <Switch
+              checked={Boolean(mfaFactorId)}
+              onChange={() => (mfaFactorId ? setMfaEnrolling({ factorId: mfaFactorId, qrCode: '', secret: '' }) : startMfaEnroll())}
+              label="Two-factor authentication"
+            />
           </div>
+          {mfaEnrolling && (
+            <div className="flex flex-col gap-3 rounded-xl border border-[#eeeef2] bg-[#fafafb] p-4">
+              {mfaEnrolling.qrCode && (
+                <>
+                  <p className="text-sm text-gray-700">Scan this code in your authenticator app:</p>
+                  <div dangerouslySetInnerHTML={{ __html: mfaEnrolling.qrCode }} />
+                  <p className="text-xs text-gray-500">Or enter this key manually: {mfaEnrolling.secret}</p>
+                </>
+              )}
+              <label htmlFor="mfa-confirm-code" className="text-sm font-medium text-gray-700">
+                Verification code
+              </label>
+              <input
+                id="mfa-confirm-code"
+                type="text"
+                inputMode="numeric"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value)}
+                className="rounded-lg border border-gray-300 px-4 py-2"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={mfaFactorId === mfaEnrolling.factorId ? disableMfa : confirmMfaEnroll}
+                  className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMfaEnrolling(null);
+                    setMfaCode('');
+                    setMfaError(null);
+                  }}
+                  className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+              {mfaError && (
+                <p role="alert" className="text-sm text-red-600">
+                  {mfaError}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="h-px bg-[#eeeef2]" />
 
