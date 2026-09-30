@@ -76,4 +76,12 @@ describe('MarketingPage content (signed out)', () => {
     await renderSignedOut();
     expect(screen.getByRole('link', { name: /see what's trending in gta 6 right now/i })).toHaveAttribute('href', '/warroom');
   });
+
+  // The free Diagnostic tool had no link anywhere in the signed-out app —
+  // only reachable by already knowing the URL. This is its one entry point.
+  it('links to the free diagnostic tool', async () => {
+    await renderSignedOut();
+    const link = screen.getByRole('link', { name: /score a video free/i });
+    expect(link).toHaveAttribute('href', '/diagnostic');
+  });
 });

@@ -32,9 +32,12 @@ export default async function MarketingPage() {
         growth, a breakdown of any channel&apos;s strategy, and a watchlist on who&apos;s already ahead.
       </p>
       <Link
-        href="/ideas"
+        href="/diagnostic"
         className="rounded-full bg-indigo-600 px-8 py-3 text-lg font-semibold text-white hover:bg-indigo-700"
       >
+        Score a video free &mdash; no subscription needed
+      </Link>
+      <Link href="/ideas" className="text-indigo-700 underline">
         Get this week&apos;s GTA 6 content ideas
       </Link>
       <Link href="/warroom" className="text-indigo-700 underline">
