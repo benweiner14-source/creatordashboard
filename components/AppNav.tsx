@@ -87,12 +87,13 @@ export function AppNav() {
               Sign out
             </button>
           </div>
-          <div
-            aria-hidden="true"
+          <Link
+            href="/settings"
+            aria-label="Settings"
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700"
           >
             {initial}
-          </div>
+          </Link>
           {/* Below `sm` the link list above never renders at all — this toggle
               is the only way a signed-in phone user reaches anything besides
               /home, so it (and the dropdown it opens) is the mobile nav, not a
