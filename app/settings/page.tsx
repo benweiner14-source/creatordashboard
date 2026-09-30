@@ -150,6 +150,7 @@ export default function SettingsPage() {
     }
     setMfaFactorId(null);
     setMfaCode('');
+    setMfaEnrolling(null);
   }
 
   async function disconnectPlatform(platform: 'tiktok' | 'instagram') {
