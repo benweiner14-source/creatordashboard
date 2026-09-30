@@ -6,6 +6,14 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'recap-1' }),
 }));
 
+// AppNav makes its own fetch('/api/session') call on mount, which would
+// otherwise shift this file's call-ordered fetch mocks. It renders nothing
+// for a signed-out visitor anyway (the common case for this public share
+// page); its own behavior is covered by its dedicated suite.
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
+}));
+
 import RecapCardPage from '@/app/recap/[id]/page';
 
 describe('RecapCardPage', () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { AppNav } from '@/components/AppNav';
 import { GlossaryText } from '@/components/GlossaryChip';
 
 interface DiagnosticReportData {
@@ -169,17 +170,29 @@ export default function DiagnosticReportPage() {
   }
 
   if (error) {
-    return <p role="alert">{error}</p>;
+    return (
+      <>
+        <AppNav />
+        <p role="alert">{error}</p>
+      </>
+    );
   }
 
   if (!diagnostic) {
-    return <p>Loading your report…</p>;
+    return (
+      <>
+        <AppNav />
+        <p>Loading your report…</p>
+      </>
+    );
   }
 
   const { report } = diagnostic;
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
+    <>
+      <AppNav />
+      <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
       <h1 className="text-2xl font-bold text-gray-900">{report.headline}</h1>
       {report.confidenceCaveat && (
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{report.confidenceCaveat}</p>
@@ -293,6 +306,7 @@ export default function DiagnosticReportPage() {
           </button>
         </div>
       )}
-    </main>
+      </main>
+    </>
   );
 }

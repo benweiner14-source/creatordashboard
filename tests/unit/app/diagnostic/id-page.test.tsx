@@ -5,6 +5,14 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'diagnostic-1' }),
 }));
 
+// AppNav makes its own fetch('/api/session') call on mount; every test file
+// that stubs a call-ordered fetch mock for the page's own requests mocks
+// this out too, so AppNav's independent call doesn't shift that order.
+// AppNav's own behavior is covered by its dedicated suite.
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
+}));
+
 import DiagnosticReportPage from '@/app/diagnostic/[id]/page';
 
 describe('DiagnosticReportPage', () => {
