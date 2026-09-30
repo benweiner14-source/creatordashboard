@@ -31,11 +31,13 @@ export async function GET() {
     return NextResponse.json({ error: 'Weekly Content Ideas requires an active subscription.', upgradeUrl: '/billing' }, { status: 402 });
   }
 
-  const { data: profile } = await serviceClient
-    .from('profiles')
-    .select('niche, digest_email_opt_in')
-    .eq('id', user.id)
-    .single();
+  const { data: profile } = await serviceClient.from('profiles').select('niche').eq('id', user.id).single();
+
+  const { data: preferences } = await serviceClient
+    .from('notification_preferences')
+    .select('new_content_ideas_ready')
+    .eq('profile_id', user.id)
+    .maybeSingle();
 
   const { data: existingDigest } = await serviceClient
     .from('weekly_digests')
@@ -46,7 +48,7 @@ export async function GET() {
 
   return NextResponse.json({
     niche: profile?.niche ?? null,
-    digestEmailOptIn: profile?.digest_email_opt_in ?? false,
+    digestEmailOptIn: preferences?.new_content_ideas_ready ?? true,
     digest: existingDigest ? mapDigestRow(existingDigest) : null,
   });
 }

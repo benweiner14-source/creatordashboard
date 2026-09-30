@@ -39,8 +39,7 @@ export async function PATCH(request: Request) {
       savePreferences: async (profileId, columns) => {
         const { error } = await serviceClient
           .from('notification_preferences')
-          .update({ ...columns, updated_at: new Date().toISOString() })
-          .eq('profile_id', profileId);
+          .upsert({ profile_id: profileId, ...columns, updated_at: new Date().toISOString() });
         if (error) {
           throw new Error(`Failed to save notification preferences: ${error.message}`);
         }
