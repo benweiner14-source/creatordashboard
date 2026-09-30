@@ -30,11 +30,17 @@ export async function requestMagicLink(
   deps: MagicLinkDeps,
   params: RequestMagicLinkParams
 ): Promise<RequestMagicLinkResult> {
-  if (!isValidEmailFormat(params.email)) {
+  // A pasted email with stray leading/trailing whitespace passes the
+  // (unanchored) format check below but was never trimmed anywhere before
+  // reaching Supabase -- trim once here, at the boundary, so every caller
+  // (there are several duplicated client-side reducers) is covered.
+  const email = params.email.trim();
+
+  if (!isValidEmailFormat(email)) {
     return { status: 400, body: { error: "That doesn't look like a valid email address. Double-check it and try again." } };
   }
 
-  const identityHash = hashIdentity(params.email.toLowerCase(), deps.ipSalt);
+  const identityHash = hashIdentity(email.toLowerCase(), deps.ipSalt);
   const ipHash = hashIdentity(params.ip, deps.ipSalt);
 
   const rateLimitResult = await checkAndRecordRateLimit({
@@ -66,16 +72,25 @@ export async function requestMagicLink(
   const emailRedirectTo = `${params.origin}/auth/callback?next=${encodeURIComponent(redirectPath)}`;
 
   try {
-    const { error } = await deps.signInWithOtp({ email: params.email, emailRedirectTo });
+    const { error } = await deps.signInWithOtp({ email, emailRedirectTo });
 
     if (error) {
-      await releaseRateLimitEventIfNeeded({ store: deps.rateLimitStore, eventId: rateLimitResult.eventId });
       if (error.status === 429) {
+        // Supabase's own OTP-send rate limit, distinct from and independent
+        // of checkAndRecordRateLimit above -- deliberately NOT releasing the
+        // slot here (unlike every other failure branch): a genuine attempt
+        // was made and Supabase itself chose to reject it, so it should
+        // still count against the local quota. Releasing it let a rapid
+        // client retry loop keep re-hitting Supabase's own limit, and it
+        // erased the only evidence (the row) that the attempt happened.
         return {
           status: 429,
-          body: { error: "You've requested a few sign-in links in a row. Wait a minute and try again." },
+          body: {
+            error: 'Our email provider is briefly rate-limiting sign-in emails right now. Please wait a few minutes and try again.',
+          },
         };
       }
+      await releaseRateLimitEventIfNeeded({ store: deps.rateLimitStore, eventId: rateLimitResult.eventId });
       return { status: 500, body: { error: "We couldn't reach the server. Check your connection and try again." } };
     }
 
