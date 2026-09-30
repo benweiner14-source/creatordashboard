@@ -208,4 +208,24 @@ describe('SettingsPage', () => {
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ email: 'new@example.com' }) })
     );
   });
+
+  it('saves the timezone on change', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const select = await screen.findByLabelText(/^timezone$/i);
+    fireEvent.change(select, { target: { value: 'Europe/London' } });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/settings/locale',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ timezone: 'Europe/London' }) })
+      )
+    );
+  });
 });

@@ -51,8 +51,8 @@ export default function SettingsPage() {
     product: false,
     billing: true,
   });
-  const [timezone, setTimezone] = useState('(GMT-08:00) Pacific Time');
-  const [language, setLanguage] = useState('English (US)');
+  const [timezone, setTimezone] = useState('America/Los_Angeles');
+  const [language, setLanguage] = useState('en-US');
   const [platforms, setPlatforms] = useState<{ tiktok: boolean; instagram: boolean; youtube: boolean } | null>(null);
   const [youtubeHandle, setYoutubeHandle] = useState('');
   const [deleteArmed, setDeleteArmed] = useState(false);
@@ -212,8 +212,8 @@ export default function SettingsPage() {
         </div>
 
         <Banner variant="info" label="Preview">
-          This page previews the redesigned Settings screen. Password, two-factor, notifications, and locale aren&apos;t
-          saved yet. Profile details, connected platforms, billing, and sign out work normally.
+          This page previews the redesigned Settings screen. Password, two-factor, and notifications aren&apos;t saved yet.
+          Profile details, connected platforms, locale, billing, and sign out work normally.
         </Banner>
 
         <section id="profile" className="flex scroll-mt-16 flex-col gap-[18px] rounded-2xl border border-[#e8e8ee] bg-white p-6">
@@ -442,28 +442,42 @@ export default function SettingsPage() {
             Timezone
             <select
               value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
+              onChange={async (e) => {
+                setTimezone(e.target.value);
+                await fetch('/api/settings/locale', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ timezone: e.target.value }),
+                });
+              }}
               className="rounded-[10px] border border-[#d8d8e0] px-[14px] py-[10px] font-normal text-gray-900"
             >
-              <option>(GMT-08:00) Pacific Time</option>
-              <option>(GMT-05:00) Eastern Time</option>
-              <option>(GMT+00:00) London</option>
-              <option>(GMT+01:00) Central European Time</option>
-              <option>(GMT+09:00) Tokyo</option>
+              <option value="America/Los_Angeles">(GMT-08:00) Pacific Time</option>
+              <option value="America/New_York">(GMT-05:00) Eastern Time</option>
+              <option value="Europe/London">(GMT+00:00) London</option>
+              <option value="Europe/Berlin">(GMT+01:00) Central European Time</option>
+              <option value="Asia/Tokyo">(GMT+09:00) Tokyo</option>
             </select>
           </label>
           <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-gray-700">
             Language
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onChange={async (e) => {
+                setLanguage(e.target.value);
+                await fetch('/api/settings/locale', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ locale: e.target.value }),
+                });
+              }}
               className="rounded-[10px] border border-[#d8d8e0] px-[14px] py-[10px] font-normal text-gray-900"
             >
-              <option>English (US)</option>
-              <option>English (UK)</option>
-              <option>Español</option>
-              <option>Português (Brasil)</option>
-              <option>Deutsch</option>
+              <option value="en-US">English (US)</option>
+              <option value="en-GB">English (UK)</option>
+              <option value="es-ES">Español</option>
+              <option value="pt-BR">Português (Brasil)</option>
+              <option value="de-DE">Deutsch</option>
             </select>
           </label>
         </section>

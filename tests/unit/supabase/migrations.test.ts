@@ -233,4 +233,10 @@ describe('supabase migrations', () => {
     expect(sql).toContain('visual_audio_is_episodic boolean');
     expect(sql).toContain('visual_audio_series_label text');
   });
+
+  it('includes a migration adding timezone and locale to profiles', () => {
+    const sql = readMigrationContaining('add_timezone_locale_to_profiles');
+    expect(sql).toContain("add column timezone text not null default 'UTC'");
+    expect(sql).toContain("add column locale text not null default 'en-US'");
+  });
 });

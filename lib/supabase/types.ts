@@ -13,6 +13,8 @@ export interface Database {
           digest_email_opt_in: boolean;
           digest_last_sent_at: string | null;
           warroom_email_opt_in: boolean;
+          timezone: string;
+          locale: string;
           created_at: string;
         };
         Insert: {
@@ -26,6 +28,8 @@ export interface Database {
           digest_email_opt_in?: boolean;
           digest_last_sent_at?: string | null;
           warroom_email_opt_in?: boolean;
+          timezone?: string;
+          locale?: string;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
