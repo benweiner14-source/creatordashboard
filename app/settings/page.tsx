@@ -31,6 +31,14 @@ const NOTIF_META = [
 type NotifKey = (typeof NOTIF_META)[number]['key'];
 type Platform = BadgePlatform;
 
+const NOTIF_UPDATE_KEY: Record<NotifKey, string> = {
+  recap: 'weeklyRecapReady',
+  ideas: 'newContentIdeasReady',
+  diagnostic: 'diagnosticFinished',
+  product: 'productMarketing',
+  billing: 'paymentBillingAlerts',
+};
+
 const PLATFORM_NAMES: Record<Platform, string> = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram' };
 
 export default function SettingsPage() {
@@ -108,6 +116,14 @@ export default function SettingsPage() {
     fetch('/api/settings/mfa/factors')
       .then((res) => res.json())
       .then((data) => setMfaFactorId(data.factorId ?? null))
+      .catch(() => {});
+  }, [state.status]);
+
+  useEffect(() => {
+    if (state.status !== 'loaded') return;
+    fetch('/api/settings/notifications')
+      .then((res) => res.json())
+      .then((data) => setNotifOn(data))
       .catch(() => {});
   }, [state.status]);
 
@@ -265,8 +281,8 @@ export default function SettingsPage() {
         </div>
 
         <Banner variant="info" label="Preview">
-          This page previews the redesigned Settings screen. Password and notifications aren&apos;t saved yet. Profile
-          details, two-factor authentication, connected platforms, locale, billing, and sign out work normally.
+          This page previews the redesigned Settings screen. Password isn&apos;t available yet. Profile details, two-factor
+          authentication, connected platforms, notifications, locale, billing, and sign out work normally.
         </Banner>
 
         <section id="profile" className="flex scroll-mt-16 flex-col gap-[18px] rounded-2xl border border-[#e8e8ee] bg-white p-6">
@@ -533,7 +549,15 @@ export default function SettingsPage() {
               </div>
               <Switch
                 checked={notifOn[notif.key]}
-                onChange={() => setNotifOn((prev) => ({ ...prev, [notif.key]: !prev[notif.key] }))}
+                onChange={() => {
+                  const next = !notifOn[notif.key];
+                  setNotifOn((prev) => ({ ...prev, [notif.key]: next }));
+                  fetch('/api/settings/notifications', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [NOTIF_UPDATE_KEY[notif.key]]: next }),
+                  });
+                }}
                 label={notif.label}
               />
             </div>

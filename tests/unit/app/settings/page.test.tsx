@@ -83,6 +83,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: true, instagram: false, youtube: false }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ recap: true, ideas: true, diagnostic: true, product: false, billing: true }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -122,6 +123,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ recap: true, ideas: true, diagnostic: true, product: false, billing: true }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -144,10 +146,10 @@ describe('SettingsPage', () => {
     await waitFor(() => screen.getByRole('button', { name: 'Delete account' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
-    expect(screen.getByText(/isn't available yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/account deletion isn't available yet/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(screen.queryByText(/isn't available yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/account deletion isn't available yet/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete account' })).toBeInTheDocument();
   });
 
@@ -158,6 +160,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ recap: true, ideas: true, diagnostic: true, product: false, billing: true }) })
       .mockResolvedValueOnce({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -176,6 +179,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ recap: true, ideas: true, diagnostic: true, product: false, billing: true }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -199,7 +203,8 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: 'Jordan' }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ recap: true, ideas: true, diagnostic: true, product: false, billing: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<SettingsPage />);
@@ -217,6 +222,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ recap: true, ideas: true, diagnostic: true, product: false, billing: true }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'confirmationSent' }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -232,6 +238,30 @@ describe('SettingsPage', () => {
     );
   });
 
+  it('loads real notification preferences and saves a toggle change', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/session') return Promise.resolve({ status: 200, json: async () => ({ email: 'creator@example.com' }) });
+      if (url === '/api/settings/notifications' && !init) {
+        return Promise.resolve({ ok: true, json: async () => ({ recap: false, ideas: true, diagnostic: true, product: false, billing: true }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const recapSwitch = await screen.findByRole('switch', { name: 'Weekly recap ready' });
+    await waitFor(() => expect(recapSwitch).toHaveAttribute('aria-checked', 'false'));
+
+    fireEvent.click(recapSwitch);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/settings/notifications',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ weeklyRecapReady: true }) })
+      )
+    );
+  });
+
   it('saves the timezone on change', async () => {
     const fetchMock = vi
       .fn()
@@ -239,6 +269,7 @@ describe('SettingsPage', () => {
       .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ tiktok: false, instagram: false, youtube: false }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ factorId: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ recap: true, ideas: true, diagnostic: true, product: false, billing: true }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
