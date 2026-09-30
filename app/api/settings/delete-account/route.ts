@@ -35,7 +35,15 @@ export async function POST() {
         }
       },
       signOut: async () => {
-        await supabase.auth.signOut();
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          // The subscription cancellation and scheduled_deletion_at write above have
+          // already succeeded, so a signOut failure here must not fail the request —
+          // that would look like the whole deletion request failed and could prompt a
+          // retry, when the account is already correctly scheduled for deletion. Log
+          // it so a lingering session is visible rather than silently discarded.
+          console.error('Sign-out failed after scheduling account deletion:', error);
+        }
       },
     },
     { profileId: user?.id ?? null }
