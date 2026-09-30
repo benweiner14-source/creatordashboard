@@ -1,5 +1,6 @@
 export interface CallbackHandlerDeps {
   exchangeCodeForSession: (code: string) => Promise<{ error: { message: string } | null }>;
+  hasVerifiedMfaFactor: () => Promise<boolean>;
 }
 
 export interface CallbackRequestContext {
@@ -30,6 +31,14 @@ export async function handleAuthCallback(
     const { error } = await deps.exchangeCodeForSession(context.code);
     if (!error) {
       const safeNext = isSafeRelativePath(context.next) ? context.next : '/diagnostic';
+      // The session already exists at AAL1 (magic-link-verified) here. An
+      // account with 2FA on must clear a second, TOTP challenge before
+      // reaching its destination — see design spec §5.
+      if (await deps.hasVerifiedMfaFactor()) {
+        const challengeUrl = new URL('/auth/mfa-challenge', context.origin);
+        challengeUrl.searchParams.set('next', safeNext);
+        return { redirectUrl: challengeUrl.toString() };
+      }
       return { redirectUrl: new URL(safeNext, context.origin).toString() };
     }
   }
