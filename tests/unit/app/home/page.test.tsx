@@ -25,6 +25,7 @@ import HomePage from '@/app/home/page';
 function homeResponse(overrides: Record<string, unknown> = {}) {
   return {
     email: 'jordan@example.com',
+    timezone: 'UTC',
     diagnostic: null,
     recap: null,
     ideas: { niche: null, digest: null },

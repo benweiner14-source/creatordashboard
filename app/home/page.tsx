@@ -8,6 +8,7 @@ import { HomeCard } from '@/components/HomeCard';
 import { PlatformBadge, type BadgePlatform } from '@/components/PlatformBadge';
 import { SignInPrompt } from '@/components/SignInPrompt';
 import { formatCompactNumber } from '@/lib/home/format';
+import { formatDateInTimezone } from '@/lib/format/timezone';
 import { deriveDisplayNameFromEmail } from '@/lib/home/display-name';
 import { homePageReducer, createInitialHomePageState } from '@/lib/home/page-state';
 import type { HomeData } from '@/lib/home/types';
@@ -119,14 +120,14 @@ export default function HomePage() {
       </header>
 
       <main className="grid grid-cols-1 gap-4 p-6 [&>article]:motion-safe:animate-rise md:grid-cols-2">
-        <RecapCard recap={data.recap} />
+        <RecapCard recap={data.recap} timezone={data.timezone} />
         <IdeasCard ideas={data.ideas} />
       </main>
     </div>
   );
 }
 
-function RecapCard({ recap }: { recap: HomeData['recap'] }) {
+function RecapCard({ recap, timezone }: { recap: HomeData['recap']; timezone: string }) {
   if (!recap) {
     return (
       <HomeCard variant="cta" ariaLabelledBy="recap-cta-heading">
@@ -145,12 +146,7 @@ function RecapCard({ recap }: { recap: HomeData['recap'] }) {
   }
 
   const platformEntries = RECAP_PLATFORM_ORDER.filter((p) => recap.platformData[p]);
-  // recap.month is an ISO date ('2026-08-01'), which Date parses as UTC
-  // midnight — format in UTC too so it doesn't slip to the previous month
-  // for viewers west of Greenwich.
-  const monthName = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(
-    new Date(recap.month)
-  );
+  const monthName = formatDateInTimezone(recap.month, timezone, { month: 'long' });
 
   return (
     <HomeCard ariaLabelledBy="recap-heading">

@@ -23,7 +23,7 @@ export async function GET() {
   const now = new Date();
 
   const [{ data: profile }, { data: diagnosticRow }, { data: recapRow }, { data: digestRow }] = await Promise.all([
-    serviceClient.from('profiles').select('niche').eq('id', user.id).single(),
+    serviceClient.from('profiles').select('niche, timezone').eq('id', user.id).single(),
     serviceClient
       .from('diagnostics')
       .select(
@@ -52,6 +52,7 @@ export async function GET() {
 
   const homeData: HomeData = {
     email: user.email ?? '',
+    timezone: profile?.timezone ?? 'UTC',
     diagnostic: diagnosticRow
       ? {
           id: diagnosticRow.id,

@@ -9,6 +9,7 @@ import { SignInPrompt } from '@/components/SignInPrompt';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { billingPageReducer, createInitialBillingPageState } from '@/lib/billing/page-state';
 import type { BillingStatusData } from '@/lib/billing/page-state';
+import { formatDateInTimezone } from '@/lib/format/timezone';
 
 const POLL_ATTEMPTS = 4;
 const POLL_DELAY_MS = 1500;
@@ -252,10 +253,10 @@ export default function BillingPage() {
                 <p className="text-base text-gray-700">
                   {state.cancelAtPeriodEnd
                     ? state.currentPeriodEnd
-                      ? `Your plan ends ${new Date(state.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+                      ? `Your plan ends ${formatDateInTimezone(state.currentPeriodEnd, state.timezone, { month: 'long', day: 'numeric' })}.`
                       : 'Your plan is ending soon.'
                     : state.currentPeriodEnd
-                      ? `You're subscribed — renews ${new Date(state.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+                      ? `You're subscribed — renews ${formatDateInTimezone(state.currentPeriodEnd, state.timezone, { month: 'long', day: 'numeric' })}.`
                       : "You're subscribed."}
                 </p>
               )}

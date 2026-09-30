@@ -36,6 +36,7 @@ export interface HomeIdeasSummary {
 
 export interface HomeData {
   email: string;
+  timezone: string;
   diagnostic: HomeDiagnosticSummary | null;
   recap: HomeRecapSummary | null;
   ideas: HomeIdeasSummary;

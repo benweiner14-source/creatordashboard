@@ -2,7 +2,7 @@ import { isValidEmailFormat } from '@/lib/auth/sign-in-flow-state';
 
 export type BillingStatusData =
   | { status: 'free' }
-  | { status: 'active' | 'past_due'; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean };
+  | { status: 'active' | 'past_due'; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; timezone: string };
 
 export type BillingPageState =
   | { status: 'loading' }
@@ -14,6 +14,7 @@ export type BillingPageState =
       cancelAtPeriodEnd: boolean;
       pastDue: boolean;
       justSubscribed?: boolean;
+      timezone: string;
     }
   | { status: 'bootstrapFailed' }
   // Sign-in sub-flow, mirroring lib/recap/page-state.ts so the same
@@ -57,6 +58,7 @@ export function billingPageReducer(state: BillingPageState, event: BillingPageEv
         currentPeriodEnd: event.data.currentPeriodEnd,
         cancelAtPeriodEnd: event.data.cancelAtPeriodEnd,
         pastDue: event.data.status === 'past_due',
+        timezone: event.data.timezone,
         ...(event.justSubscribed ? { justSubscribed: true } : {}),
       };
 

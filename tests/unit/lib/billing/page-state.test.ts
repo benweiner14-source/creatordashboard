@@ -22,17 +22,45 @@ describe('billingPageReducer', () => {
   it('moves to subscribed on BOOTSTRAPPED with active data', () => {
     const next = billingPageReducer(
       { status: 'loading' },
-      { type: 'BOOTSTRAPPED', data: { status: 'active', currentPeriodEnd: '2026-09-01T00:00:00Z', cancelAtPeriodEnd: false } }
+      {
+        type: 'BOOTSTRAPPED',
+        data: {
+          status: 'active',
+          currentPeriodEnd: '2026-09-01T00:00:00Z',
+          cancelAtPeriodEnd: false,
+          timezone: 'America/Los_Angeles',
+        },
+      }
     );
-    expect(next).toEqual({ status: 'subscribed', currentPeriodEnd: '2026-09-01T00:00:00Z', cancelAtPeriodEnd: false, pastDue: false });
+    expect(next).toEqual({
+      status: 'subscribed',
+      currentPeriodEnd: '2026-09-01T00:00:00Z',
+      cancelAtPeriodEnd: false,
+      pastDue: false,
+      timezone: 'America/Los_Angeles',
+    });
   });
 
   it('moves to subscribed with pastDue true on BOOTSTRAPPED with past_due data', () => {
     const next = billingPageReducer(
       { status: 'loading' },
-      { type: 'BOOTSTRAPPED', data: { status: 'past_due', currentPeriodEnd: '2026-09-01T00:00:00Z', cancelAtPeriodEnd: false } }
+      {
+        type: 'BOOTSTRAPPED',
+        data: {
+          status: 'past_due',
+          currentPeriodEnd: '2026-09-01T00:00:00Z',
+          cancelAtPeriodEnd: false,
+          timezone: 'America/Los_Angeles',
+        },
+      }
     );
-    expect(next).toEqual({ status: 'subscribed', currentPeriodEnd: '2026-09-01T00:00:00Z', cancelAtPeriodEnd: false, pastDue: true });
+    expect(next).toEqual({
+      status: 'subscribed',
+      currentPeriodEnd: '2026-09-01T00:00:00Z',
+      cancelAtPeriodEnd: false,
+      pastDue: true,
+      timezone: 'America/Los_Angeles',
+    });
   });
 
   it('marks justSubscribed on BOOTSTRAPPED when the checkout-success poll finds an active plan', () => {
@@ -40,7 +68,12 @@ describe('billingPageReducer', () => {
       { status: 'polling' },
       {
         type: 'BOOTSTRAPPED',
-        data: { status: 'active', currentPeriodEnd: '2026-09-01T00:00:00Z', cancelAtPeriodEnd: false },
+        data: {
+          status: 'active',
+          currentPeriodEnd: '2026-09-01T00:00:00Z',
+          cancelAtPeriodEnd: false,
+          timezone: 'America/Los_Angeles',
+        },
         justSubscribed: true,
       }
     );
@@ -49,6 +82,7 @@ describe('billingPageReducer', () => {
       currentPeriodEnd: '2026-09-01T00:00:00Z',
       cancelAtPeriodEnd: false,
       pastDue: false,
+      timezone: 'America/Los_Angeles',
       justSubscribed: true,
     });
   });

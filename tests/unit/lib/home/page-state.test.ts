@@ -4,6 +4,7 @@ import type { HomeData } from '@/lib/home/types';
 
 const DATA: HomeData = {
   email: 'jordan@example.com',
+  timezone: 'UTC',
   diagnostic: null,
   recap: null,
   ideas: { niche: null, digest: null },
