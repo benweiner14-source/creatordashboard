@@ -76,6 +76,14 @@ export default function SettingsPage() {
         setDisplayName(data.email.split('@')[0]);
         setEmail(data.email);
         dispatch({ type: 'BOOTSTRAPPED', data: { email: data.email } });
+        fetch('/api/settings/profile')
+          .then((res) => res.json())
+          .then((profileData) => {
+            if (typeof profileData.displayName === 'string' && profileData.displayName.length > 0) {
+              setDisplayName(profileData.displayName);
+            }
+          })
+          .catch(() => {});
       })
       .catch(() => {
         if (!cancelled) dispatch({ type: 'BOOTSTRAP_FAILED' });

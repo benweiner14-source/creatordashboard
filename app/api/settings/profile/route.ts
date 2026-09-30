@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase/server';
-import { handleUpdateProfile } from '@/lib/settings/profile-handler';
+import { handleUpdateProfile, handleGetProfile } from '@/lib/settings/profile-handler';
 
 export async function PATCH(request: Request) {
   const supabase = await createSupabaseServerClient();
@@ -20,6 +20,26 @@ export async function PATCH(request: Request) {
       },
     },
     { profileId: user?.id ?? null, displayName: typeof body.displayName === 'string' ? body.displayName : '' }
+  );
+
+  return NextResponse.json(result.body, { status: result.status });
+}
+
+export async function GET() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const serviceClient = createSupabaseServiceRoleClient();
+
+  const result = await handleGetProfile(
+    {
+      getDisplayName: async (profileId) => {
+        const { data } = await serviceClient.from('profiles').select('display_name').eq('id', profileId).single();
+        return data?.display_name ?? null;
+      },
+    },
+    { profileId: user?.id ?? null }
   );
 
   return NextResponse.json(result.body, { status: result.status });

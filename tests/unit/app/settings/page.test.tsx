@@ -86,6 +86,7 @@ describe('SettingsPage', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -101,6 +102,7 @@ describe('SettingsPage', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: null }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -116,5 +118,20 @@ describe('SettingsPage', () => {
       )
     );
     expect(await screen.findByText('Saved')).toBeInTheDocument();
+  });
+
+  it('loads persisted display name on page load, overriding the email-derived default', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ email: 'creator@example.com' }) })
+      .mockResolvedValueOnce({ status: 200, json: async () => ({ displayName: 'Jordan' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettingsPage />);
+    const input = await screen.findByLabelText('Display name');
+
+    await waitFor(() => {
+      expect((input as HTMLInputElement).value).toBe('Jordan');
+    });
   });
 });

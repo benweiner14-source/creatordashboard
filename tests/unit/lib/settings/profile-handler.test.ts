@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleUpdateProfile, type UpdateProfileDeps } from '@/lib/settings/profile-handler';
+import { handleUpdateProfile, type UpdateProfileDeps, handleGetProfile, type GetProfileDeps } from '@/lib/settings/profile-handler';
 
 function makeDeps(overrides: Partial<UpdateProfileDeps> = {}): UpdateProfileDeps {
   return {
@@ -32,5 +32,34 @@ describe('handleUpdateProfile', () => {
     });
     expect(result.status).toBe(200);
     expect(saveDisplayName).toHaveBeenCalledWith('profile-1', 'Jordan');
+  });
+});
+
+function makeGetDeps(overrides: Partial<GetProfileDeps> = {}): GetProfileDeps {
+  return {
+    getDisplayName: vi.fn().mockResolvedValue(null),
+    ...overrides,
+  };
+}
+
+describe('handleGetProfile', () => {
+  it('returns 401 when not signed in', async () => {
+    const result = await handleGetProfile(makeGetDeps(), { profileId: null });
+    expect(result.status).toBe(401);
+  });
+
+  it('returns 200 with displayName when signed in', async () => {
+    const getDisplayName = vi.fn().mockResolvedValue('Jordan');
+    const result = await handleGetProfile(makeGetDeps({ getDisplayName }), { profileId: 'profile-1' });
+    expect(result.status).toBe(200);
+    expect(result.body.displayName).toBe('Jordan');
+    expect(getDisplayName).toHaveBeenCalledWith('profile-1');
+  });
+
+  it('returns 200 with null displayName when no display name is set', async () => {
+    const getDisplayName = vi.fn().mockResolvedValue(null);
+    const result = await handleGetProfile(makeGetDeps({ getDisplayName }), { profileId: 'profile-1' });
+    expect(result.status).toBe(200);
+    expect(result.body.displayName).toBeNull();
   });
 });

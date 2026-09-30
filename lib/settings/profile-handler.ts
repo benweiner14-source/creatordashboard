@@ -12,6 +12,19 @@ export interface UpdateProfileResult {
   body: Record<string, unknown>;
 }
 
+export interface GetProfileDeps {
+  getDisplayName: (profileId: string) => Promise<string | null>;
+}
+
+export interface GetProfileContext {
+  profileId: string | null;
+}
+
+export interface GetProfileResult {
+  status: number;
+  body: Record<string, unknown>;
+}
+
 const MAX_DISPLAY_NAME_LENGTH = 60;
 
 export async function handleUpdateProfile(
@@ -32,4 +45,15 @@ export async function handleUpdateProfile(
 
   await deps.saveDisplayName(context.profileId, trimmed);
   return { status: 200, body: { ok: true } };
+}
+
+export async function handleGetProfile(
+  deps: GetProfileDeps,
+  context: GetProfileContext
+): Promise<GetProfileResult> {
+  if (!context.profileId) {
+    return { status: 401, body: { error: 'You must be signed in.' } };
+  }
+  const displayName = await deps.getDisplayName(context.profileId);
+  return { status: 200, body: { displayName } };
 }
