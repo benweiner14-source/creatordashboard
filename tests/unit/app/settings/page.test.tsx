@@ -140,17 +140,31 @@ describe('SettingsPage', () => {
     );
   });
 
-  it('arms and cancels the delete-account confirmation without deleting anything', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200, json: async () => ({ email: 'creator@example.com' }) }));
+  it('deletes the account for real and shows the scheduled-deletion countdown', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/session') return Promise.resolve({ status: 200, json: async () => ({ email: 'creator@example.com' }) });
+      if (url === '/api/settings/delete-account') {
+        return Promise.resolve({ ok: true, json: async () => ({ scheduledDeletionAt: '2026-10-14T00:00:00.000Z' }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
     render(<SettingsPage />);
-    await waitFor(() => screen.getByRole('button', { name: 'Delete account' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete account' }));
+    fireEvent.click(screen.getByRole('button', { name: /yes, delete everything/i }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
-    expect(screen.getByText(/account deletion isn't available yet/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/your account will be deleted on/i)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Delete account' })).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(screen.queryByText(/account deletion isn't available yet/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete account' })).toBeInTheDocument();
+  it('shows a one-time notice when signing back in cancels a pending deletion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ status: 200, json: async () => ({ email: 'creator@example.com', justCancelledDeletion: true }) })
+    );
+    render(<SettingsPage />);
+    expect(await screen.findByText(/account deletion was canceled/i)).toBeInTheDocument();
   });
 
   it('signs out and redirects home when Sign out is clicked', async () => {

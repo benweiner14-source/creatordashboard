@@ -67,6 +67,9 @@ export default function SettingsPage() {
   const [platforms, setPlatforms] = useState<{ tiktok: boolean; instagram: boolean; youtube: boolean } | null>(null);
   const [youtubeHandle, setYoutubeHandle] = useState('');
   const [deleteArmed, setDeleteArmed] = useState(false);
+  const [scheduledDeletionAt, setScheduledDeletionAt] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [justCancelledDeletion, setJustCancelledDeletion] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +88,9 @@ export default function SettingsPage() {
         }
         setDisplayName(data.email.split('@')[0]);
         setEmail(data.email);
+        if (data.justCancelledDeletion) {
+          setJustCancelledDeletion(true);
+        }
         dispatch({ type: 'BOOTSTRAPPED', data: { email: data.email } });
         fetch('/api/settings/profile')
           .then((res) => res.json())
@@ -275,6 +281,12 @@ export default function SettingsPage() {
       </div>
 
       <main className="mx-auto flex max-w-[760px] flex-col gap-5 px-5 pb-24 pt-[34px]">
+        {justCancelledDeletion && (
+          <Banner variant="positive" label="Welcome back">
+            Your account deletion was canceled.
+          </Banner>
+        )}
+
         <div>
           <div className="mb-2 font-mono text-[11px] uppercase tracking-[.2em] text-gray-500">Account</div>
           <h1 className="font-heading text-[34px] font-bold leading-[1.05] text-gray-900">Settings</h1>
@@ -631,18 +643,46 @@ export default function SettingsPage() {
           <p className="text-sm leading-[1.5] text-gray-600">
             Permanently delete your account and all diagnostics, recaps, and saved ideas. This can&apos;t be undone.
           </p>
-          {deleteArmed ? (
+          {scheduledDeletionAt ? (
+            <p className="text-sm text-gray-700">
+              Your account will be deleted on{' '}
+              {new Date(scheduledDeletionAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Sign
+              in again before then to keep it.
+            </p>
+          ) : deleteArmed ? (
             <div className="flex flex-col gap-3 rounded-xl border border-[#f7cfc8] border-t-2 border-t-[#ef4444] bg-gradient-to-br from-[#fef2f2] to-[#fde4e0] px-4 py-[15px]">
-              <p className="text-sm leading-[1.5] text-[#1f2937]">
-                Account deletion isn&apos;t available yet in this preview — contact support to delete your account.
-              </p>
-              <button
-                type="button"
-                onClick={() => setDeleteArmed(false)}
-                className="self-start whitespace-nowrap rounded-full border border-[#d8d8e0] bg-white px-[18px] py-2.5 text-[13px] font-semibold text-gray-700"
-              >
-                Close
-              </button>
+              <p className="text-sm leading-[1.5] text-[#1f2937]">This will erase everything. Are you sure?</p>
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setDeleteError(null);
+                    const res = await fetch('/api/settings/delete-account', { method: 'POST' });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      setDeleteError(data.error ?? 'Something went wrong. Please try again.');
+                      return;
+                    }
+                    setScheduledDeletionAt(data.scheduledDeletionAt);
+                    setDeleteArmed(false);
+                  }}
+                  className="whitespace-nowrap rounded-full bg-[#dc2626] px-[18px] py-2.5 text-[13px] font-semibold text-white"
+                >
+                  Yes, delete everything
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteArmed(false)}
+                  className="whitespace-nowrap rounded-full border border-[#d8d8e0] bg-white px-[18px] py-2.5 text-[13px] font-semibold text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+              {deleteError && (
+                <p role="alert" className="text-sm text-[#b91c1c]">
+                  {deleteError}
+                </p>
+              )}
             </div>
           ) : (
             <button
