@@ -8,7 +8,13 @@ export type BillingPageState =
   | { status: 'loading' }
   | { status: 'polling' }
   | { status: 'free'; justCheckedOut?: boolean }
-  | { status: 'subscribed'; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; pastDue: boolean }
+  | {
+      status: 'subscribed';
+      currentPeriodEnd: string | null;
+      cancelAtPeriodEnd: boolean;
+      pastDue: boolean;
+      justSubscribed?: boolean;
+    }
   | { status: 'bootstrapFailed' }
   // Sign-in sub-flow, mirroring lib/recap/page-state.ts so the same
   // <SignInPrompt> component drives it.
@@ -19,7 +25,10 @@ export type BillingPageState =
 
 export type BillingPageEvent =
   | { type: 'START_POLLING' }
-  | { type: 'BOOTSTRAPPED'; data: BillingStatusData }
+  // justSubscribed is only ever true right after a checkout-success poll
+  // resolves — it drives the one-time "You're in" delight banner, not a
+  // persistent flag, so a plain page load never sets it.
+  | { type: 'BOOTSTRAPPED'; data: BillingStatusData; justSubscribed?: boolean }
   | { type: 'POLL_EXHAUSTED' }
   | { type: 'BOOTSTRAP_FAILED' }
   | { type: 'BOOTSTRAP_UNAUTHORIZED' }
@@ -48,6 +57,7 @@ export function billingPageReducer(state: BillingPageState, event: BillingPageEv
         currentPeriodEnd: event.data.currentPeriodEnd,
         cancelAtPeriodEnd: event.data.cancelAtPeriodEnd,
         pastDue: event.data.status === 'past_due',
+        ...(event.justSubscribed ? { justSubscribed: true } : {}),
       };
 
     case 'POLL_EXHAUSTED':

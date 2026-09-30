@@ -17,6 +17,15 @@ describe('UpgradePrompt', () => {
     expect(screen.getByText('Upgrade to unlock it.')).toBeInTheDocument();
   });
 
+  it('renders optional children between the body and the upgrade button', () => {
+    render(
+      <UpgradePrompt title="t" body="b">
+        <p>Recap Card</p>
+      </UpgradePrompt>
+    );
+    expect(screen.getByText('Recap Card')).toBeInTheDocument();
+  });
+
   it('starts checkout and redirects on button click', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: 'https://checkout.stripe.com/pay/cs_1' }) }));
     render(<UpgradePrompt title="t" body="b" />);

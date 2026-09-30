@@ -35,6 +35,24 @@ describe('billingPageReducer', () => {
     expect(next).toEqual({ status: 'subscribed', currentPeriodEnd: '2026-09-01T00:00:00Z', cancelAtPeriodEnd: false, pastDue: true });
   });
 
+  it('marks justSubscribed on BOOTSTRAPPED when the checkout-success poll finds an active plan', () => {
+    const next = billingPageReducer(
+      { status: 'polling' },
+      {
+        type: 'BOOTSTRAPPED',
+        data: { status: 'active', currentPeriodEnd: '2026-09-01T00:00:00Z', cancelAtPeriodEnd: false },
+        justSubscribed: true,
+      }
+    );
+    expect(next).toEqual({
+      status: 'subscribed',
+      currentPeriodEnd: '2026-09-01T00:00:00Z',
+      cancelAtPeriodEnd: false,
+      pastDue: false,
+      justSubscribed: true,
+    });
+  });
+
   it('moves to free with justCheckedOut on POLL_EXHAUSTED', () => {
     const next = billingPageReducer({ status: 'polling' }, { type: 'POLL_EXHAUSTED' });
     expect(next).toEqual({ status: 'free', justCheckedOut: true });
