@@ -34,19 +34,24 @@ export default function MfaChallengePage() {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    const id = await resolveFactorId();
-    const res = await fetch('/api/settings/mfa/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ factorId: id, code }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error ?? 'Something went wrong. Please try again.');
+    try {
+      const id = await resolveFactorId();
+      const res = await fetch('/api/settings/mfa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ factorId: id, code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? 'Something went wrong. Please try again.');
+        setSubmitting(false);
+        return;
+      }
+      router.push(next);
+    } catch {
+      setError('Network error. Please check your connection and try again.');
       setSubmitting(false);
-      return;
     }
-    router.push(next);
   }
 
   return (
