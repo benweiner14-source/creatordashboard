@@ -893,12 +893,12 @@ Replace the Platforms `<section>` body's `.map(...)` block:
 })}
 ```
 
-Update the top "Preview" `Banner`'s body text to drop "connected platforms" from the list of not-saved-yet sections:
+Update the top "Preview" `Banner`'s body text to drop "connected platforms" from the not-saved list — and drop "Profile details" too, since Tasks 1-2 already made display name and email real (the plan's original banner text predates those tasks and was never corrected until now):
 
 ```tsx
 <Banner variant="info" label="Preview">
-  This page previews the redesigned Settings screen. Profile details, password, two-factor, notifications, and
-  locale aren&apos;t saved yet. Connected platforms, billing, and sign out work normally.
+  This page previews the redesigned Settings screen. Password, two-factor, notifications, and locale aren&apos;t
+  saved yet. Profile details, connected platforms, billing, and sign out work normally.
 </Banner>
 ```
 
@@ -1199,8 +1199,8 @@ Also update the top Preview banner to drop "locale" from the not-saved list, and
 
 ```tsx
 <Banner variant="info" label="Preview">
-  This page previews the redesigned Settings screen. Profile details, password, two-factor, and notifications
-  aren&apos;t saved yet. Connected platforms, locale, billing, and sign out work normally.
+  This page previews the redesigned Settings screen. Password, two-factor, and notifications aren&apos;t saved yet.
+  Profile details, connected platforms, locale, billing, and sign out work normally.
 </Banner>
 ```
 
@@ -2298,16 +2298,14 @@ Replace the two-factor block in the Security `<section>`:
 )}
 ```
 
-Update the top Preview banner one last time to drop "two-factor" from the not-saved list:
+Update the top Preview banner one last time to drop "two-factor" from the not-saved list. Notifications is not yet real (that's Task 12) so it stays in the not-saved clause here:
 
 ```tsx
 <Banner variant="info" label="Preview">
-  This page previews the redesigned Settings screen. Profile details and password aren&apos;t saved yet. Two-factor
-  authentication, connected platforms, notifications, locale, billing, and sign out work normally.
+  This page previews the redesigned Settings screen. Password and notifications aren&apos;t saved yet. Profile
+  details, two-factor authentication, connected platforms, locale, billing, and sign out work normally.
 </Banner>
 ```
-
-(Notifications is listed here as "working normally" only after Task 12 lands — if this task is executed before Task 12 in a different order than written, leave notifications in the not-saved list until Task 12's own step updates it. As written, this plan executes Tasks in order, so by Task 10 only notifications remains unwired; adjust the banner text to whichever tasks are actually complete at the time this step runs.)
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -2717,12 +2715,23 @@ it('loads real notification preferences and saves a toggle change', async () => 
 });
 ```
 
-- [ ] **Step 8: Run tests to verify they pass**
+- [ ] **Step 8: Update the Preview banner — notifications is now real**
+
+Notifications is the last section before account deletion to become real. Update the same top Preview banner Tasks 4/5/10 have been narrowing:
+
+```tsx
+<Banner variant="info" label="Preview">
+  This page previews the redesigned Settings screen. Password isn&apos;t available yet. Profile details, two-factor
+  authentication, connected platforms, notifications, locale, billing, and sign out work normally.
+</Banner>
+```
+
+- [ ] **Step 9: Run tests to verify they pass**
 
 Run: `npx vitest run tests/unit/app/settings/page.test.tsx`
 Expected: PASS
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add lib/settings/notifications-handler.ts app/api/settings/notifications/route.ts app/settings/page.tsx tests/unit/lib/settings/notifications-handler.test.ts tests/unit/app/settings/page.test.tsx
