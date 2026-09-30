@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { AppNav } from '@/components/AppNav';
 import { GlossaryText } from '@/components/GlossaryChip';
+import { Banner } from '@/components/Banner';
+import { OverallScoreRing } from '@/components/OverallScoreRing';
 
 interface DiagnosticReportData {
   headline: string;
@@ -193,14 +195,22 @@ export default function DiagnosticReportPage() {
     <>
       <AppNav />
       <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
-      <h1 className="text-2xl font-bold text-gray-900">{report.headline}</h1>
-      {report.confidenceCaveat && (
-        <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{report.confidenceCaveat}</p>
-      )}
-      <p className="text-lg text-gray-700">Overall score: {report.scores.overallScore}</p>
-      <div className="text-base leading-relaxed text-gray-800">
-        <GlossaryText text={report.explanationSegments.map((s) => s.value).join('')} />
-      </div>
+      <article className="motion-safe:animate-card-establish rounded-[18px] border border-[#e8e8ee] bg-white px-[30px] py-7">
+        <h1 className="font-heading text-2xl font-bold leading-tight text-gray-900">{report.headline}</h1>
+        {report.confidenceCaveat && (
+          <div className="mt-5">
+            <Banner variant="caution" label="Low confidence">
+              {report.confidenceCaveat}
+            </Banner>
+          </div>
+        )}
+        <div className="motion-safe:animate-hud-resolve mt-6">
+          <OverallScoreRing value={report.scores.overallScore} />
+        </div>
+        <div className="motion-safe:animate-support-reveal mt-6 text-base leading-relaxed text-gray-800">
+          <GlossaryText text={report.explanationSegments.map((s) => s.value).join('')} />
+        </div>
+      </article>
 
       {/*
         'pending' is treated as retryable, not as "in progress": the analysis
@@ -216,7 +226,7 @@ export default function DiagnosticReportPage() {
             type="button"
             onClick={handleEnrich}
             disabled={enriching}
-            className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="self-start rounded-full bg-brand px-6 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
             {enriching
               ? 'Analyzing your first 5 seconds…'
@@ -226,36 +236,47 @@ export default function DiagnosticReportPage() {
           </button>
         )}
 
-      {enrichBlocked && (
-        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p>{enrichBlocked.message}</p>
-          {enrichBlocked.upgradeUrl && (
-            <a href={enrichBlocked.upgradeUrl} className="mt-2 inline-block font-medium underline">
+      {enrichBlocked &&
+        (enrichBlocked.upgradeUrl ? (
+          <Banner variant="promo" label="Locked">
+            <p>{enrichBlocked.message}</p>
+            <a
+              href={enrichBlocked.upgradeUrl}
+              className="mt-2 inline-block rounded-full bg-brand px-[18px] py-[9px] text-[13px] font-semibold text-white"
+            >
               Upgrade to unlock this analysis
             </a>
-          )}
-        </div>
-      )}
+          </Banner>
+        ) : (
+          <Banner variant="caution" label="Can't run this yet">
+            {enrichBlocked.message}
+          </Banner>
+        ))}
 
       {diagnostic.visualAudioStatus === 'complete' && diagnostic.visualAudioNarrative && (
-        <div className="rounded-lg bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-          <p className="mb-1 font-semibold">Your first 5 seconds, visually</p>
+        <Banner variant="positive" label="Complete">
+          <p className="mb-1 font-semibold text-gray-900">Your first 5 seconds, visually</p>
           <p>{diagnostic.visualAudioNarrative}</p>
           {diagnostic.visualAudioIsEpisodic && (
-            <p className="mt-2 inline-block rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800">
+            <p className="mt-2 inline-block whitespace-nowrap rounded-md border border-[#a7f3d0] bg-[#d1fae5] px-2 py-1 font-mono text-[10px] uppercase tracking-[.12em] text-[#047857]">
               📺 Part of a series{diagnostic.visualAudioSeriesLabel ? `: ${diagnostic.visualAudioSeriesLabel}` : ''}
             </p>
           )}
-        </div>
+        </Banner>
       )}
 
       {diagnostic.visualAudioStatus === 'failed' && (
-        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+        <Banner variant="critical" label="Analysis failed" role="alert">
           <p>{enrichError ?? "Couldn't analyze this video."}</p>
-          <button type="button" onClick={handleEnrich} disabled={enriching} className="mt-2 font-medium underline">
+          <button
+            type="button"
+            onClick={handleEnrich}
+            disabled={enriching}
+            className="mt-2 font-semibold text-[#b91c1c] underline"
+          >
             Try again
           </button>
-        </div>
+        </Banner>
       )}
 
       {diagnostic.platform !== 'youtube' &&
@@ -265,7 +286,7 @@ export default function DiagnosticReportPage() {
             type="button"
             onClick={handleAnalyzeComments}
             disabled={analyzingComments}
-            className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="self-start rounded-full bg-brand px-6 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
             {analyzingComments
               ? 'Reading your top comments…'
@@ -275,36 +296,47 @@ export default function DiagnosticReportPage() {
           </button>
         )}
 
-      {commentAnalysisBlocked && (
-        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p>{commentAnalysisBlocked.message}</p>
-          {commentAnalysisBlocked.upgradeUrl && (
-            <a href={commentAnalysisBlocked.upgradeUrl} className="mt-2 inline-block font-medium underline">
+      {commentAnalysisBlocked &&
+        (commentAnalysisBlocked.upgradeUrl ? (
+          <Banner variant="promo" label="Locked">
+            <p>{commentAnalysisBlocked.message}</p>
+            <a
+              href={commentAnalysisBlocked.upgradeUrl}
+              className="mt-2 inline-block rounded-full bg-brand px-[18px] py-[9px] text-[13px] font-semibold text-white"
+            >
               Upgrade to unlock this analysis
             </a>
-          )}
-        </div>
-      )}
+          </Banner>
+        ) : (
+          <Banner variant="caution" label="Can't run this yet">
+            {commentAnalysisBlocked.message}
+          </Banner>
+        ))}
 
       {diagnostic.commentAnalysisStatus === 'complete' && diagnostic.commentAnalysisNarrative && (
-        <div className="rounded-lg bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-          <p className="mb-1 font-semibold">What your audience is saying</p>
+        <Banner variant="positive" label="Complete">
+          <p className="mb-1 font-semibold text-gray-900">What your audience is saying</p>
           <p>{diagnostic.commentAnalysisNarrative}</p>
           {diagnostic.commentAnalysisHasContentRequest && diagnostic.commentAnalysisContentRequestSummary && (
-            <p className="mt-2 inline-block rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800">
+            <p className="mt-2 font-mono text-[11px] leading-[1.45] text-gray-600">
               💡 Content idea from comments: {diagnostic.commentAnalysisContentRequestSummary}
             </p>
           )}
-        </div>
+        </Banner>
       )}
 
       {diagnostic.commentAnalysisStatus === 'failed' && (
-        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+        <Banner variant="critical" label="Analysis failed" role="alert">
           <p>{commentAnalysisError ?? "Couldn't analyze these comments."}</p>
-          <button type="button" onClick={handleAnalyzeComments} disabled={analyzingComments} className="mt-2 font-medium underline">
+          <button
+            type="button"
+            onClick={handleAnalyzeComments}
+            disabled={analyzingComments}
+            className="mt-2 font-semibold text-[#b91c1c] underline"
+          >
             Try again
           </button>
-        </div>
+        </Banner>
       )}
       </main>
     </>

@@ -44,7 +44,11 @@ describe('DiagnosticReportPage', () => {
 
     expect(screen.getByText(/loading your report/i)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Strong hook, moderate retention')).toBeInTheDocument());
-    expect(screen.getByText(/overall score: 72/i)).toBeInTheDocument();
+    // The score ring count-up runs over real time in jsdom (no matchMedia to
+    // stub prefers-reduced-motion here), so give it room to land on 72.
+    await waitFor(() => expect(screen.getByRole('group', { name: /overall score 72 out of 100/i })).toBeInTheDocument(), {
+      timeout: 2000,
+    });
     expect(screen.getByRole('button', { name: 'hook rate' })).toBeInTheDocument();
   });
 
