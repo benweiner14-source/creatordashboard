@@ -41,7 +41,11 @@ test('setting a niche and generating shows the returned idea cards', async ({ pa
   });
 
   await page.goto('/ideas');
-  await page.getByLabel(/your gta 6 focus/i).fill('home baking');
+  // None of the GTA 6 preset chips fit "home baking", so this uses the
+  // "Other" chip, which reveals a free-text field — the faithful equivalent
+  // of the old free-text niche input.
+  await page.getByRole('button', { name: 'Other' }).click();
+  await page.getByLabel(/describe your own focus/i).fill('home baking');
   await page.getByRole('button', { name: /save niche/i }).click();
   await page.getByRole('button', { name: /get this week's ideas/i }).click();
 

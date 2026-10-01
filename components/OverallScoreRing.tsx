@@ -19,38 +19,43 @@ function bandFor(value: number): { word: string; arc: string; num: string } {
   return { word: 'Strong', arc: '#22c55e', num: '#15803d' };
 }
 
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
 export function OverallScoreRing({ value }: OverallScoreRingProps) {
   const target = Math.round(Math.max(0, Math.min(100, value)));
-  const [display, setDisplay] = useState(0);
+  // Computed once at mount (during render, not in an effect) so the
+  // reduced-motion case can skip the count-up animation entirely rather
+  // than animating and then synchronously overwriting it from an effect.
+  const [reduceMotion] = useState(prefersReducedMotion);
+  const [animatedDisplay, setAnimatedDisplay] = useState(0);
+  const display = reduceMotion ? target : animatedDisplay;
   const rafRef = useRef<number | null>(null);
   const failsafeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const reduceMotion =
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    if (reduceMotion) {
-      setDisplay(target);
-      return undefined;
-    }
+    if (reduceMotion) return undefined;
 
     const startTime = performance.now();
     function step(now: number) {
       const progress = Math.min(1, (now - startTime) / COUNT_UP_DURATION_MS);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(target * eased));
+      setAnimatedDisplay(Math.round(target * eased));
       if (progress < 1) rafRef.current = requestAnimationFrame(step);
     }
     rafRef.current = requestAnimationFrame(step);
-    failsafeRef.current = setTimeout(() => setDisplay(target), COUNT_UP_FAILSAFE_MS);
+    failsafeRef.current = setTimeout(() => setAnimatedDisplay(target), COUNT_UP_FAILSAFE_MS);
 
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       if (failsafeRef.current !== null) clearTimeout(failsafeRef.current);
     };
-  }, [target]);
+  }, [target, reduceMotion]);
 
   const band = bandFor(display);
   const offset = CIRCUMFERENCE * (1 - display / 100);
