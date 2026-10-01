@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { isSafeRelativePath } from '@/lib/auth/callback';
 
-export default function MfaChallengePage() {
+function MfaChallengePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawNext = searchParams.get('next');
@@ -84,5 +84,13 @@ export default function MfaChallengePage() {
         )}
       </form>
     </main>
+  );
+}
+
+export default function MfaChallengePage() {
+  return (
+    <Suspense fallback={<p>Loading…</p>}>
+      <MfaChallengePageInner />
+    </Suspense>
   );
 }
