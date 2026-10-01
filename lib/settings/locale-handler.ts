@@ -17,8 +17,15 @@ export interface UpdateLocaleResult {
 }
 
 function isValidTimezone(value: string): boolean {
+  // Intl.supportedValuesOf('timeZone') only lists canonical IANA zone names
+  // (e.g. 'Etc/UTC') — it does NOT include the literal string 'UTC', even
+  // though 'UTC' is a valid timeZone identifier that Intl.DateTimeFormat
+  // itself accepts. Constructing a formatter is the more robust check: it
+  // accepts 'UTC' and any other valid-but-non-canonical identifier Node
+  // recognizes, and throws a RangeError for anything it doesn't.
   try {
-    return Intl.supportedValuesOf('timeZone').includes(value);
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
   } catch {
     return false;
   }

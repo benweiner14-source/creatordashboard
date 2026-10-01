@@ -29,6 +29,17 @@ describe('handleUpdateLocale', () => {
     expect(result.status).toBe(400);
   });
 
+  it('saves "UTC" as a valid timezone (N2: not in Intl.supportedValuesOf but a valid Intl timeZone identifier)', async () => {
+    const saveLocale = vi.fn().mockResolvedValue(undefined);
+    const result = await handleUpdateLocale(makeDeps({ saveLocale }), {
+      profileId: 'profile-1',
+      timezone: 'UTC',
+      locale: undefined,
+    });
+    expect(result.status).toBe(200);
+    expect(saveLocale).toHaveBeenCalledWith('profile-1', { timezone: 'UTC', locale: undefined });
+  });
+
   it('saves a valid timezone only, leaving locale untouched', async () => {
     const saveLocale = vi.fn().mockResolvedValue(undefined);
     const result = await handleUpdateLocale(makeDeps({ saveLocale }), {
