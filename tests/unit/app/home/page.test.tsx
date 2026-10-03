@@ -1,6 +1,6 @@
 // tests/unit/app/home/page.test.tsx
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 const pushMock = vi.fn();
 const replaceMock = vi.fn();
@@ -25,6 +25,7 @@ import HomePage from '@/app/home/page';
 function homeResponse(overrides: Record<string, unknown> = {}) {
   return {
     email: 'jordan@example.com',
+    timezone: 'UTC',
     diagnostic: null,
     recap: null,
     ideas: { niche: null, digest: null },
@@ -73,6 +74,35 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'August recap' })).toBeInTheDocument();
   });
 
+  it('names the recap month from the calendar-month key regardless of the viewer timezone', async () => {
+    // Finding I3 regression: recap.month is a calendar-month key
+    // ('2026-08-01' means "the August 2026 recap"), not a point-in-time
+    // timestamp. A viewer timezone behind UTC (like America/Los_Angeles)
+    // must not shift it back to "July recap" — the month is always read
+    // back in UTC, independent of `timezone`.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () =>
+          homeResponse({
+            timezone: 'America/Los_Angeles',
+            recap: {
+              id: 'card-1',
+              month: '2026-08-01',
+              totals: { views: 142000, likes: 4000, comments: 300, postCount: 5 },
+              platformData: { youtube: { views: 100000, likes: 3000, comments: 200, postCount: 3 } },
+              topPost: { platform: 'youtube', captionOrTitle: '3 Editing Tricks I Wish I Knew Sooner', viewCount: 38000, permalink: 'https://example.com' },
+              generatedAt: '2026-08-01T00:00:00Z',
+            },
+          }),
+      })
+    );
+    render(<HomePage />);
+    await waitFor(() => expect(screen.getByText('142K')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'August recap' })).toBeInTheDocument();
+  });
+
   it('shows a "set your niche" prompt when no niche is set', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => homeResponse() }));
     render(<HomePage />);
@@ -112,13 +142,33 @@ describe('HomePage', () => {
     await waitFor(() => expect(screen.getByText('Welcome back, Jordan.')).toBeInTheDocument());
   });
 
-  it('replaces the history entry with / when the bootstrap fetch is unauthorized', async () => {
+  it('shows the inline sign-in prompt (not a redirect) when the bootstrap fetch is unauthorized', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: 'unauthorized' }) }));
     render(<HomePage />);
-    // replace(), not push() — otherwise Back from '/' returns to /home, which
-    // 401s and redirects again, trapping the user.
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/'));
+    // Matches every other gated page's pattern — a silent redirect to the
+    // marketing page lost context and left session-expired users stranded.
+    await waitFor(() => expect(screen.getByLabelText('Email')).toBeInTheDocument());
+    expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('submits the email with redirectPath=/home and shows the check-your-email confirmation', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: 'unauthorized' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<HomePage />);
+    await waitFor(() => screen.getByLabelText('Email'));
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'creator@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /send sign-in link/i }));
+
+    await waitFor(() => expect(screen.getByText(/check your email/i)).toHaveTextContent('creator@example.com'));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/auth/magic-link',
+      expect.objectContaining({ body: JSON.stringify({ email: 'creator@example.com', redirectPath: '/home' }) })
+    );
   });
 
   it('offers a way out when the bootstrap fetch fails outright', async () => {

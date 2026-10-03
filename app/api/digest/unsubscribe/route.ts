@@ -13,9 +13,8 @@ export async function GET(request: Request) {
       verifyToken: (profileId, token) => verifyUnsubscribeToken(profileId, token, secret),
       setOptOut: async (profileId) => {
         const { error } = await serviceClient
-          .from('profiles')
-          .update({ digest_email_opt_in: false })
-          .eq('id', profileId);
+          .from('notification_preferences')
+          .upsert({ profile_id: profileId, new_content_ideas_ready: false });
         if (error) {
           throw new Error(`Failed to opt out of digest emails: ${error.message}`);
         }

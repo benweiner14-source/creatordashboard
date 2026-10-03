@@ -9,7 +9,16 @@ export async function GET(request: Request) {
 
   const supabase = await createSupabaseServerClient();
   const result = await handleAuthCallback(
-    { exchangeCodeForSession: (c) => supabase.auth.exchangeCodeForSession(c) },
+    {
+      exchangeCodeForSession: (c) => supabase.auth.exchangeCodeForSession(c),
+      hasVerifiedMfaFactor: async () => {
+        const { data, error } = await supabase.auth.mfa.listFactors();
+        if (error) {
+          console.error('MFA factor lookup failed; treating as no factors:', error);
+        }
+        return (data?.totp ?? []).some((factor) => factor.status === 'verified');
+      },
+    },
     { code, next, origin: requestUrl.origin }
   );
 

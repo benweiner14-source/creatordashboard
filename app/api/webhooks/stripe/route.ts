@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/server';
 import { verifyStripeWebhookSignature } from '@/lib/billing/stripe-webhook';
 import { handleStripeWebhookEvent } from '@/lib/billing/webhook-handler';
+import { shouldSendPastDueAlert } from '@/lib/billing/payment-alerts';
+import { createResendEmailClient } from '@/lib/integrations/resend';
 
 export async function POST(request: Request) {
   const signature = request.headers.get('stripe-signature');
@@ -16,6 +18,47 @@ export async function POST(request: Request) {
   }
 
   const serviceClient = createSupabaseServiceRoleClient();
+  const emailClient = createResendEmailClient(process.env.RESEND_API_KEY ?? '', process.env.DIGEST_FROM_EMAIL ?? '');
+
+  async function sendPastDueAlertIfOptedIn(stripeCustomerId: string): Promise<void> {
+    const { data: sub } = await serviceClient
+      .from('subscriptions')
+      .select('profile_id')
+      .eq('stripe_customer_id', stripeCustomerId)
+      .maybeSingle();
+    if (!sub) return;
+
+    const { data: prefs } = await serviceClient
+      .from('notification_preferences')
+      .select('payment_billing_alerts')
+      .eq('profile_id', sub.profile_id)
+      .maybeSingle();
+    if (prefs?.payment_billing_alerts === false) return;
+
+    // profiles.email is client-writable and not authoritative — the verified
+    // address lives in Supabase Auth. Same hazard/fix as the weekly-digest
+    // and checkout routes.
+    const { data: userData, error: userError } = await serviceClient.auth.admin.getUserById(sub.profile_id);
+    if (userError || !userData?.user?.email) return;
+
+    // The subscription status has already been written to the DB by the
+    // time we get here, so a Resend failure must not bubble up into the
+    // outer handler's try/catch — that would return a 500 and cause Stripe
+    // to retry the whole event, even though the DB write already succeeded.
+    // On retry the pre-update status read would already reflect 'past_due',
+    // shouldSendPastDueAlert would return false, and the alert would be
+    // silently dropped for good. Instead we log and swallow so the failure
+    // is at least visible to an operator.
+    try {
+      await emailClient.sendEmail({
+        to: userData.user.email,
+        subject: "We couldn't process your last payment",
+        html: '<p>We were unable to process your last payment for Creator Dashboard. Please update your card in Billing to keep your subscription active.</p>',
+      });
+    } catch (err) {
+      console.error('Failed to send past-due payment alert:', err);
+    }
+  }
 
   try {
     await handleStripeWebhookEvent(
@@ -26,6 +69,12 @@ export async function POST(request: Request) {
         // update (keyed by the unique stripe_customer_id) is always
         // correct and simpler than an upsert. See spec §1/§5.
         updateSubscriptionFromStripe: async ({ stripeCustomerId, stripeSubscriptionId, status, currentPeriodEnd, cancelAtPeriodEnd }) => {
+          const { data: existing } = await serviceClient
+            .from('subscriptions')
+            .select('status')
+            .eq('stripe_customer_id', stripeCustomerId)
+            .maybeSingle();
+
           const { data, error } = await serviceClient
             .from('subscriptions')
             .update({
@@ -47,6 +96,10 @@ export async function POST(request: Request) {
             // checkout flow, a deleted profile, manual data repair), fail
             // loudly rather than silently leaving the subscriber unentitled.
             throw new Error(`No subscription row found for Stripe customer ${stripeCustomerId}`);
+          }
+
+          if (shouldSendPastDueAlert(existing?.status ?? null, status)) {
+            await sendPastDueAlertIfOptedIn(stripeCustomerId);
           }
         },
         markSubscriptionCanceled: async (stripeCustomerId, stripeSubscriptionId) => {

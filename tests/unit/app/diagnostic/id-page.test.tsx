@@ -5,6 +5,14 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'diagnostic-1' }),
 }));
 
+// AppNav makes its own fetch('/api/session') call on mount; every test file
+// that stubs a call-ordered fetch mock for the page's own requests mocks
+// this out too, so AppNav's independent call doesn't shift that order.
+// AppNav's own behavior is covered by its dedicated suite.
+vi.mock('@/components/AppNav', () => ({
+  AppNav: () => null,
+}));
+
 import DiagnosticReportPage from '@/app/diagnostic/[id]/page';
 
 describe('DiagnosticReportPage', () => {
@@ -36,7 +44,11 @@ describe('DiagnosticReportPage', () => {
 
     expect(screen.getByText(/loading your report/i)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Strong hook, moderate retention')).toBeInTheDocument());
-    expect(screen.getByText(/overall score: 72/i)).toBeInTheDocument();
+    // The score ring count-up runs over real time in jsdom (no matchMedia to
+    // stub prefers-reduced-motion here), so give it room to land on 72.
+    await waitFor(() => expect(screen.getByRole('group', { name: /overall score 72 out of 100/i })).toBeInTheDocument(), {
+      timeout: 2000,
+    });
     expect(screen.getByRole('button', { name: 'hook rate' })).toBeInTheDocument();
   });
 

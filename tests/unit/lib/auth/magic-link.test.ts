@@ -47,11 +47,17 @@ describe('requestMagicLink', () => {
     });
   });
 
-  it('returns a rate-limit-specific message when Supabase reports a 429', async () => {
+  // Distinct from the app's own profile_limit message (checkAndRecordRateLimit,
+  // below): live testing found Supabase's own OTP-send rate limit can reject a
+  // request independently, and reusing the app's wording made the two
+  // indistinguishable to a user -- and to whoever investigated it afterward.
+  it('gives a distinct message when Supabase itself rate-limits the OTP send, not the app-level limiter', async () => {
     const deps = makeDeps({ signInWithOtp: vi.fn().mockResolvedValue({ error: { message: 'rate limited', status: 429 } }) });
     const result = await requestMagicLink(deps, makeParams());
     expect(result.status).toBe(429);
-    expect(result.body).toEqual({ error: "You've requested a few sign-in links in a row. Wait a minute and try again." });
+    expect(result.body).toEqual({
+      error: 'Our email provider is briefly rate-limiting sign-in emails right now. Please wait a few minutes and try again.',
+    });
   });
 
   it('falls back to /diagnostic when redirectPath is an absolute URL (open-redirect guard)', async () => {
@@ -130,6 +136,57 @@ describe('requestMagicLink', () => {
       const succeedingDeps = makeDeps({ rateLimitStore: store });
       const second = await requestMagicLink(succeedingDeps, makeParams());
       expect(second.status).toBe(200);
+    });
+
+    // The opposite of the two tests above: a genuine attempt was made and
+    // Supabase itself chose to reject it, so it should still count against
+    // the local quota -- otherwise a rapid client retry loop just keeps
+    // re-hitting Supabase's own limit, and (per live testing) the deleted
+    // row also erased the only evidence that a 3rd attempt was ever made.
+    it('does NOT release the rate-limit slot when Supabase itself rate-limits the send (status 429)', async () => {
+      const store = createInMemoryRateLimitStore();
+      const rateLimitedDeps = makeDeps({
+        rateLimitStore: store,
+        signInWithOtp: vi.fn().mockResolvedValue({ error: { message: 'rate limited', status: 429 } }),
+      });
+      const first = await requestMagicLink(rateLimitedDeps, makeParams());
+      expect(first.status).toBe(429);
+
+      const succeedingDeps = makeDeps({ rateLimitStore: store });
+      expect((await requestMagicLink(succeedingDeps, makeParams())).status).toBe(200);
+      expect((await requestMagicLink(succeedingDeps, makeParams())).status).toBe(200);
+      // The first attempt's slot was never released, so this is really the
+      // 4th attempt against a limit of 3 -- blocked at the app level, never
+      // reaching Supabase again.
+      succeedingDeps.signInWithOtp.mockClear();
+      const fourth = await requestMagicLink(succeedingDeps, makeParams());
+      expect(fourth.status).toBe(429);
+      expect(succeedingDeps.signInWithOtp).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('email trimming', () => {
+    // Live testing found a pasted email with stray whitespace passed the
+    // (unanchored) format check but was never trimmed anywhere before being
+    // sent to Supabase -- a common real-world copy-paste artifact that could
+    // produce a silently-different identity or an opaque failure.
+    it('trims leading/trailing whitespace before sending to Supabase', async () => {
+      const deps = makeDeps();
+      const result = await requestMagicLink(deps, makeParams({ email: '  creator@example.com  ' }));
+      expect(result.status).toBe(200);
+      expect(deps.signInWithOtp).toHaveBeenCalledWith(expect.objectContaining({ email: 'creator@example.com' }));
+    });
+
+    it('rate-limits a whitespace-padded email under the same identity as its trimmed form', async () => {
+      const deps = makeDeps();
+      await requestMagicLink(deps, makeParams({ email: 'creator@example.com' }));
+      await requestMagicLink(deps, makeParams({ email: ' creator@example.com' }));
+      await requestMagicLink(deps, makeParams({ email: 'creator@example.com ' }));
+      deps.signInWithOtp.mockClear();
+
+      const result = await requestMagicLink(deps, makeParams({ email: '  creator@example.com  ' }));
+      expect(result.status).toBe(429);
+      expect(deps.signInWithOtp).not.toHaveBeenCalled();
     });
   });
 });

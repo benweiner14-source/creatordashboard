@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { AppNav } from '@/components/AppNav';
 
 interface RecapCardData {
   month: string;
@@ -83,11 +84,21 @@ export default function RecapCardPage() {
   }, [params.id]);
 
   if (error) {
-    return <p role="alert">{error}</p>;
+    return (
+      <>
+        <AppNav />
+        <p role="alert">{error}</p>
+      </>
+    );
   }
 
   if (!card) {
-    return <p>Loading your recap card…</p>;
+    return (
+      <>
+        <AppNav />
+        <p>Loading your recap card…</p>
+      </>
+    );
   }
 
   const monthLabel = new Date(card.month).toLocaleDateString('en-US', {
@@ -98,7 +109,9 @@ export default function RecapCardPage() {
   const warningNote = describeWarnings(card.warnings);
 
   return (
-    <main className="mx-auto flex max-w-md flex-col items-center gap-6 px-6 py-16 text-center">
+    <>
+      <AppNav />
+      <main className="mx-auto flex max-w-md flex-col items-center gap-6 px-6 py-16 text-center">
       <h1 className="text-2xl font-bold text-gray-900">{monthLabel} Recap</h1>
       <img
         src={`/recap/${params.id}/image`}
@@ -122,6 +135,7 @@ export default function RecapCardPage() {
       <Link href="/recap?edit=1" className="text-sm text-indigo-700 underline">
         Manage platforms
       </Link>
-    </main>
+      </main>
+    </>
   );
 }

@@ -10,9 +10,13 @@ export interface Database {
           youtube_channel_handle: string | null;
           tiktok_handle: string | null;
           instagram_handle: string | null;
+          // deprecated: superseded by notification_preferences.new_content_ideas_ready (see 2026-09-30-settings-backend-design.md §6)
           digest_email_opt_in: boolean;
           digest_last_sent_at: string | null;
           warroom_email_opt_in: boolean;
+          timezone: string;
+          locale: string;
+          scheduled_deletion_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -23,9 +27,13 @@ export interface Database {
           youtube_channel_handle?: string | null;
           tiktok_handle?: string | null;
           instagram_handle?: string | null;
+          // deprecated: superseded by notification_preferences.new_content_ideas_ready (see 2026-09-30-settings-backend-design.md §6)
           digest_email_opt_in?: boolean;
           digest_last_sent_at?: string | null;
           warroom_email_opt_in?: boolean;
+          timezone?: string;
+          locale?: string;
+          scheduled_deletion_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
@@ -185,6 +193,28 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['subscriptions']['Insert']>;
+        Relationships: [];
+      };
+      notification_preferences: {
+        Row: {
+          profile_id: string;
+          weekly_recap_ready: boolean;
+          new_content_ideas_ready: boolean;
+          diagnostic_finished: boolean;
+          product_marketing: boolean;
+          payment_billing_alerts: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          weekly_recap_ready?: boolean;
+          new_content_ideas_ready?: boolean;
+          diagnostic_finished?: boolean;
+          product_marketing?: boolean;
+          payment_billing_alerts?: boolean;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['notification_preferences']['Insert']>;
         Relationships: [];
       };
       strategy_breakdowns: {

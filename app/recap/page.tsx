@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useReducer, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppNav } from '@/components/AppNav';
+import { Banner } from '@/components/Banner';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
@@ -240,27 +241,44 @@ function RecapPageInner() {
   return (
     <>
       <AppNav />
-      <main className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
-        <h1 className="text-2xl font-bold text-gray-900">Monthly recap card</h1>
-        <p className="text-gray-600">Connect your platforms once, then generate a shareable card of this month&apos;s stats.</p>
-
-        {toast && (
-          <p role="alert" className={toast.kind === 'success' ? 'text-sm text-green-700' : 'text-sm text-red-600'}>
-            {toast.message}
+      <main className="mx-auto flex max-w-[520px] flex-col gap-[22px] px-6 py-11">
+        <div>
+          <div className="mb-2 font-mono text-[11px] uppercase tracking-[.2em] text-gray-500">Monthly</div>
+          <h1 className="font-heading text-[34px] font-bold leading-[1.05] text-gray-900">Monthly recap card</h1>
+          <p className="mt-2.5 text-[15px] leading-[1.55] text-gray-600">
+            Connect your platforms once, then generate a shareable card of this month&apos;s stats.
           </p>
-        )}
+        </div>
 
-        <div className="flex flex-col gap-3">
+        {toast &&
+          (toast.kind === 'success' ? (
+            <Banner variant="positive" label="Connected">
+              {toast.message}
+            </Banner>
+          ) : (
+            <Banner variant="critical" label="Connection error" role="alert">
+              {toast.message}
+            </Banner>
+          ))}
+
+        <div className="flex flex-col gap-4 rounded-2xl border border-[#e8e8ee] bg-white p-[22px]">
           {(['youtube', 'tiktok', 'instagram'] as const).map((platform) => {
             const connected = isOAuthPlatform(platform) && state.connections[platform];
 
             if (connected && isOAuthPlatform(platform)) {
               return (
-                <div key={platform} className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                <div key={platform} className="flex flex-col gap-1.5 text-[13px] font-semibold text-gray-700">
                   {PLATFORM_LABELS[platform]}
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-300 px-4 py-2 font-normal">
-                    <span>Connected via {OAUTH_PLATFORM_NAMES[platform]} ✓</span>
-                    <button type="button" onClick={() => disconnect(platform)} className="text-indigo-700 underline">
+                  <div className="flex items-center justify-between gap-2 rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-[14px] py-[10px] font-normal">
+                    <span className="flex items-center gap-2 text-[#166534]">
+                      <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[#22c55e]" />
+                      Connected via {OAUTH_PLATFORM_NAMES[platform]} ✓
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => disconnect(platform)}
+                      className="whitespace-nowrap text-[13px] text-[#6d28d9] underline"
+                    >
                       Disconnect
                     </button>
                   </div>
@@ -269,7 +287,7 @@ function RecapPageInner() {
             }
 
             return (
-              <label key={platform} className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              <label key={platform} className="flex flex-col gap-1.5 text-[13px] font-semibold text-gray-700">
                 {PLATFORM_LABELS[platform]}
                 <input
                   type="text"
@@ -279,10 +297,10 @@ function RecapPageInner() {
                   // Generation is the one state where the form legitimately can't
                   // accept edits — say so rather than silently swallowing them.
                   disabled={state.status === 'generating'}
-                  className="rounded-lg border border-gray-300 px-4 py-2 font-normal disabled:bg-gray-50"
+                  className="rounded-[10px] border border-[#d8d8e0] px-[14px] py-[10px] font-normal disabled:bg-gray-50"
                 />
                 {isOAuthPlatform(platform) && (
-                  <a href={`/api/oauth/${platform}/authorize`} className="self-start text-xs text-indigo-700 underline">
+                  <a href={`/api/oauth/${platform}/authorize`} className="self-start text-xs text-[#6d28d9] underline">
                     Or connect via {OAUTH_PLATFORM_NAMES[platform]}
                   </a>
                 )}
@@ -293,7 +311,7 @@ function RecapPageInner() {
             type="button"
             onClick={saveHandles}
             disabled={state.status === 'generating'}
-            className="self-start rounded-full border border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50"
+            className="self-start whitespace-nowrap rounded-full border border-[#7c3aed] px-[18px] py-2 text-[13px] font-semibold text-[#6d28d9] disabled:opacity-50"
           >
             Save platforms
           </button>
@@ -309,25 +327,28 @@ function RecapPageInner() {
           <button
             type="button"
             onClick={generate}
-            className="rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700"
+            className="rounded-full bg-brand px-6 py-[14px] font-semibold text-white hover:brightness-105"
           >
             Generate this month&apos;s recap
           </button>
         )}
 
         {state.status === 'generating' && (
-          <Spinner label={state.stillWorking ? 'Still working — pulling your posts from each platform…' : 'Generating…'} />
+          <Spinner
+            variant="onLight"
+            label={state.stillWorking ? 'Still working — pulling your posts from each platform…' : 'Generating…'}
+          />
         )}
 
         {state.status === 'generationFailed' && (
           <div className="flex flex-col gap-2">
-            <p role="alert" className="text-sm text-red-600">
+            <Banner variant="critical" label="Generation failed" role="alert">
               {state.error}
-            </p>
+            </Banner>
             <button
               type="button"
               onClick={generate}
-              className="self-start rounded-full bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700"
+              className="self-start rounded-full bg-brand px-6 py-[14px] font-semibold text-white hover:brightness-105"
             >
               Try again
             </button>

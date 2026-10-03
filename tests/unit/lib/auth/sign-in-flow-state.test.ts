@@ -4,6 +4,7 @@ import {
   createInitialSignInFlowState,
   isValidEmailFormat,
   isValidUrlFormat,
+  detectSupportedPlatformUrl,
   type SignInFlowState,
 } from '@/lib/auth/sign-in-flow-state';
 
@@ -45,6 +46,29 @@ describe('signInFlowReducer — diagnostic submission path', () => {
   it('ignores SUBMIT_DIAGNOSTIC with an empty url', () => {
     const state: SignInFlowState = { status: 'idle', url: '', error: null };
     expect(signInFlowReducer(state, { type: 'SUBMIT_DIAGNOSTIC' })).toBe(state);
+  });
+
+  // A well-formed but unsupported-platform URL used to sail through this
+  // check into submittingDiagnostic, forcing a full sign-in-by-email round
+  // trip before the server's *own* platform check (post-auth) ever ran.
+  it('rejects a well-formed but unsupported-platform URL immediately, without a network round trip', () => {
+    const state: SignInFlowState = { status: 'idle', url: 'https://example.com/whatever', error: null };
+    const next = signInFlowReducer(state, { type: 'SUBMIT_DIAGNOSTIC' });
+    expect(next).toEqual({
+      status: 'diagnosticError',
+      url: 'https://example.com/whatever',
+      error: 'That link is not a supported YouTube, TikTok, or Instagram URL.',
+    });
+  });
+
+  it('allows a well-formed unsupported-platform URL to be retried after EDIT_URL from diagnosticError', () => {
+    const state: SignInFlowState = {
+      status: 'diagnosticError',
+      url: 'https://example.com/whatever',
+      error: 'That link is not a supported YouTube, TikTok, or Instagram URL.',
+    };
+    const next = signInFlowReducer(state, { type: 'URL_CHANGED', url: 'https://www.tiktok.com/@x/video/1' });
+    expect(next).toEqual({ status: 'diagnosticError', url: 'https://www.tiktok.com/@x/video/1', error: state.error });
   });
 
   it('sets stillWorking on DIAGNOSTIC_STILL_WORKING without changing status', () => {
@@ -241,5 +265,31 @@ describe('isValidUrlFormat', () => {
 
   it('rejects an empty or whitespace-only string', () => {
     expect(isValidUrlFormat('   ')).toBe(false);
+  });
+});
+
+describe('detectSupportedPlatformUrl', () => {
+  it('accepts a TikTok URL', () => {
+    expect(detectSupportedPlatformUrl('https://www.tiktok.com/@user/video/123')).toBe(true);
+  });
+
+  it('accepts an Instagram URL', () => {
+    expect(detectSupportedPlatformUrl('https://www.instagram.com/reel/abc123/')).toBe(true);
+  });
+
+  it('accepts a youtube.com URL', () => {
+    expect(detectSupportedPlatformUrl('https://www.youtube.com/watch?v=abc123')).toBe(true);
+  });
+
+  it('accepts a youtu.be short URL', () => {
+    expect(detectSupportedPlatformUrl('https://youtu.be/abc123')).toBe(true);
+  });
+
+  it('rejects a well-formed URL on an unsupported domain', () => {
+    expect(detectSupportedPlatformUrl('https://example.com/whatever')).toBe(false);
+  });
+
+  it('rejects an unparseable string', () => {
+    expect(detectSupportedPlatformUrl('not a url at all')).toBe(false);
   });
 });

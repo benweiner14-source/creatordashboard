@@ -16,12 +16,16 @@ agencies.
 ## Product Purpose
 
 Creator Dashboard helps small creators understand and improve their content
-without needing to already understand analytics. Three tools: a free
+without needing to already understand analytics. Six tools: a free
 Diagnostic that scores a single video/post (hook strength, retention risk,
-timing, format fit) and explains the score in plain language; a monthly
-Recap Card summarizing a creator's platform performance; and a Weekly
-Content Ideas digest of AI-researched, niche-specific content concepts,
-deliverable by email.
+timing, format fit, reach) and explains the score in plain language; a
+monthly Recap Card summarizing a creator's platform performance; a Weekly
+Content Ideas digest of AI-researched, niche-specific content concepts; a
+Strategy Breakdown that analyzes any channel's posting cadence and format
+mix; a Competitor Watchlist that tracks up to 20 competitor
+channels/profiles over time; and the GTA6 War Room, a real-time feed of
+GTA6 content opportunities (the product's only real-time surface — every
+other tool is weekly or on-demand).
 
 ## Positioning
 
@@ -31,28 +35,51 @@ target user, cost, and complexity assume a beginner from the start. The
 plain-English explanation of *why* a score is what it is (not just the
 number) is core to this, not a secondary nicety.
 
+The product has since narrowed its niche focus to GTA6 content creators
+specifically — Weekly Content Ideas, the GTA6 War Room, and the Diagnostic's
+research-backed copy are all now scoped to that niche rather than treating
+"niche" as a fully generic input.
+
 ## Operating Context
 
 A signed-in web app (Supabase magic-link auth, no password). Creators
 connect their content via YouTube (public API, no OAuth needed), and via
 OAuth for TikTok/Instagram (falling back to Apify-scraped public profile
-data for a platform they haven't connected). Diagnostic runs are
-rate-limited (free tier: 1 per 30 days). Weekly Content Ideas can be
+data for a platform they haven't connected). Weekly Content Ideas can be
 delivered proactively via a Monday email a creator opts into, not just
 generated on-demand.
 
 ## Capabilities and Constraints
 
-- Diagnostic: scores a single video/post across four dimensions (hook
-  strength, retention risk, timing, format fit); YouTube, TikTok, and
-  Instagram supported.
+- Diagnostic: scores a single video/post across five dimensions (hook
+  strength, retention risk, timing, format fit, reach); YouTube, TikTok, and
+  Instagram supported; free, rate-limited to 1 run per profile per 30 days.
+  Two opt-in, paid, per-diagnostic add-on passes: Visual & Audio Content
+  Analysis (TikTok only — downloads the video, analyzes the first 5
+  seconds' hook visually, and detects episodic/series framing) and Comment
+  Analysis (TikTok and Instagram — reads a post's top comments for
+  audience sentiment and flags concrete content requests).
 - Recap Card: a monthly, shareable summary card of a creator's platform
   stats; publicly viewable at a share URL once generated. Requires a
   subscription.
-- Weekly Content Ideas: niche-based, AI-researched (web search) concept
-  list, regenerable weekly; optional automated Monday email delivery with
+- Weekly Content Ideas: a ranked shortlist of Reel/carousel concepts for
+  the creator's chosen GTA6 focus (picked from preset chips, up to 3, plus
+  an "Other" option), AI-researched against real current GTA6 news;
+  regenerable weekly; optional automated Monday email delivery with
   one-click unsubscribe. Requires a subscription.
-- Diagnostic is free; Recap Card and Weekly Content Ideas require a $10/mo
+- Strategy Breakdown: paste any channel/profile link (YouTube, TikTok, or
+  Instagram) and get its posting cadence, format mix, and a plain-English
+  read on what's working and why — including channels the creator doesn't
+  own. Requires a subscription.
+- Competitor Watchlist: a saved, recurring version of Strategy Breakdown —
+  track up to 20 competitor channels/profiles over time (follower/view/video
+  counts plus current top 5 posts by views-per-hour). Requires a
+  subscription.
+- GTA6 War Room: a real-time feed that scrapes and scores GTA6 content
+  platform-wide for virality, surfacing a creator's next content
+  opportunity as it happens — the product's only real-time surface;
+  everything else is weekly or on-demand. Requires a subscription.
+- Diagnostic is free; every other tool requires the same $10/mo
   subscription (Stripe Checkout + Customer Portal).
 - Web only — no native apps.
 
@@ -60,7 +87,7 @@ generated on-demand.
 
 - Product name: "Creator Dashboard."
 - Visual accent color: indigo/violet, used consistently across every
-  existing page (sign-in, diagnostic, recap, ideas).
+  existing page.
 - Voice: plain English, explicitly non-jargon — stated directly in existing
   product copy ("explained in words you actually understand, not jargon").
 

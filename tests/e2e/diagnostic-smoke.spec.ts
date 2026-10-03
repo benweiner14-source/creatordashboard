@@ -36,7 +36,10 @@ test('pasting a URL renders a diagnostic report', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/diagnostic\/e2e-diagnostic-1$/);
   await expect(page.getByRole('heading', { name: 'Strong hook, watch your pacing' })).toBeVisible();
-  await expect(page.getByText('Overall score: 76')).toBeVisible();
+  // The score and its "Overall score" label are now separate DOM nodes (see
+  // OverallScoreRing), so assert both rather than one combined string.
+  await expect(page.getByTestId('overall-score-number')).toHaveText('76');
+  await expect(page.getByText('Overall score')).toBeVisible();
   await expect(page.getByRole('button', { name: 'hook rate' })).toBeVisible();
 });
 

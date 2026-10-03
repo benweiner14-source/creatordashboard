@@ -33,7 +33,7 @@ describe('handleAuthCallback', () => {
   it('redirects to the next path when code exchange succeeds', async () => {
     const exchangeCodeForSession = vi.fn().mockResolvedValue({ error: null });
     const result = await handleAuthCallback(
-      { exchangeCodeForSession },
+      { exchangeCodeForSession, hasVerifiedMfaFactor: async () => false },
       { code: 'valid-code', next: '/diagnostic?url=https%3A%2F%2Ftiktok.com%2Fx', origin: 'https://app.example.com' }
     );
     expect(exchangeCodeForSession).toHaveBeenCalledWith('valid-code');
@@ -43,7 +43,7 @@ describe('handleAuthCallback', () => {
   it('redirects to /diagnostic with authError=expired and the preserved url when code exchange fails', async () => {
     const exchangeCodeForSession = vi.fn().mockResolvedValue({ error: { message: 'expired' } });
     const result = await handleAuthCallback(
-      { exchangeCodeForSession },
+      { exchangeCodeForSession, hasVerifiedMfaFactor: async () => false },
       { code: 'stale-code', next: '/diagnostic?url=https%3A%2F%2Ftiktok.com%2Fx', origin: 'https://app.example.com' }
     );
     const redirectUrl = new URL(result.redirectUrl);
@@ -55,7 +55,7 @@ describe('handleAuthCallback', () => {
   it('redirects to /diagnostic with authError=expired and no url when there is no code at all', async () => {
     const exchangeCodeForSession = vi.fn();
     const result = await handleAuthCallback(
-      { exchangeCodeForSession },
+      { exchangeCodeForSession, hasVerifiedMfaFactor: async () => false },
       { code: null, next: '/diagnostic', origin: 'https://app.example.com' }
     );
     expect(exchangeCodeForSession).not.toHaveBeenCalled();
@@ -67,7 +67,7 @@ describe('handleAuthCallback', () => {
   it('falls back to /diagnostic on the app origin when next is an absolute URL (open-redirect guard)', async () => {
     const exchangeCodeForSession = vi.fn().mockResolvedValue({ error: null });
     const result = await handleAuthCallback(
-      { exchangeCodeForSession },
+      { exchangeCodeForSession, hasVerifiedMfaFactor: async () => false },
       { code: 'valid-code', next: 'https://evil.example', origin: 'https://app.example.com' }
     );
     const redirectUrl = new URL(result.redirectUrl);
@@ -78,11 +78,33 @@ describe('handleAuthCallback', () => {
   it('falls back to /diagnostic without throwing when next is malformed', async () => {
     const exchangeCodeForSession = vi.fn().mockResolvedValue({ error: null });
     const result = await handleAuthCallback(
-      { exchangeCodeForSession },
+      { exchangeCodeForSession, hasVerifiedMfaFactor: async () => false },
       { code: 'valid-code', next: 'http://', origin: 'https://app.example.com' }
     );
     const redirectUrl = new URL(result.redirectUrl);
     expect(redirectUrl.origin).toBe('https://app.example.com');
     expect(redirectUrl.pathname).toBe('/diagnostic');
+  });
+
+  it('redirects to the MFA challenge page instead of next when the user has a verified MFA factor', async () => {
+    const result = await handleAuthCallback(
+      {
+        exchangeCodeForSession: async () => ({ error: null }),
+        hasVerifiedMfaFactor: async () => true,
+      },
+      { code: 'valid-code', next: '/ideas', origin: 'https://app.example.com' }
+    );
+    expect(result.redirectUrl).toBe('https://app.example.com/auth/mfa-challenge?next=%2Fideas');
+  });
+
+  it('redirects straight to next when there is no verified MFA factor', async () => {
+    const result = await handleAuthCallback(
+      {
+        exchangeCodeForSession: async () => ({ error: null }),
+        hasVerifiedMfaFactor: async () => false,
+      },
+      { code: 'valid-code', next: '/ideas', origin: 'https://app.example.com' }
+    );
+    expect(result.redirectUrl).toBe('https://app.example.com/ideas');
   });
 });

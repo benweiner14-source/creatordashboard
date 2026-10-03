@@ -61,14 +61,16 @@ describe('POST /api/auth/magic-link', () => {
     expect(body).toEqual({ error: "That doesn't look like a valid email address. Double-check it and try again." });
   });
 
-  it('returns the rate-limit message and status when Supabase reports a 429', async () => {
+  it('returns a distinct rate-limit message when Supabase itself reports a 429', async () => {
     signInWithOtpMock.mockResolvedValue({ error: { message: 'rate limited', status: 429 } });
 
     const response = await POST(makeRequest({ email: 'creator@example.com', redirectPath: '/diagnostic' }));
     const body = await response.json();
 
     expect(response.status).toBe(429);
-    expect(body).toEqual({ error: "You've requested a few sign-in links in a row. Wait a minute and try again." });
+    expect(body).toEqual({
+      error: 'Our email provider is briefly rate-limiting sign-in emails right now. Please wait a few minutes and try again.',
+    });
   });
 
   it('returns 400 when no email is provided at all', async () => {

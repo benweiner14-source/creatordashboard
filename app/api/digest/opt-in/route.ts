@@ -22,7 +22,9 @@ export async function POST(request: Request) {
         return data?.niche ?? null;
       },
       updateDigestOptIn: async (profileId, optIn) => {
-        const { error } = await serviceClient.from('profiles').update({ digest_email_opt_in: optIn }).eq('id', profileId);
+        const { error } = await serviceClient
+          .from('notification_preferences')
+          .upsert({ profile_id: profileId, new_content_ideas_ready: optIn });
         if (error) {
           throw new Error(`Failed to save digest opt-in: ${error.message}`);
         }

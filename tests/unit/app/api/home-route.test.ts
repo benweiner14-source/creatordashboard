@@ -65,6 +65,7 @@ describe('GET /api/home', () => {
     expect(response.status).toBe(200);
     expect(body).toEqual({
       email: 'jordan@example.com',
+      timezone: 'UTC',
       diagnostic: null,
       recap: null,
       ideas: { niche: null, digest: null },

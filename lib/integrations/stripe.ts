@@ -26,6 +26,7 @@ export interface StripeClient {
     cancelUrl: string;
   }): Promise<StripeCheckoutSession>;
   createPortalSession(params: { customerId: string; returnUrl: string }): Promise<StripePortalSession>;
+  cancelSubscription(subscriptionId: string): Promise<void>;
 }
 
 export function createStripeClient(secretKey: string): StripeClient {
@@ -44,6 +45,18 @@ export function createStripeClient(secretKey: string): StripeClient {
       throw new Error(message);
     }
     return data;
+  }
+
+  async function stripeDelete(path: string): Promise<void> {
+    const response = await fetch(`https://api.stripe.com/v1/${path}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      const message = (data as { error?: { message?: string } }).error?.message ?? `Stripe API request failed with status ${response.status}`;
+      throw new Error(message);
+    }
   }
 
   return {
@@ -68,6 +81,9 @@ export function createStripeClient(secretKey: string): StripeClient {
         return_url: returnUrl,
       });
       return { url: data.url as string };
+    },
+    async cancelSubscription(subscriptionId) {
+      await stripeDelete(`subscriptions/${subscriptionId}`);
     },
   };
 }

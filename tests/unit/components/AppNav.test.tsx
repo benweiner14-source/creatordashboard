@@ -1,6 +1,6 @@
 // tests/unit/components/AppNav.test.tsx
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 const pushMock = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -120,6 +120,26 @@ describe('AppNav', () => {
     }
   });
 
+  it('shows a "deletion canceled" banner when the session response says so', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ email: 'jordan@example.com', justCancelledDeletion: true }),
+      })
+    );
+    render(<AppNav />);
+    await waitFor(() => expect(screen.getByText('jordan@example.com')).toBeInTheDocument());
+    expect(screen.getByText('Your account deletion was canceled.')).toBeInTheDocument();
+  });
+
+  it('does not show the "deletion canceled" banner when the session response omits it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+    render(<AppNav />);
+    await waitFor(() => expect(screen.getByText('jordan@example.com')).toBeInTheDocument());
+    expect(screen.queryByText('Your account deletion was canceled.')).not.toBeInTheDocument();
+  });
+
   it('includes a War Room link right after Home', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
     render(<AppNav />);
@@ -127,5 +147,59 @@ describe('AppNav', () => {
     const labels = links.map((l) => l.textContent);
     const homeIndex = labels.indexOf('Home');
     expect(labels[homeIndex + 1]).toBe('War Room');
+  });
+
+  // Below `sm` the desktop link row (`hidden sm:flex`) never displays at all,
+  // and there was no substitute — a signed-in phone user had no in-app way to
+  // reach anything but /home. This toggle button + dropdown is that substitute.
+  describe('mobile menu', () => {
+    it('shows a menu toggle button hidden on desktop (sm:hidden)', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+      render(<AppNav />);
+      const toggle = await screen.findByRole('button', { name: /menu/i });
+      expect(Array.from(toggle.classList)).toContain('sm:hidden');
+    });
+
+    it('is closed by default and opens the full link list on toggle click', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+      render(<AppNav />);
+      const toggle = await screen.findByRole('button', { name: /menu/i });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByTestId('mobile-nav-menu')).not.toBeInTheDocument();
+
+      fireEvent.click(toggle);
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByTestId('mobile-nav-menu')).toBeInTheDocument();
+      for (const label of ['Home', 'War Room', 'Recap', 'Ideas', 'Strategy', 'Watchlist', 'Billing']) {
+        expect(screen.getByTestId('mobile-nav-menu')).toHaveTextContent(label);
+      }
+    });
+
+    it('closes the menu on a second toggle click', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+      render(<AppNav />);
+      const toggle = await screen.findByRole('button', { name: /menu/i });
+      fireEvent.click(toggle);
+      expect(screen.getByTestId('mobile-nav-menu')).toBeInTheDocument();
+
+      fireEvent.click(toggle);
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByTestId('mobile-nav-menu')).not.toBeInTheDocument();
+    });
+
+    it('closes the menu after clicking a link inside it', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: 'jordan@example.com' }) }));
+      render(<AppNav />);
+      const toggle = await screen.findByRole('button', { name: /menu/i });
+      fireEvent.click(toggle);
+
+      const mobileMenu = screen.getByTestId('mobile-nav-menu');
+      fireEvent.click(within(mobileMenu).getByRole('link', { name: 'Watchlist' }));
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByTestId('mobile-nav-menu')).not.toBeInTheDocument();
+    });
   });
 });

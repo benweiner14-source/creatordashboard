@@ -6,7 +6,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AppNav } from '@/components/AppNav';
 import { Spinner } from '@/components/Spinner';
 import { SignInPrompt } from '@/components/SignInPrompt';
-import { signInFlowReducer, createInitialSignInFlowState } from '@/lib/auth/sign-in-flow-state';
+import {
+  signInFlowReducer,
+  createInitialSignInFlowState,
+  isValidUrlFormat,
+  detectSupportedPlatformUrl,
+} from '@/lib/auth/sign-in-flow-state';
 
 function DiagnosticInputPageInner() {
   const router = useRouter();
@@ -85,6 +90,10 @@ function DiagnosticInputPageInner() {
     if (state.status !== 'idle' && state.status !== 'diagnosticError') return;
     const url = state.url;
     dispatch({ type: 'SUBMIT_DIAGNOSTIC' });
+    // The reducer itself rejects an unsupported-platform URL (transitioning
+    // straight to diagnosticError, no network call) -- mirror that check here
+    // so this function doesn't fire the request anyway regardless of outcome.
+    if (!isValidUrlFormat(url) || !detectSupportedPlatformUrl(url)) return;
     void submitDiagnostic(url);
   }
 
